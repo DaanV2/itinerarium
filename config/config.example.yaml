@@ -1,0 +1,10 @@
+# Itinerarium configuration. Copy to config/config.yaml (or pass any path via
+# --config). Priority: flags → env vars → this file → built-in defaults.
+#
+# Every key maps to an env var: server.database-path → SERVER_DATABASE_PATH.
+
+server:
+  # Address the API listens on (flag: --address, env: SERVER_ADDRESS)
+  address: ":8080"
+  # SQLite database file (flag: --database-path, env: SERVER_DATABASE_PATH)
+  database-path: "data/itinerarium.db"

@@ -9,13 +9,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 GitHub: `git@github.com:DaanV2/itinerarium.git`
 Reference codebase for Go patterns: [`DaanV2/mechanus`](https://github.com/DaanV2/mechanus)
 
-Full docs live in `docs/`: [features](docs/features.md), [architecture](docs/architecture.md), [deployment](docs/deployment.md), [roadmap](docs/roadmap.md), [backlog](docs/backlog.md). The architecture doc is the source of truth for entities and permission rules — keep it updated when the domain model changes.
+Full docs live in `docs/`: [features](docs/features.md), [architecture](docs/architecture.md), [development workflow](docs/development.md), [deployment](docs/deployment.md), [roadmap](docs/roadmap.md), [backlog](docs/backlog.md). The architecture doc is the source of truth for entities and permission rules — keep it updated when the domain model changes.
+
+**Working on a feature?** Follow [docs/development.md](docs/development.md) — it defines the workflow, definition of done, and the security tests every feature needs. `api/CLAUDE.md` and `web/CLAUDE.md` contain the layer rules and copyable code templates for their side.
 
 ## Stack
 
 | Layer | Technology |
 |-------|-----------|
-| API | Go, GORM, SQLite (FTS5 for search) |
+| API | Go, GORM, SQLite via `glebarez/sqlite` — pure Go, no cgo (FTS5 for search) |
 | Frontend | SvelteKit + TypeScript |
 | Deployment | Docker Compose |
 | CLI | Cobra |
@@ -31,6 +33,7 @@ api/
 ├── infrastructure/
 │   ├── authentication/     # JWT, JTI, key storage
 │   ├── config/             # Viper setup and manager
+│   ├── lifecycle/          # graceful-shutdown phase interfaces
 │   ├── persistence/
 │   │   ├── models/         # GORM models
 │   │   ├── repositories/   # One file per entity
@@ -47,18 +50,17 @@ docker-compose.yml
 
 ## Commands
 
-> Fill in once scaffolded.
+A `justfile` at the repo root is the canonical task runner — `just` lists all recipes.
 
 ```bash
-# API
-cd api && go run ./cmd/server
-
-# Frontend
-cd web && pnpm dev
-
-# Full stack
-docker compose up
+just api          # run the API on :8080
+just web          # run the frontend on :5173 (/api proxied to :8080)
+just fmt          # format everything
+just verify       # every check CI runs — run this before finishing any feature
+just up           # full stack via Docker Compose (API :8080, web :3000)
 ```
+
+Raw equivalents (what CI runs): from `api/` — `go build ./... && go vet ./... && golangci-lint run ./... && go test ./...` (CI adds `-race`, Linux-only); from `web/` — `npm run lint && npm run check && npm run test && npm run build`. The web package manager is **npm**.
 
 ## Go Conventions (from mechanus)
 

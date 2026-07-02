@@ -1,0 +1,21 @@
+# Runtime data (SQLite database, generated JWT keys)
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Go
+api/itinerarium
+api/itinerarium.exe
+api/coverage.out
+
+# Editors / OS
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local environment overrides
+.env
+.env.local

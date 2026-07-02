@@ -8,13 +8,14 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 
 ### M0 — Foundation
 
-- [ ] Repo scaffold: `api/` (Go, mechanus layout) and `web/` (SvelteKit + TypeScript)
-- [ ] Viper config: flags → env vars → YAML → defaults
-- [ ] SQLite + GORM with shared `Model` base (UUID, timestamps, soft delete), `AutoMigrate`
+- [x] Repo scaffold: `api/` (Go, mechanus layout) and `web/` (SvelteKit + TypeScript)
+- [x] Viper config: flags → env vars → YAML → defaults
+- [x] SQLite + GORM with shared `Model` base (UUID, timestamps, soft delete), `AutoMigrate`
 - [ ] RS512 JWT auth with JTI revocation; keys auto-generated on first start
-- [ ] Docker Compose for API + web
+- [ ] Docker Compose for API + web *(compose file + Dockerfiles written, not yet verified — Docker unavailable on the dev machine)*
 - [ ] First-run setup wizard creating the initial GM account
-- [ ] Graceful shutdown lifecycle (mechanus pattern)
+- [x] Graceful shutdown lifecycle (mechanus pattern)
+- [x] Create Github Workflows, with testing included
 
 ### M1 — Users, Characters & Locations
 
