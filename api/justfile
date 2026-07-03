@@ -31,7 +31,8 @@ lint:
 
 # Run all Go tests
 test:
-    go test ./...
+    go test ./... --cover -coverprofile=reports/coverage.out --covermode atomic --coverpkg=./...
+    go tool cover -html=reports/coverage.out
 
 # Everything the API CI job checks
 verify: build vet lint test
