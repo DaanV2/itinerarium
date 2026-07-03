@@ -1,7 +1,7 @@
 # Task runner for Itinerarium. Run `just` to list recipes.
 # Requires: go, node/npm, golangci-lint, and (optionally) docker.
 
-set windows-shell := ["sh", "-c"]
+set windows-shell := ["cmd.exe", "/c"]
 
 # Show available recipes
 default:

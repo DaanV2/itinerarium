@@ -19,3 +19,6 @@ Thumbs.db
 # Local environment overrides
 .env
 .env.local
+
+# Executable files
+*.exe
