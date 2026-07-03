@@ -8,6 +8,7 @@ Preferred: `just api-verify` from the repo root (build + vet + lint + test), `ju
 
 ```bash
 go run . serve          # start the API on :8080
+go run . init --email gm@example.com --password <password>  # CLI first-run bootstrap, alternative to the web setup wizard
 go build ./...          # compile everything
 go vet ./...            # static checks
 go test ./...           # all tests

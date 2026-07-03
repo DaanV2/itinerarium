@@ -19,6 +19,7 @@ Thumbs.db
 # Local environment overrides
 .env
 .env.local
+.claude/settings.local.json
 
 # Executable files
 *.exe
