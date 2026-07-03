@@ -9,3 +9,19 @@ export interface InitialAccount {
 	email: string;
 	access_token: string;
 }
+
+export type Role = 'gm' | 'player';
+
+export interface Account {
+	id: string;
+	email: string;
+	role: Role;
+}
+
+export interface CreatedAccount extends Account {
+	temporary_password: string;
+}
+
+export interface ResetPasswordResult {
+	temporary_password: string;
+}
