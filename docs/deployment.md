@@ -6,7 +6,13 @@
 docker compose up -d
 ```
 
-On first start a setup wizard creates the initial GM account.
+On first start a setup wizard creates the initial GM account. For headless deployments, the same bootstrap can be run from the command line instead of the web wizard:
+
+```bash
+docker compose exec api /app/itinerarium init --email gm@example.com --password <password>
+```
+
+Fails once any account already exists, same as the web wizard.
 
 ## Configuration
 

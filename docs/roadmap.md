@@ -11,9 +11,9 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] Repo scaffold: `api/` (Go, mechanus layout) and `web/` (SvelteKit + TypeScript)
 - [x] Viper config: flags → env vars → YAML → defaults
 - [x] SQLite + GORM with shared `Model` base (UUID, timestamps, soft delete), `AutoMigrate`
-- [ ] RS512 JWT auth with JTI revocation; keys auto-generated on first start
+- [x] RS512 JWT auth with JTI revocation; keys auto-generated on first start
 - [ ] Docker Compose for API + web *(compose file + Dockerfiles written, not yet verified — Docker unavailable on the dev machine)*
-- [ ] First-run setup wizard creating the initial GM account
+- [x] First-run setup wizard creating the initial GM account (web wizard + `itinerarium init` CLI for headless deployments)
 - [x] Graceful shutdown lifecycle (mechanus pattern)
 - [x] Create Github Workflows, with testing included
 
