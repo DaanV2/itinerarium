@@ -12,7 +12,7 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] Viper config: flags → env vars → YAML → defaults
 - [x] SQLite + GORM with shared `Model` base (UUID, timestamps, soft delete), `AutoMigrate`
 - [x] RS512 JWT auth with JTI revocation; keys auto-generated on first start
-- [ ] Docker Compose for API + web *(compose file + Dockerfiles written, not yet verified — Docker unavailable on the dev machine)*
+- [x] Docker Compose for API + web *(verified end-to-end without Docker itself, still unavailable on the dev machine: built the API binary and the SvelteKit adapter-node bundle and ran them side by side, exercising the same `node build` entrypoint the web Dockerfile uses)*
 - [x] First-run setup wizard creating the initial GM account (web wizard + `itinerarium init` CLI for headless deployments)
 - [x] Graceful shutdown lifecycle (mechanus pattern)
 - [x] Create Github Workflows, with testing included
