@@ -48,3 +48,40 @@ func (r *Users) GetByEmail(ctx context.Context, email string) (*models.User, err
 
 	return &u, nil
 }
+
+// GetByID looks up a user by ID.
+func (r *Users) GetByID(ctx context.Context, id string) (*models.User, error) {
+	var u models.User
+
+	err := r.db.DB().WithContext(ctx).First(&u, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return &u, nil
+}
+
+// List returns every account, ordered by email, for the admin panel.
+func (r *Users) List(ctx context.Context) ([]models.User, error) {
+	var users []models.User
+
+	err := r.db.DB().WithContext(ctx).Order("email").Find(&users).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
+// UpdatePasswordHash sets a new password hash for the given user.
+func (r *Users) UpdatePasswordHash(ctx context.Context, id, passwordHash string) error {
+	err := r.db.DB().WithContext(ctx).
+		Model(&models.User{}).
+		Where("id = ?", id).
+		Update("password_hash", passwordHash).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

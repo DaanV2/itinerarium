@@ -59,13 +59,23 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		repositories.NewRevokedTokens(db),
 		authentication.WithTTL(cfg.Duration("token-ttl", authentication.DefaultTokenTTL)),
 	)
-	setupSvc := application.NewSetupService(repositories.NewUsers(db), tokens)
+	users := repositories.NewUsers(db)
+	setupSvc := application.NewSetupService(users, tokens)
+	authSvc := application.NewAuthService(tokens, users)
+	userSvc := application.NewUserService(users)
+	requireAuth := transport.RequireAuth(authSvc)
 
 	router := transport.NewRouter(
 		transport.WithMiddleware(transport.Logging(logger)),
 		transport.WithHandle("GET /api/health", transport.HealthHandler()),
 		transport.WithHandle("GET /api/setup", transport.SetupStatusHandler(setupSvc)),
 		transport.WithHandle("POST /api/setup", transport.CreateInitialGMHandler(setupSvc)),
+		transport.WithHandle("GET /api/admin/users", requireAuth(transport.ListAccountsHandler(userSvc))),
+		transport.WithHandle("POST /api/admin/users", requireAuth(transport.CreateAccountHandler(userSvc))),
+		transport.WithHandle(
+			"POST /api/admin/users/{id}/reset-password",
+			requireAuth(transport.ResetPasswordHandler(userSvc)),
+		),
 	)
 	server := servers.New(
 		servers.WithAddr(cfg.String("address", ":8080")),
