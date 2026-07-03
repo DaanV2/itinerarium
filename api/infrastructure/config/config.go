@@ -10,6 +10,7 @@ package config
 import (
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -97,5 +98,12 @@ func (c *Context) Bool(key string, def bool) bool {
 	return v.GetBool(c.key(key))
 }
 
-// Duration-, slice-, or struct-valued settings: add typed getters here as
-// needed, following the same SetDefault-then-Get shape.
+// Duration resolves a duration setting, falling back to def.
+func (c *Context) Duration(key string, def time.Duration) time.Duration {
+	v.SetDefault(c.key(key), def)
+
+	return v.GetDuration(c.key(key))
+}
+
+// Slice- or struct-valued settings: add typed getters here as needed,
+// following the same SetDefault-then-Get shape.
