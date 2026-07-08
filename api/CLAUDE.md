@@ -142,7 +142,7 @@ Route patterns use Go 1.22+ `http.ServeMux` syntax: `"METHOD /path/{param}"`, re
 - **Shutdown**: anything holding resources implements a `lifecycle` interface (`Shutdown(ctx) error` usually) and gets passed to `lifecycle.ShutdownAll` in `cmd/serve.go`.
 - **SQLite driver**: `github.com/glebarez/sqlite` (pure Go, no cgo, FTS5-capable). Do not switch to `gorm.io/driver/sqlite` — it needs cgo and breaks the static Docker build.
 - **Errors**: wrap with `fmt.Errorf("doing thing: %w", err)`; sentinel errors (`ErrNotFound`) live in the service layer.
-- **Logging**: `github.com/charmbracelet/log` (`log.Default()`, `logger.Info("msg", "key", value)`). The linter rejects the stdlib `log` package (and `log/slog` — same import prefix).
+- **Logging**: `github.com/charmbracelet/log` (`log.Default()`, `logger.Info("msg", "key", value)`). The linter rejects the stdlib `log` package (and `log/slog` — same import prefix). `infrastructure/logging` configures the global logger from the `log` config component (`--level`/`LOG_LEVEL`, `--format`/`LOG_FORMAT` — text/json/logfmt, `--report-caller`/`LOG_REPORT_CALLER`) and carries request-scoped loggers through `context.Context` via `logging.Context`/`logging.From` — request handlers get one via `logging.From(r.Context())` after `transport.Logging` middleware has run.
 
 ## Lint rules that trip people up (`.golangci.yml`, enforced in CI)
 
