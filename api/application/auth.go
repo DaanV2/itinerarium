@@ -8,7 +8,6 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
-	"gorm.io/gorm"
 )
 
 // ErrInvalidCredentials is returned when a login attempt has an unknown
@@ -34,7 +33,7 @@ func NewAuthService(tokens *authentication.TokenService, users *repositories.Use
 func (s *AuthService) Login(ctx context.Context, email, password string) (*models.User, string, error) {
 	user, err := s.users.GetByEmail(ctx, email)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, repositories.ErrNotFound) {
 			return nil, "", ErrInvalidCredentials
 		}
 
@@ -64,7 +63,7 @@ func (s *AuthService) Authenticate(ctx context.Context, token string) (Requester
 
 	user, err := s.users.GetByID(ctx, claims.Subject)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, repositories.ErrNotFound) {
 			return nil, ErrUnauthenticated
 		}
 

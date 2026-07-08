@@ -11,7 +11,6 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
-	"gorm.io/gorm"
 )
 
 // temporaryPasswordBytes sizes the random temporary password generated for
@@ -59,7 +58,7 @@ func (s *UserService) CreateAccount(
 	if err == nil {
 		return nil, "", ErrEmailTaken
 	}
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
+	if !errors.Is(err, repositories.ErrNotFound) {
 		return nil, "", fmt.Errorf("checking existing account: %w", err)
 	}
 
@@ -101,7 +100,7 @@ func (s *UserService) ResetPassword(ctx context.Context, requester Requester, us
 
 	_, err := s.users.GetByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, repositories.ErrNotFound) {
 			return "", ErrNotFound
 		}
 
