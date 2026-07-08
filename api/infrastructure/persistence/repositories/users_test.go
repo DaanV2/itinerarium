@@ -6,7 +6,6 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
-	"gorm.io/gorm"
 )
 
 func TestUsers_CreateCountAndGetByEmail(t *testing.T) {
@@ -50,8 +49,8 @@ func TestUsers_GetByEmail_NotFound(t *testing.T) {
 	repo := repositories.NewUsers(newTestDB(t))
 
 	_, err := repo.GetByEmail(t.Context(), "nobody@example.com")
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		t.Fatalf("GetByEmail = %v, want gorm.ErrRecordNotFound", err)
+	if !errors.Is(err, repositories.ErrNotFound) {
+		t.Fatalf("GetByEmail = %v, want repositories.ErrNotFound", err)
 	}
 }
 
@@ -73,8 +72,8 @@ func TestUsers_GetByID(t *testing.T) {
 	}
 
 	_, err = repo.GetByID(ctx, "not-an-id")
-	if !errors.Is(err, gorm.ErrRecordNotFound) {
-		t.Fatalf("GetByID(unknown) = %v, want gorm.ErrRecordNotFound", err)
+	if !errors.Is(err, repositories.ErrNotFound) {
+		t.Fatalf("GetByID(unknown) = %v, want repositories.ErrNotFound", err)
 	}
 }
 

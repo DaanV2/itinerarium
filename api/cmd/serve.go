@@ -70,6 +70,7 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		transport.WithHandle("GET /api/health", transport.HealthHandler()),
 		transport.WithHandle("GET /api/setup", transport.SetupStatusHandler(setupSvc)),
 		transport.WithHandle("POST /api/setup", transport.CreateInitialGMHandler(setupSvc)),
+		transport.WithHandle("POST /api/login", transport.LoginHandler(authSvc)),
 		transport.WithHandle("GET /api/admin/users", requireAuth(transport.ListAccountsHandler(userSvc))),
 		transport.WithHandle("POST /api/admin/users", requireAuth(transport.CreateAccountHandler(userSvc))),
 		transport.WithHandle(

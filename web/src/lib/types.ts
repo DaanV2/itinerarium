@@ -25,3 +25,10 @@ export interface CreatedAccount extends Account {
 export interface ResetPasswordResult {
 	temporary_password: string;
 }
+
+export interface LoginResult {
+	id: string;
+	email: string;
+	role: Role;
+	access_token: string;
+}

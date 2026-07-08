@@ -9,6 +9,30 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 )
 
+func newTestAuthServiceWithPassword(t *testing.T, email, password string) *application.AuthService {
+	t.Helper()
+
+	users := newTestUsersRepo(t)
+	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
+	if err != nil {
+		t.Fatalf("NewKeyStore: %v", err)
+	}
+
+	tokens := authentication.NewTokenService(keys, noopRevocationStore{})
+
+	hash, err := authentication.HashPassword(password)
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	user := &models.User{Email: email, PasswordHash: hash, Role: models.RolePlayer}
+	if err := users.Create(t.Context(), user); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	return application.NewAuthService(tokens, users)
+}
+
 func newTestAuthService(t *testing.T) (*application.AuthService, *authentication.TokenService, string) {
 	t.Helper()
 
@@ -69,5 +93,38 @@ func TestAuthService_Authenticate_RejectsUnknownSubject(t *testing.T) {
 	_, err = auth.Authenticate(t.Context(), token)
 	if !errors.Is(err, application.ErrUnauthenticated) {
 		t.Fatalf("Authenticate(unknown subject) = %v, want ErrUnauthenticated", err)
+	}
+}
+
+func TestAuthService_Login(t *testing.T) {
+	auth := newTestAuthServiceWithPassword(t, "player@example.com", "hunter22hunter")
+
+	user, token, err := auth.Login(t.Context(), "player@example.com", "hunter22hunter")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if user.Email != "player@example.com" {
+		t.Fatalf("Email = %q, want player@example.com", user.Email)
+	}
+	if token == "" {
+		t.Fatal("expected a non-empty access token")
+	}
+}
+
+func TestAuthService_Login_RejectsWrongPassword(t *testing.T) {
+	auth := newTestAuthServiceWithPassword(t, "player@example.com", "hunter22hunter")
+
+	_, _, err := auth.Login(t.Context(), "player@example.com", "wrong-password")
+	if !errors.Is(err, application.ErrInvalidCredentials) {
+		t.Fatalf("Login(wrong password) = %v, want ErrInvalidCredentials", err)
+	}
+}
+
+func TestAuthService_Login_RejectsUnknownEmail(t *testing.T) {
+	auth := newTestAuthServiceWithPassword(t, "player@example.com", "hunter22hunter")
+
+	_, _, err := auth.Login(t.Context(), "nobody@example.com", "hunter22hunter")
+	if !errors.Is(err, application.ErrInvalidCredentials) {
+		t.Fatalf("Login(unknown email) = %v, want ErrInvalidCredentials", err)
 	}
 }

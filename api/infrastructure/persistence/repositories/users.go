@@ -2,10 +2,16 @@ package repositories
 
 import (
 	"context"
+	"errors"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"gorm.io/gorm"
 )
+
+// ErrNotFound is returned when no user matches the given lookup. It
+// sanitizes gorm.ErrRecordNotFound so callers never need to import gorm.
+var ErrNotFound = errors.New("user not found")
 
 // Users provides access to user accounts.
 type Users struct{ db *persistence.Database }
@@ -37,24 +43,33 @@ func (r *Users) Create(ctx context.Context, u *models.User) error {
 	return nil
 }
 
-// GetByEmail looks up a user by email.
+// GetByEmail looks up a user by email. It returns ErrNotFound if no user
+// matches.
 func (r *Users) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	var u models.User
 
 	err := r.db.DB().WithContext(ctx).First(&u, "email = ?", email).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+
 		return nil, err
 	}
 
 	return &u, nil
 }
 
-// GetByID looks up a user by ID.
+// GetByID looks up a user by ID. It returns ErrNotFound if no user matches.
 func (r *Users) GetByID(ctx context.Context, id string) (*models.User, error) {
 	var u models.User
 
 	err := r.db.DB().WithContext(ctx).First(&u, "id = ?", id).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+
 		return nil, err
 	}
 
