@@ -8,3 +8,8 @@ server:
   address: ":8080"
   # SQLite database file (flag: --database-path, env: SERVER_DATABASE_PATH)
   database-path: "data/itinerarium.db"
+  # Directory holding the RS512 JWT signing key pair, auto-generated on first
+  # start (flag: --keys-path, env: SERVER_KEYS_PATH)
+  # keys-path: "data/keys"
+  # Access token lifetime (flag: --token-ttl, env: SERVER_TOKEN_TTL)
+  # token-ttl: "15m"

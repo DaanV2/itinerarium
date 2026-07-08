@@ -50,11 +50,12 @@ Never use: `export let`, `$:` reactive statements, `on:click`, stores for compon
 src/
 ├── lib/
 │   ├── api/            # typed API client — ALL fetch calls to the Go API live here
-│   ├── components/     # shared components
 │   └── types.ts        # TypeScript types mirroring the API models
 ├── routes/             # +page.svelte / +page.ts / +layout.svelte per URL
 └── app.html
 ```
+
+`lib/components/` doesn't exist yet — create it for shared components once more than one route needs the same one; don't add it speculatively.
 
 ## Talking to the API
 

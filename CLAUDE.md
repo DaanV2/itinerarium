@@ -13,6 +13,8 @@ Full docs live in `docs/`: [features](docs/features.md), [architecture](docs/arc
 
 **Working on a feature?** Follow [docs/development.md](docs/development.md) — it defines the workflow, definition of done, and the security tests every feature needs. `api/CLAUDE.md` and `web/CLAUDE.md` contain the layer rules and copyable code templates for their side.
 
+**Documenting a feature?** Treat this the same as a human developer would: when you add or change a feature, update the relevant doc in `docs/` (features, architecture, deployment, roadmap, backlog as applicable) in the same change — don't leave docs to drift. New non-obvious behavior, workflows, or "how to do X with this code" knowledge belongs in `docs/` (or the relevant `CLAUDE.md`) rather than only in commit messages or code comments.
+
 ## Stack
 
 | Layer | Technology |
