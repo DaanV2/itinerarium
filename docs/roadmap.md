@@ -21,7 +21,7 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 
 - [x] GM creates accounts (player or GM rank) and hands out credentials
 - [x] GM resets passwords via temporary password from the admin panel (no SMTP)
-- [ ] Login with email + password
+- [x] Login with email + password
 - [ ] Multiple characters per user account
 - [ ] Character `current_game_day` field
 - [ ] Personal inventory (item list + quantity) per character
