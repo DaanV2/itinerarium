@@ -37,6 +37,8 @@ Joining a group grants access to all its knowledge (subject to the game-day rule
 - The GM can provide a **default item catalog** (JSON/YAML list) so players pick from known items when adding to an inventory
 - **Custom free-text items are always allowed** alongside catalog items — the catalog is a convenience, not a restriction
 
+See [currency.md](currency.md) for how currencies and money work, and [currency-configuration.md](currency-configuration.md) for defining them.
+
 ## Documentation
 
 ### Repositories

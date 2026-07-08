@@ -73,6 +73,8 @@ Activity entries have two visibility paths:
 
 ## Inventory & Currency
 
+> For a focused walkthrough see [currency.md](currency.md) (concepts, ratios, money, API) and [currency-configuration.md](currency-configuration.md) (defining the catalog).
+
 The GM defines two campaign-wide catalogs, both readable by any authenticated user and writable only by a GM:
 
 - **`Currency`** — `code` (unique), `name`, and an integer `ratio` giving the value of one unit in the campaign's **base unit** (the smallest denomination, which itself has `ratio` 1). For "1 gold = 10 silver = 100 copper", copper is the base (`ratio` 1), silver `ratio` 10, gold `ratio` 100. Storing an integer ratio keeps all money arithmetic in whole base units, avoiding floating-point rounding.
