@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 GitHub: `git@github.com:DaanV2/itinerarium.git`
 Reference codebase for Go patterns: [`DaanV2/mechanus`](https://github.com/DaanV2/mechanus)
 
-Full docs live in `docs/`: [features](docs/features.md), [architecture](docs/architecture.md), [development workflow](docs/development.md), [deployment](docs/deployment.md), [roadmap](docs/roadmap.md), [backlog](docs/backlog.md). The architecture doc is the source of truth for entities and permission rules — keep it updated when the domain model changes.
+Full docs live in `docs/`: [features](docs/features.md), [architecture](docs/architecture.md), [development workflow](docs/development.md), [deployment](docs/deployment.md), [currency](docs/currency.md), [currency configuration](docs/currency-configuration.md), [roadmap](docs/roadmap.md), [backlog](docs/backlog.md). The architecture doc is the source of truth for entities and permission rules — keep it updated when the domain model changes.
 
 **Working on a feature?** Follow [docs/development.md](docs/development.md) — it defines the workflow, definition of done, and the security tests every feature needs. `api/CLAUDE.md` and `web/CLAUDE.md` contain the layer rules and copyable code templates for their side.
 

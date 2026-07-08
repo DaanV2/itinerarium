@@ -24,6 +24,7 @@ Configuration is loaded in priority order: CLI flags → environment variables �
 | `server.database-path` | Path to SQLite file | `data/itinerarium.db` |
 | `server.keys-path` | Directory for RS512 JWT signing keys (auto-generated on first start) | `data/keys` |
 | `server.token-ttl` | Access token lifetime | `15m` |
+| `server.catalog-path` | Optional JSON/YAML file seeding the currency & item catalog on startup (see [currency-configuration.md](currency-configuration.md)) | _(unset)_ |
 
 Environment variables are derived automatically from key names: `server.database-path` → `SERVER_DATABASE_PATH`. The frontend's port is not a config key — it's set directly on the `web` service in `docker-compose.yml` (`3000`).
 
