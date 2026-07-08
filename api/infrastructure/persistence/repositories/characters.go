@@ -2,9 +2,11 @@ package repositories
 
 import (
 	"context"
+	"errors"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"gorm.io/gorm"
 )
 
 // Characters provides access to player characters.
@@ -25,12 +27,17 @@ func (r *Characters) Create(ctx context.Context, c *models.Character) error {
 	return nil
 }
 
-// GetByID looks up a character by ID.
+// GetByID looks up a character by ID. It returns ErrNotFound if no
+// character matches.
 func (r *Characters) GetByID(ctx context.Context, id string) (*models.Character, error) {
 	var c models.Character
 
 	err := r.db.DB().WithContext(ctx).First(&c, "id = ?", id).Error
 	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+
 		return nil, err
 	}
 

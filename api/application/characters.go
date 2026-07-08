@@ -7,7 +7,6 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
-	"gorm.io/gorm"
 )
 
 // ErrInvalidName is returned when a character is created or renamed with an
@@ -50,7 +49,7 @@ func (s *CharacterService) Create(
 
 	if ownerUserID != requester.UserID() {
 		if _, err := s.users.GetByID(ctx, ownerUserID); err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+			if errors.Is(err, repositories.ErrNotFound) {
 				return nil, ErrNotFound
 			}
 
@@ -90,7 +89,7 @@ func (s *CharacterService) List(ctx context.Context, requester Requester) ([]mod
 func (s *CharacterService) Get(ctx context.Context, requester Requester, id string) (*models.Character, error) {
 	c, err := s.characters.GetByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
+		if errors.Is(err, repositories.ErrNotFound) {
 			return nil, ErrNotFound
 		}
 
