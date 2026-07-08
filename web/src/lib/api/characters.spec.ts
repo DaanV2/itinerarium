@@ -23,7 +23,9 @@ describe('listCharacters', () => {
 	});
 
 	it('throws the server error message on failure', async () => {
-		const fetchFn = vi.fn().mockResolvedValue(jsonResponse({ error: 'unauthenticated' }, false, 401));
+		const fetchFn = vi
+			.fn()
+			.mockResolvedValue(jsonResponse({ error: 'unauthenticated' }, false, 401));
 
 		await expect(listCharacters('token-123', fetchFn)).rejects.toThrow('unauthenticated');
 	});

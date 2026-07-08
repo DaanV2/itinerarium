@@ -19,6 +19,8 @@ Package manager is **npm** (plain `package-lock.json`, `npm ci` in CI/Docker) �
 
 Before finishing: `npm run format && npm run lint && npm run check && npm run test`.
 
+CI runs Prettier and ESLint as two separate steps (`npx prettier --check .` then `npx eslint .`), not the combined `npm run lint`, so a Prettier-only failure is never masked by ESLint's exit code or vice versa — fix and verify each independently. On a checkout with `core.autocrlf=true` (common on Windows), `npm run lint` / `npx prettier --check .` over the **whole tree** will flag every pre-existing file with a line-ending diff that isn't a real problem, purely from CRLF vs. the LF committed in git. That noise makes it easy to miss a genuine formatting bug in a file you just touched — always run `npx prettier --check <the files you changed>` scoped to your own changes before finishing, even if the whole-tree check is red for unrelated reasons, and don't bulk-reformat the tree to silence it.
+
 ## Svelte 5 runes — required syntax
 
 ```svelte
