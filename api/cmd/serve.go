@@ -60,9 +60,11 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		authentication.WithTTL(cfg.Duration("token-ttl", authentication.DefaultTokenTTL)),
 	)
 	users := repositories.NewUsers(db)
+	characters := repositories.NewCharacters(db)
 	setupSvc := application.NewSetupService(users, tokens)
 	authSvc := application.NewAuthService(tokens, users)
 	userSvc := application.NewUserService(users)
+	characterSvc := application.NewCharacterService(characters, users)
 	requireAuth := transport.RequireAuth(authSvc)
 
 	router := transport.NewRouter(
@@ -77,6 +79,10 @@ func runServe(cmd *cobra.Command, _ []string) error {
 			"POST /api/admin/users/{id}/reset-password",
 			requireAuth(transport.ResetPasswordHandler(userSvc)),
 		),
+		transport.WithHandle("GET /api/characters", requireAuth(transport.ListCharactersHandler(characterSvc))),
+		transport.WithHandle("POST /api/characters", requireAuth(transport.CreateCharacterHandler(characterSvc))),
+		transport.WithHandle("GET /api/characters/{id}", requireAuth(transport.GetCharacterHandler(characterSvc))),
+		transport.WithHandle("PATCH /api/characters/{id}", requireAuth(transport.UpdateCharacterHandler(characterSvc))),
 	)
 	server := servers.New(
 		servers.WithAddr(cfg.String("address", ":8080")),

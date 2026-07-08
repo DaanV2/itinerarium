@@ -32,3 +32,10 @@ export interface LoginResult {
 	role: Role;
 	access_token: string;
 }
+
+export interface Character {
+	id: string;
+	name: string;
+	current_game_day: number;
+	user_id: string;
+}
