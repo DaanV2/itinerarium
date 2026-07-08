@@ -9,6 +9,10 @@ func allModels() []any {
 		&models.User{},
 		&models.RevokedToken{},
 		&models.Character{},
+		&models.Currency{},
+		&models.ItemDefinition{},
+		&models.InventoryItem{},
+		&models.MoneyBalance{},
 	}
 }
 

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { createCharacter, listCharacters } from '$lib/api/characters';
 	import type { Character } from '$lib/types';
 
@@ -72,7 +73,11 @@
 		{:else}
 			<ul>
 				{#each characters as character (character.id)}
-					<li>{character.name} — game day {character.current_game_day}</li>
+					<li>
+						<a href={resolve('/characters/[id]', { id: character.id })}>{character.name}</a> — game
+						day
+						{character.current_game_day}
+					</li>
 				{/each}
 			</ul>
 		{/if}

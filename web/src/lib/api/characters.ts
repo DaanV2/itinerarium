@@ -23,6 +23,24 @@ export async function listCharacters(
 	return (await res.json()) as Character[];
 }
 
+/** Fetches a single character. The API returns 404 for characters the caller
+ * may not see — surface that as not-found, don't special-case it. */
+export async function getCharacter(
+	id: string,
+	token: string,
+	fetchFn: typeof fetch = fetch
+): Promise<Character> {
+	const res = await fetchFn(`/api/characters/${id}`, {
+		headers: { Authorization: `Bearer ${token}` }
+	});
+
+	if (!res.ok) {
+		throw new Error(await errorMessage(res, `failed to load character: ${res.status}`));
+	}
+
+	return (await res.json()) as Character;
+}
+
 /** Creates a new character for the caller. */
 export async function createCharacter(
 	name: string,

@@ -13,3 +13,7 @@ server:
   # keys-path: "data/keys"
   # Access token lifetime (flag: --token-ttl, env: SERVER_TOKEN_TTL)
   # token-ttl: "15m"
+  # Optional JSON/YAML file seeding the currency and item catalog on startup.
+  # It upserts on every start, so editing the file and restarting is safe. See
+  # config/catalog.example.yaml (flag: --catalog-path, env: SERVER_CATALOG_PATH)
+  # catalog-path: "config/catalog.example.yaml"

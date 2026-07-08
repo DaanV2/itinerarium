@@ -31,6 +31,8 @@ itinerarium/
 | `Document`     | Markdown content with a folder `path` inside exactly one `Repository`. Has sections with a `gm_only` flag. Can additionally be shared directly to specific characters on a game day. |
 | `Currency`     | GM-defined via JSON/YAML list, with conversion ratios to a base unit. Shared by all inventories. |
 | `ItemDefinition` | Entry in the GM's default item catalog (JSON/YAML). Inventory items may reference a definition or be free-text — the catalog never restricts. |
+| `InventoryItem` | A line in a character's personal inventory (M1): name + quantity, optionally referencing an `ItemDefinition`. Owner + GM only. M2 extends inventories to groups and locations. |
+| `MoneyBalance` | A character's holding of a single `Currency` (M1): `amount` in that currency's own unit, one per (character, currency). Owner + GM only. |
 | `Session`      | Links characters to a play event. GM advances/rewinds `game_day` per character or in bulk.                                          |
 | `JournalEntry` | Belongs to a character, stamped with `game_day`. Readable by the owning player and GMs only. Can be converted (copied) into a `Document` in the character's private knowledge repository. |
 | `ActivityEntry` | Append-only event log. Stamped with `game_day`. Scoped to an entity (group, location, document). Supports an `announced` flag with explicit target characters or groups that bypasses normal entity-access rules (used for theft, destruction, and GM broadcasts). |
@@ -68,6 +70,39 @@ Location inventories apply the same access-control check: if a character lacks a
 Activity entries have two visibility paths:
 1. **Normal** — character has access to the source entity AND `current_game_day >= entry.game_day`
 2. **Announced** — entry has `announced: true` and the character (or one of their groups) is in the `announced_to` list; entity-access check is skipped. The `actor` field is stripped server-side for non-GM users — players see what happened and to what, but not who did it.
+
+## Inventory & Currency
+
+The GM defines two campaign-wide catalogs, both readable by any authenticated user and writable only by a GM:
+
+- **`Currency`** — `code` (unique), `name`, and an integer `ratio` giving the value of one unit in the campaign's **base unit** (the smallest denomination, which itself has `ratio` 1). For "1 gold = 10 silver = 100 copper", copper is the base (`ratio` 1), silver `ratio` 10, gold `ratio` 100. Storing an integer ratio keeps all money arithmetic in whole base units, avoiding floating-point rounding.
+- **`ItemDefinition`** — `name` (unique), optional `description` and `category`. A convenience for picking known items; it never restricts inventories (core domain rule 8).
+
+Both catalogs can be seeded from a JSON/YAML file at startup via `--catalog-path` (env `SERVER_CATALOG_PATH`). The loader **upserts** — currencies by `code`, items by `name` — so restarting with an edited file updates entries in place instead of duplicating them. See `config/catalog.example.yaml`.
+
+In M1, inventories and money are **per character**:
+
+- **`InventoryItem`** — a line in a character's inventory: `character_id`, `name` (required), optional `item_definition_id` (a catalog reference; omitting it makes the line a free-text item), `quantity` (≥ 1), optional `description`.
+- **`MoneyBalance`** — a character's holding of one currency: `character_id`, `currency_id`, `amount` (≥ 0). At most one balance per (character, currency), enforced by a composite unique index; `SetMoney` upserts it.
+
+**Permission rule.** A character's inventory and money follow the same visibility as the character itself: **owner + GM only**. Every inventory/money service method resolves access through the character-visibility check first, so a caller who is neither the owner nor a GM gets `404` (existence hidden, never `403`). An inventory line addressed through the wrong character's path is likewise reported as `404`.
+
+> M1 scopes inventories to characters. M2 generalises inventories to groups and locations and adds item movement between them.
+
+### Endpoints
+
+| Method & path | Who | Purpose |
+|---|---|---|
+| `GET /api/currencies` | any authenticated | List the currency catalog |
+| `POST /api/currencies` | GM | Add a currency |
+| `GET /api/items` | any authenticated | List the item catalog |
+| `POST /api/items` | GM | Add an item definition |
+| `GET /api/characters/{id}/inventory` | owner + GM | List a character's inventory |
+| `POST /api/characters/{id}/inventory` | owner + GM | Add an inventory line |
+| `PATCH /api/characters/{id}/inventory/{itemId}` | owner + GM | Edit name/quantity/description |
+| `DELETE /api/characters/{id}/inventory/{itemId}` | owner + GM | Remove a line |
+| `GET /api/characters/{id}/money` | owner + GM | List a character's balances |
+| `PUT /api/characters/{id}/money/{currencyId}` | owner + GM | Set a balance to an absolute amount |
 
 ## Document Format
 

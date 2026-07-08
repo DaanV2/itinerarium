@@ -1,0 +1,44 @@
+# Currency and item catalog seed. Point the API at this file with
+# --catalog-path / SERVER_CATALOG_PATH (see config.example.yaml). It is
+# upserted on every startup — currencies are matched by `code`, items by
+# `name` — so editing and restarting updates existing entries in place rather
+# than creating duplicates.
+#
+# JSON works too: the loader parses JSON and YAML with the same decoder.
+
+# Currencies carry a conversion ratio expressed in the campaign's base unit —
+# the smallest denomination, which has ratio 1. Here copper is the base, so
+# 1 silver = 10 copper and 1 gold = 100 copper. Ratios must be whole numbers
+# (>= 1) so all money arithmetic stays in whole base units.
+currencies:
+  - code: cp
+    name: Copper
+    ratio: 1
+  - code: sp
+    name: Silver
+    ratio: 10
+  - code: gp
+    name: Gold
+    ratio: 100
+  - code: pp
+    name: Platinum
+    ratio: 1000
+
+# Item definitions are a convenience so players can pick from known items when
+# adding to an inventory. They never restrict inventories: free-text custom
+# items are always allowed. `description` and `category` are optional.
+items:
+  - name: Torch
+    description: Burns for 1 hour, sheds bright light in a 20-foot radius.
+    category: Adventuring Gear
+  - name: Rope, Hempen (50 ft)
+    description: Has 2 hit points and can be burst with a DC 17 Strength check.
+    category: Adventuring Gear
+  - name: Rations (1 day)
+    category: Adventuring Gear
+  - name: Healing Potion
+    description: Restores 2d4 + 2 hit points when drunk.
+    category: Consumable
+  - name: Longsword
+    description: Versatile martial weapon, 1d8 slashing.
+    category: Weapon
