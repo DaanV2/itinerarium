@@ -35,7 +35,9 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().String("config", "", "path to a YAML config file")
+	rootCmd.PersistentFlags().String(
+		"config", "", "path to a YAML config file (auto-discovered from standard locations if omitted)",
+	)
 
 	logFlags := pflag.NewFlagSet("log", pflag.ContinueOnError)
 	logFlags.String("level", "info", "log level: debug, info, warn, error, fatal")
