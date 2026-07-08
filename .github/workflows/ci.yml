@@ -62,8 +62,11 @@ jobs:
       - name: 🛠️ Build
         run: npm run build
 
-      - name: 🧹 Lint
-        run: npm run lint
+      - name: 🧹 Lint (Prettier)
+        run: npx prettier --check .
+
+      - name: 🧹 Lint (ESLint)
+        run: npx eslint .
 
       - name: 🧪 Test
         run: npm run test
