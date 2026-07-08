@@ -24,10 +24,10 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] Login with email + password
 - [x] Multiple characters per user account
 - [x] Character `current_game_day` field
-- [ ] Personal inventory (item list + quantity) per character
-- [ ] Personal money (per currency) per character
-- [ ] Currency catalog from JSON/YAML with conversion ratios
-- [ ] Item catalog from JSON/YAML; free-text custom items always allowed
+- [x] Personal inventory (item list + quantity) per character
+- [x] Personal money (per currency) per character
+- [x] Currency catalog from JSON/YAML with conversion ratios
+- [x] Item catalog from JSON/YAML; free-text custom items always allowed
 - [ ] Locations: name + description, multi-plane support
 - [ ] Characters can be associated with a location
 

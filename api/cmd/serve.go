@@ -31,6 +31,7 @@ func init() {
 	serveCmd.Flags().String("database-path", "data/itinerarium.db", "path to the SQLite database file")
 	serveCmd.Flags().String("keys-path", "data/keys", "directory holding the RS512 JWT signing key pair")
 	serveCmd.Flags().Duration("token-ttl", authentication.DefaultTokenTTL, "access token lifetime")
+	serveCmd.Flags().String("catalog-path", "", "optional JSON/YAML file seeding the currency and item catalog on startup")
 	config.MustBindFlags("server", serveCmd.Flags())
 }
 
@@ -61,11 +62,26 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	)
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
+	currencies := repositories.NewCurrencies(db)
+	itemDefs := repositories.NewItemDefinitions(db)
+	inventoryItems := repositories.NewInventoryItems(db)
+	moneyBalances := repositories.NewMoneyBalances(db)
 	setupSvc := application.NewSetupService(users, tokens)
 	authSvc := application.NewAuthService(tokens, users)
 	userSvc := application.NewUserService(users)
 	characterSvc := application.NewCharacterService(characters, users)
+	catalogSvc := application.NewCatalogService(currencies, itemDefs)
+	inventorySvc := application.NewInventoryService(characterSvc, inventoryItems, moneyBalances, currencies, itemDefs)
 	requireAuth := transport.RequireAuth(authSvc)
+
+	if path := cfg.String("catalog-path", ""); path != "" {
+		curCount, itemCount, err := catalogSvc.LoadFile(ctx, path)
+		if err != nil {
+			return err
+		}
+
+		logger.Info("catalog seeded", "path", path, "currencies", curCount, "items", itemCount)
+	}
 
 	router := transport.NewRouter(
 		transport.WithMiddleware(transport.Logging(logger)),
@@ -83,6 +99,34 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		transport.WithHandle("POST /api/characters", requireAuth(transport.CreateCharacterHandler(characterSvc))),
 		transport.WithHandle("GET /api/characters/{id}", requireAuth(transport.GetCharacterHandler(characterSvc))),
 		transport.WithHandle("PATCH /api/characters/{id}", requireAuth(transport.UpdateCharacterHandler(characterSvc))),
+		transport.WithHandle("GET /api/currencies", requireAuth(transport.ListCurrenciesHandler(catalogSvc))),
+		transport.WithHandle("POST /api/currencies", requireAuth(transport.CreateCurrencyHandler(catalogSvc))),
+		transport.WithHandle("GET /api/items", requireAuth(transport.ListItemDefinitionsHandler(catalogSvc))),
+		transport.WithHandle("POST /api/items", requireAuth(transport.CreateItemDefinitionHandler(catalogSvc))),
+		transport.WithHandle(
+			"GET /api/characters/{id}/inventory",
+			requireAuth(transport.ListInventoryHandler(inventorySvc)),
+		),
+		transport.WithHandle(
+			"POST /api/characters/{id}/inventory",
+			requireAuth(transport.AddInventoryItemHandler(inventorySvc)),
+		),
+		transport.WithHandle(
+			"PATCH /api/characters/{id}/inventory/{itemId}",
+			requireAuth(transport.UpdateInventoryItemHandler(inventorySvc)),
+		),
+		transport.WithHandle(
+			"DELETE /api/characters/{id}/inventory/{itemId}",
+			requireAuth(transport.RemoveInventoryItemHandler(inventorySvc)),
+		),
+		transport.WithHandle(
+			"GET /api/characters/{id}/money",
+			requireAuth(transport.ListMoneyHandler(inventorySvc)),
+		),
+		transport.WithHandle(
+			"PUT /api/characters/{id}/money/{currencyId}",
+			requireAuth(transport.SetMoneyHandler(inventorySvc)),
+		),
 	)
 	server := servers.New(
 		servers.WithAddr(cfg.String("address", ":8080")),
