@@ -4,6 +4,7 @@ A self-hosted web tool for tabletop RPG campaigns. Supports both players and gam
 
 ## Documentation
 
+- [Onboarding](docs/onboarding.md) — start here: setup, running the stack, the mental model
 - [Features](docs/features.md) — players, GMs, groups, sessions, locations
 - [Architecture](docs/architecture.md) — data model, permission rules, tech stack
 - [Deployment](docs/deployment.md) — Docker Compose setup and configuration
