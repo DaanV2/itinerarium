@@ -3,11 +3,7 @@ package cmd
 import (
 	"context"
 
-	"github.com/DaanV2/itinerarium/api/application"
-	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
-	"github.com/DaanV2/itinerarium/api/infrastructure/config"
-	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
-	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/DaanV2/itinerarium/api/components"
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 )
@@ -31,7 +27,6 @@ func init() {
 
 func runInit(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
-	cfg := config.GetContext("server")
 	logger := log.Default()
 
 	email, err := cmd.Flags().GetString("email")
@@ -44,27 +39,27 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	db, err := persistence.New(
-		persistence.WithPath(cfg.String("database-path", "data/itinerarium.db")),
-	)
+	cfg, err := components.LoadServerConfig()
+	if err != nil {
+		return err
+	}
+
+	db, err := components.SetupDatabase(cfg)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = db.Shutdown(context.Background()) }()
 
-	if err := db.Migrate(); err != nil {
-		return err
-	}
+	repos := components.NewRepositories(db)
 
-	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(cfg.String("keys-path", "data/keys")))
+	tokens, err := components.SetupAuthentication(cfg, repos.RevokedTokens)
 	if err != nil {
 		return err
 	}
 
-	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
-	setupSvc := application.NewSetupService(repositories.NewUsers(db), tokens)
+	services := components.NewServices(repos, tokens)
 
-	user, _, err := setupSvc.CreateInitialGM(ctx, email, password)
+	user, _, err := services.Setup.CreateInitialGM(ctx, email, password)
 	if err != nil {
 		return err
 	}

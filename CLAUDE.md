@@ -30,7 +30,8 @@ Full docs live in `docs/`: [features](docs/features.md), [architecture](docs/arc
 
 ```
 api/
-├── cmd/                    # Cobra CLI commands
+├── cmd/                    # Cobra CLI commands (thin: delegate to components)
+├── components/             # Composition root — wires config→db→auth→repos→services→router→server
 ├── application/            # Service / business logic layer
 ├── infrastructure/
 │   ├── authentication/     # JWT, JTI, key storage
