@@ -107,7 +107,7 @@ func (s *CharacterService) Get(ctx context.Context, requester Requester, id stri
 }
 ```
 
-### 5. Route — handler in `infrastructure/transport/`, wired in `cmd/serve.go`
+### 5. Route — handler in `infrastructure/transport/`, wired in `components/router.go`
 
 Handlers decode the request, call one service method, encode the response:
 
@@ -121,11 +121,13 @@ func GetCharacterHandler(svc *application.CharacterService) http.Handler {
 }
 ```
 
-Wire it in `cmd/serve.go` with the existing options pattern:
+Wire it into `CreateRouter` in `components/router.go` with the existing options pattern (services come off the `*Services` bundle):
 
 ```go
-transport.WithHandle("GET /api/characters/{id}", transport.GetCharacterHandler(characterSvc)),
+transport.WithHandle("GET /api/characters/{id}", requireAuth(transport.GetCharacterHandler(services.Characters))),
 ```
+
+If the handler needs a new service or repository, add it to the `Services` / `Repositories` bundle in `components/services.go` / `components/repositories.go` — that is the composition root.
 
 Route patterns use Go 1.22+ `http.ServeMux` syntax: `"METHOD /path/{param}"`, read params with `r.PathValue("param")`.
 
@@ -139,7 +141,8 @@ Route patterns use Go 1.22+ `http.ServeMux` syntax: `"METHOD /path/{param}"`, re
 
 - **Functional options** for every constructor that has configuration: `New(opts ...Option)` — see `servers/server.go`, `persistence/database.go`.
 - **Config**: read via `config.GetContext("component")`; bind command flags with `config.MustBindFlags` (see `cmd/serve.go`). Key `server.database-path` = flag `--database-path` = env `SERVER_DATABASE_PATH` = YAML `server.database-path`.
-- **Shutdown**: anything holding resources implements a `lifecycle` interface (`Shutdown(ctx) error` usually) and gets passed to `lifecycle.ShutdownAll` in `cmd/serve.go`.
+- **Shutdown**: anything holding resources implements a `lifecycle` interface (`Shutdown(ctx) error` usually) and is joined by `lifecycle.ShutdownAll` in `ServerComponents.Shutdown` (`components/build.go`).
+- **Composition root**: `components/` wires config → database → auth → repositories → services → router → server. `BuildServer(ctx)` returns a `*ServerComponents`; commands (`cmd/serve.go`, `cmd/init.go`) stay thin and reuse the smaller builders (`SetupDatabase`, `NewRepositories`, `SetupAuthentication`, `NewServices`).
 - **SQLite driver**: `github.com/glebarez/sqlite` (pure Go, no cgo, FTS5-capable). Do not switch to `gorm.io/driver/sqlite` — it needs cgo and breaks the static Docker build.
 - **Errors**: wrap with `fmt.Errorf("doing thing: %w", err)`; sentinel errors (`ErrNotFound`) live in the service layer.
 - **Logging**: `github.com/charmbracelet/log` (`log.Default()`, `logger.Info("msg", "key", value)`). The linter rejects the stdlib `log` package (and `log/slog` — same import prefix). `infrastructure/logging` configures the global logger from the `log` config component (`--level`/`LOG_LEVEL`, `--format`/`LOG_FORMAT` — text/json/logfmt, `--report-caller`/`LOG_REPORT_CALLER`) and carries request-scoped loggers through `context.Context` via `logging.Context`/`logging.From` — request handlers get one via `logging.From(r.Context())` after `transport.Logging` middleware has run.
