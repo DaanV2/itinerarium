@@ -51,7 +51,7 @@ func BuildServer(ctx context.Context) (*ServerComponents, error) {
 	}
 
 	server := servers.New(
-		servers.WithAddr(cfg.Address.Listen()),
+		servers.WithAddr(cfg.Address.StringAddr()),
 		servers.WithHandler(CreateRouter(services, logger)),
 	)
 

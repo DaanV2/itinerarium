@@ -27,8 +27,8 @@ func ParseAddress(addr string) (Address, error) {
 	return Address{Host: host, Port: port}, nil
 }
 
-// Listen renders the address as the "host:port" string http.Server.Addr wants.
-func (a Address) Listen() string {
+// StringAddr renders the address as the "host:port" string http.Server.Addr wants.
+func (a Address) StringAddr() string {
 	return net.JoinHostPort(a.Host, a.Port)
 }
 
