@@ -47,40 +47,67 @@ func recordMiddleware(order *[]string, name string) transport.Middleware {
 	}
 }
 
-func TestGroupMiddlewareWrapsOnlyGroupRoutes(t *testing.T) {
+func TestSubRouteMountsRoutesUnderPrefix(t *testing.T) {
+	sub := transport.NewRouter(
+		transport.WithHandle("GET /", transport.HealthHandler()),     // collapses to the prefix
+		transport.WithHandle("GET /ping", transport.HealthHandler()), // nests under the prefix
+	)
+
+	router := transport.NewRouter(
+		transport.WithSubRoute("/api/items", sub),
+	)
+
+	for _, path := range []string{"/api/items", "/api/items/ping"} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for %s, got %d", path, rec.Code)
+		}
+	}
+}
+
+func TestSubRouteAppliesItsOwnMiddleware(t *testing.T) {
 	var seen []string
+
+	sub := transport.NewRouter(
+		transport.WithMiddleware(recordMiddleware(&seen, "auth")),
+		transport.WithHandle("GET /private", transport.HealthHandler()),
+	)
 
 	router := transport.NewRouter(
 		transport.WithHandle("GET /public", transport.HealthHandler()),
-		transport.WithGroup(recordMiddleware(&seen, "auth"),
-			transport.WithHandle("GET /private", transport.HealthHandler()),
-		),
+		transport.WithSubRoute("/api", sub),
 	)
 
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/public", http.NoBody))
 
 	if len(seen) != 0 {
-		t.Fatalf("group middleware should not run for public route, saw %v", seen)
+		t.Fatalf("sub middleware should not run for a route outside the subrouter, saw %v", seen)
 	}
 
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/private", http.NoBody))
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/private", http.NoBody))
 
 	if len(seen) != 1 || seen[0] != "auth" {
-		t.Fatalf("group middleware should wrap group route once, saw %v", seen)
+		t.Fatalf("sub middleware should wrap the sub route once, saw %v", seen)
 	}
 }
 
-func TestNestedGroupsWrapOuterFirst(t *testing.T) {
+func TestNestedSubRoutesWrapOuterFirst(t *testing.T) {
 	var order []string
 
-	router := transport.NewRouter(
-		transport.WithGroup(recordMiddleware(&order, "outer"),
-			transport.WithGroup(recordMiddleware(&order, "inner"),
-				transport.WithHandle("GET /deep", transport.HealthHandler()),
-			),
-		),
+	inner := transport.NewRouter(
+		transport.WithMiddleware(recordMiddleware(&order, "inner")),
+		transport.WithHandle("GET /deep", transport.HealthHandler()),
 	)
-	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/deep", http.NoBody))
+	outer := transport.NewRouter(
+		transport.WithMiddleware(recordMiddleware(&order, "outer")),
+		transport.WithSubRoute("/in", inner),
+	)
+	router := transport.NewRouter(
+		transport.WithSubRoute("/api", outer),
+	)
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/in/deep", http.NoBody))
 
 	if len(order) != 2 || order[0] != "outer" || order[1] != "inner" {
 		t.Fatalf("expected outer then inner, got %v", order)
