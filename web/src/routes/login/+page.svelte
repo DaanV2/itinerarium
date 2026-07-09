@@ -2,6 +2,10 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { login } from '$lib/api/auth';
+	import { setAccessToken } from '$lib/auth-token';
+	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
+	import FormField from '$lib/components/FormField.svelte';
+	import SubmitButton from '$lib/components/SubmitButton.svelte';
 
 	let email = $state('');
 	let password = $state('');
@@ -15,7 +19,7 @@
 
 		try {
 			const account = await login(email, password);
-			localStorage.setItem('itinerarium_access_token', account.access_token);
+			setAccessToken(account.access_token);
 			await goto(resolve('/'));
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Login failed.';
@@ -29,24 +33,26 @@
 	<h1>Log in</h1>
 
 	<form onsubmit={handleSubmit}>
-		<label for="email">Email</label>
-		<input id="email" type="email" required autocomplete="username" bind:value={email} />
+		<FormField
+			id="email"
+			label="Email"
+			type="email"
+			required
+			autocomplete="username"
+			bind:value={email}
+		/>
 
-		<label for="password">Password</label>
-		<input
+		<FormField
 			id="password"
+			label="Password"
 			type="password"
 			required
 			autocomplete="current-password"
 			bind:value={password}
 		/>
 
-		{#if error}
-			<p role="alert">{error}</p>
-		{/if}
+		<ErrorAlert message={error} />
 
-		<button type="submit" disabled={submitting}>
-			{submitting ? 'Logging in…' : 'Log in'}
-		</button>
+		<SubmitButton pending={submitting} label="Log in" pendingLabel="Logging in…" />
 	</form>
 </main>
