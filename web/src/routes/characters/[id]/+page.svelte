@@ -11,6 +11,10 @@
 		setMoney
 	} from '$lib/api/inventory';
 	import { listCurrencies, listItemDefinitions } from '$lib/api/catalog';
+	import { getAccessToken } from '$lib/auth-token';
+	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
+	import FormField from '$lib/components/FormField.svelte';
+	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import { mergeBalances, type CurrencyBalance } from '$lib/inventory-view';
 	import type {
 		Character,
@@ -39,13 +43,9 @@
 
 	let moneyRows = $derived<CurrencyBalance[]>(mergeBalances(currencies, balances));
 
-	function accessToken(): string {
-		return localStorage.getItem('itinerarium_access_token') ?? '';
-	}
-
 	async function loadAll() {
 		loading = true;
-		const token = accessToken();
+		const token = getAccessToken();
 		try {
 			[character, items, currencies, balances, itemDefinitions] = await Promise.all([
 				getCharacter(characterId, token),
@@ -74,7 +74,7 @@
 	}
 
 	async function refreshInventory() {
-		items = await listInventory(characterId, accessToken());
+		items = await listInventory(characterId, getAccessToken());
 	}
 
 	async function handleAddItem(event: SubmitEvent) {
@@ -89,7 +89,7 @@
 					quantity: itemQuantity,
 					item_definition_id: itemDefinitionId || undefined
 				},
-				accessToken()
+				getAccessToken()
 			);
 			itemName = '';
 			itemDefinitionId = '';
@@ -105,7 +105,7 @@
 	async function handleRemoveItem(itemId: string) {
 		error = '';
 		try {
-			await removeInventoryItem(characterId, itemId, accessToken());
+			await removeInventoryItem(characterId, itemId, getAccessToken());
 			await refreshInventory();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to remove item.';
@@ -115,8 +115,8 @@
 	async function handleSetMoney(currencyId: string, amount: number) {
 		error = '';
 		try {
-			await setMoney(characterId, currencyId, amount, accessToken());
-			balances = await listMoney(characterId, accessToken());
+			await setMoney(characterId, currencyId, amount, getAccessToken());
+			balances = await listMoney(characterId, getAccessToken());
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to update money.';
 		}
@@ -126,9 +126,7 @@
 <main>
 	<p><a href={resolve('/characters')}>← Characters</a></p>
 
-	{#if error}
-		<p role="alert">{error}</p>
-	{/if}
+	<ErrorAlert message={error} />
 
 	{#if loading}
 		<p>Loading…</p>
@@ -164,15 +162,18 @@
 					{/each}
 				</select>
 
-				<label for="item-name">Name</label>
-				<input id="item-name" type="text" required bind:value={itemName} />
+				<FormField id="item-name" label="Name" type="text" required bind:value={itemName} />
 
-				<label for="item-qty">Quantity</label>
-				<input id="item-qty" type="number" min="1" required bind:value={itemQuantity} />
+				<FormField
+					id="item-qty"
+					label="Quantity"
+					type="number"
+					min={1}
+					required
+					bind:value={itemQuantity}
+				/>
 
-				<button type="submit" disabled={addingItem}>
-					{addingItem ? 'Adding…' : 'Add item'}
-				</button>
+				<SubmitButton pending={addingItem} label="Add item" pendingLabel="Adding…" />
 			</form>
 		</section>
 

@@ -1,0 +1,23 @@
+const TOKEN_KEY = 'itinerarium_access_token';
+
+/**
+ * Reads the stored access token, or an empty string when none is set (or when
+ * running server-side where `localStorage` is unavailable). API wrappers treat
+ * an empty token as "unauthenticated".
+ */
+export function getAccessToken(): string {
+	if (typeof localStorage === 'undefined') return '';
+	return localStorage.getItem(TOKEN_KEY) ?? '';
+}
+
+/** Persists the access token issued after login/setup. */
+export function setAccessToken(token: string): void {
+	if (typeof localStorage === 'undefined') return;
+	localStorage.setItem(TOKEN_KEY, token);
+}
+
+/** Clears the stored access token (e.g. on logout). */
+export function clearAccessToken(): void {
+	if (typeof localStorage === 'undefined') return;
+	localStorage.removeItem(TOKEN_KEY);
+}

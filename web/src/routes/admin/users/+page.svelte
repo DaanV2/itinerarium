@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createAccount, listAccounts, resetPassword } from '$lib/api/accounts';
+	import { getAccessToken } from '$lib/auth-token';
+	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
+	import FormField from '$lib/components/FormField.svelte';
+	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import type { Account, Role } from '$lib/types';
 
 	let accounts = $state<Account[]>([]);
@@ -11,14 +15,10 @@
 	let error = $state('');
 	let issuedCredential = $state<{ email: string; password: string } | null>(null);
 
-	function accessToken(): string {
-		return localStorage.getItem('itinerarium_access_token') ?? '';
-	}
-
 	async function loadAccounts() {
 		loading = true;
 		try {
-			accounts = await listAccounts(accessToken());
+			accounts = await listAccounts(getAccessToken());
 			error = '';
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load accounts.';
@@ -35,7 +35,7 @@
 		submitting = true;
 
 		try {
-			const created = await createAccount(email, role, accessToken());
+			const created = await createAccount(email, role, getAccessToken());
 			issuedCredential = { email: created.email, password: created.temporary_password };
 			email = '';
 			role = 'player';
@@ -51,7 +51,7 @@
 		error = '';
 
 		try {
-			const result = await resetPassword(account.id, accessToken());
+			const result = await resetPassword(account.id, getAccessToken());
 			issuedCredential = { email: account.email, password: result.temporary_password };
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to reset password.';
@@ -62,9 +62,7 @@
 <main>
 	<h1>Accounts</h1>
 
-	{#if error}
-		<p role="alert">{error}</p>
-	{/if}
+	<ErrorAlert message={error} />
 
 	{#if issuedCredential}
 		<p role="status">
@@ -77,8 +75,14 @@
 	<section>
 		<h2>Create account</h2>
 		<form onsubmit={handleCreate}>
-			<label for="email">Email</label>
-			<input id="email" type="email" required autocomplete="off" bind:value={email} />
+			<FormField
+				id="email"
+				label="Email"
+				type="email"
+				required
+				autocomplete="off"
+				bind:value={email}
+			/>
 
 			<label for="role">Role</label>
 			<select id="role" bind:value={role}>
@@ -86,9 +90,7 @@
 				<option value="gm">GM</option>
 			</select>
 
-			<button type="submit" disabled={submitting}>
-				{submitting ? 'Creating…' : 'Create account'}
-			</button>
+			<SubmitButton pending={submitting} label="Create account" pendingLabel="Creating…" />
 		</form>
 	</section>
 

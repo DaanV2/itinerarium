@@ -2,6 +2,10 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { createCharacter, listCharacters } from '$lib/api/characters';
+	import { getAccessToken } from '$lib/auth-token';
+	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
+	import FormField from '$lib/components/FormField.svelte';
+	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import type { Character } from '$lib/types';
 
 	let characters = $state<Character[]>([]);
@@ -10,14 +14,10 @@
 	let submitting = $state(false);
 	let error = $state('');
 
-	function accessToken(): string {
-		return localStorage.getItem('itinerarium_access_token') ?? '';
-	}
-
 	async function loadCharacters() {
 		loading = true;
 		try {
-			characters = await listCharacters(accessToken());
+			characters = await listCharacters(getAccessToken());
 			error = '';
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load characters.';
@@ -34,7 +34,7 @@
 		submitting = true;
 
 		try {
-			await createCharacter(name, accessToken());
+			await createCharacter(name, getAccessToken());
 			name = '';
 			await loadCharacters();
 		} catch (err) {
@@ -48,19 +48,14 @@
 <main>
 	<h1>Characters</h1>
 
-	{#if error}
-		<p role="alert">{error}</p>
-	{/if}
+	<ErrorAlert message={error} />
 
 	<section>
 		<h2>Create character</h2>
 		<form onsubmit={handleCreate}>
-			<label for="name">Name</label>
-			<input id="name" type="text" required bind:value={name} />
+			<FormField id="name" label="Name" type="text" required bind:value={name} />
 
-			<button type="submit" disabled={submitting}>
-				{submitting ? 'Creating…' : 'Create character'}
-			</button>
+			<SubmitButton pending={submitting} label="Create character" pendingLabel="Creating…" />
 		</form>
 	</section>
 

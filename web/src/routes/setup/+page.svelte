@@ -2,6 +2,10 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { createInitialAccount } from '$lib/api/setup';
+	import { setAccessToken } from '$lib/auth-token';
+	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
+	import FormField from '$lib/components/FormField.svelte';
+	import SubmitButton from '$lib/components/SubmitButton.svelte';
 
 	let email = $state('');
 	let password = $state('');
@@ -21,7 +25,7 @@
 		submitting = true;
 		try {
 			const account = await createInitialAccount(email, password);
-			localStorage.setItem('itinerarium_access_token', account.access_token);
+			setAccessToken(account.access_token);
 			await goto(resolve('/'));
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Setup failed.';
@@ -36,34 +40,36 @@
 	<p>This installation has no accounts yet. Create the game master account to get started.</p>
 
 	<form onsubmit={handleSubmit}>
-		<label for="email">Email</label>
-		<input id="email" type="email" required autocomplete="username" bind:value={email} />
+		<FormField
+			id="email"
+			label="Email"
+			type="email"
+			required
+			autocomplete="username"
+			bind:value={email}
+		/>
 
-		<label for="password">Password</label>
-		<input
+		<FormField
 			id="password"
+			label="Password"
 			type="password"
 			required
-			minlength="8"
+			minlength={8}
 			autocomplete="new-password"
 			bind:value={password}
 		/>
 
-		<label for="confirm-password">Confirm password</label>
-		<input
+		<FormField
 			id="confirm-password"
+			label="Confirm password"
 			type="password"
 			required
 			autocomplete="new-password"
 			bind:value={confirmPassword}
 		/>
 
-		{#if error}
-			<p role="alert">{error}</p>
-		{/if}
+		<ErrorAlert message={error} />
 
-		<button type="submit" disabled={submitting}>
-			{submitting ? 'Creating account…' : 'Create GM account'}
-		</button>
+		<SubmitButton pending={submitting} label="Create GM account" pendingLabel="Creating account…" />
 	</form>
 </main>
