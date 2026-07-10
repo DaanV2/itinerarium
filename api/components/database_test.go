@@ -7,21 +7,21 @@ import (
 )
 
 func TestDatabaseOptionsRejectsUnknownType(t *testing.T) {
-	_, err := components.DatabaseOptions(&components.ServerConfig{DatabaseType: "oracle"})
+	_, err := components.DatabaseOptions(components.DatabaseConfig{Type: "oracle"})
 	if err == nil {
 		t.Fatal("expected an error for an unsupported database type")
 	}
 }
 
 func TestDatabaseOptionsPostgresRequiresDSN(t *testing.T) {
-	_, err := components.DatabaseOptions(&components.ServerConfig{DatabaseType: "postgres"})
+	_, err := components.DatabaseOptions(components.DatabaseConfig{Type: "postgres"})
 	if err == nil {
 		t.Fatal("expected postgres without a DSN to error")
 	}
 }
 
 func TestDatabaseOptionsMySQLRequiresDSN(t *testing.T) {
-	_, err := components.DatabaseOptions(&components.ServerConfig{DatabaseType: "mysql"})
+	_, err := components.DatabaseOptions(components.DatabaseConfig{Type: "mysql"})
 	if err == nil {
 		t.Fatal("expected mysql without a DSN to error")
 	}
@@ -29,9 +29,9 @@ func TestDatabaseOptionsMySQLRequiresDSN(t *testing.T) {
 
 func TestDatabaseOptionsSQLiteDefaults(t *testing.T) {
 	// SQLite falls back to the file path and needs no DSN.
-	opts, err := components.DatabaseOptions(&components.ServerConfig{
-		DatabaseType: "sqlite",
-		DatabasePath: "data/itinerarium.db",
+	opts, err := components.DatabaseOptions(components.DatabaseConfig{
+		Type: "sqlite",
+		Path: "data/itinerarium.db",
 	})
 	if err != nil {
 		t.Fatalf("DatabaseOptions: %v", err)
@@ -43,7 +43,7 @@ func TestDatabaseOptionsSQLiteDefaults(t *testing.T) {
 }
 
 func TestDatabaseOptionsMemory(t *testing.T) {
-	opts, err := components.DatabaseOptions(&components.ServerConfig{DatabaseType: "memory"})
+	opts, err := components.DatabaseOptions(components.DatabaseConfig{Type: "memory"})
 	if err != nil {
 		t.Fatalf("DatabaseOptions: %v", err)
 	}
