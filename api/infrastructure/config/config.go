@@ -118,6 +118,19 @@ func MustBindFlags(component string, fs *pflag.FlagSet) {
 	}
 }
 
+// BindFlag binds a single flag under the component's namespace, so flag
+// --database-type on component "server" becomes key "server.database-type".
+func BindFlag(component string, f *pflag.Flag) error {
+	return v.BindPFlag(component+"."+f.Name, f)
+}
+
+// MustBindFlag is BindFlag for init() paths where a bind error is a bug.
+func MustBindFlag(component string, f *pflag.Flag) {
+	if err := BindFlag(component, f); err != nil {
+		panic(err)
+	}
+}
+
 // Context is a component-scoped view on the config singleton.
 type Context struct {
 	component string

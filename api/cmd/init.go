@@ -22,6 +22,7 @@ func init() {
 	initCmd.Flags().String("password", "", "password for the initial GM account")
 	_ = initCmd.MarkFlagRequired("email")
 	_ = initCmd.MarkFlagRequired("password")
+	addDatabaseFlags(initCmd)
 	rootCmd.AddCommand(initCmd)
 }
 

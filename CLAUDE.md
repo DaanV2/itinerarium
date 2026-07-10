@@ -19,7 +19,7 @@ Full docs live in `docs/`: [features](docs/features.md), [architecture](docs/arc
 
 | Layer | Technology |
 |-------|-----------|
-| API | Go, GORM, SQLite via `glebarez/sqlite` — pure Go, no cgo (FTS5 for search) |
+| API | Go, GORM. Backends: SQLite (default) via `glebarez/sqlite`, PostgreSQL, MySQL — all pure Go, no cgo |
 | Frontend | SvelteKit + TypeScript |
 | Deployment | Docker Compose |
 | CLI | Cobra |

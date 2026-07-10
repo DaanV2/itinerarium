@@ -92,7 +92,7 @@ The beta phase ends — and the product is 1.0 — only when every box below is 
 
 ### M6 — Search & Obsidian Import
 
-- [ ] FTS5 full-text search over titles, file names, tags, and content
+- [ ] Full-text search over titles, file names, tags, and content
 - [ ] Access filtering applied before results are returned (no leaks, no hit counts)
 - [ ] GM-only sections excluded from the player search index
 - [ ] GMs search across everything

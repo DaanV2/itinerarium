@@ -23,11 +23,11 @@ var serveCmd = &cobra.Command{
 
 func init() {
 	serveCmd.Flags().String("address", ":8080", "address the API server listens on")
-	serveCmd.Flags().String("database-path", "data/itinerarium.db", "path to the SQLite database file")
 	serveCmd.Flags().String("keys-path", "data/keys", "directory holding the RS512 JWT signing key pair")
 	serveCmd.Flags().Duration("token-ttl", authentication.DefaultTokenTTL, "access token lifetime")
 	serveCmd.Flags().String("catalog-path", "", "optional JSON/YAML file seeding the currency and item catalog on startup")
 	config.MustBindFlags("server", serveCmd.Flags())
+	addDatabaseFlags(serveCmd)
 }
 
 func runServe(cmd *cobra.Command, _ []string) error {

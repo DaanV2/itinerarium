@@ -7,6 +7,7 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
 	"github.com/DaanV2/itinerarium/api/infrastructure/config"
+	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 )
 
 // Address is the host and port the API server listens on. A bare port (empty
@@ -32,15 +33,29 @@ func (a Address) StringAddr() string {
 	return net.JoinHostPort(a.Host, a.Port)
 }
 
+// DatabaseConfig is the resolved database configuration for a backend.
+type DatabaseConfig struct {
+	// Type selects the backend: sqlite (default), memory, postgres, mysql.
+	Type string
+	// DSN is the connection string for postgres/mysql. For sqlite it overrides
+	// Path when set.
+	DSN string
+	// Path is the sqlite file location (used when DSN is empty).
+	Path            string
+	MaxIdleConns    int
+	MaxOpenConns    int
+	ConnMaxLifetime time.Duration
+}
+
 // ServerConfig is the resolved "server" configuration the components need. It
 // centralizes the flag/env/YAML keys and their defaults in one place so every
 // builder and command reads them the same way.
 type ServerConfig struct {
-	Address      Address
-	DatabasePath string
-	KeysPath     string
-	TokenTTL     time.Duration
-	CatalogPath  string
+	Address     Address
+	Database    DatabaseConfig
+	KeysPath    string
+	TokenTTL    time.Duration
+	CatalogPath string
 }
 
 // LoadServerConfig reads the "server" config context (flags → env → YAML →
@@ -54,10 +69,17 @@ func LoadServerConfig() (*ServerConfig, error) {
 	}
 
 	return &ServerConfig{
-		Address:      address,
-		DatabasePath: cfg.String("database-path", "data/itinerarium.db"),
-		KeysPath:     cfg.String("keys-path", "data/keys"),
-		TokenTTL:     cfg.Duration("token-ttl", authentication.DefaultTokenTTL),
-		CatalogPath:  cfg.String("catalog-path", ""),
+		Address: address,
+		Database: DatabaseConfig{
+			Type:            cfg.String("database-type", persistence.SQLite.String()),
+			DSN:             cfg.String("database-dsn", ""),
+			Path:            cfg.String("database-path", "data/itinerarium.db"),
+			MaxIdleConns:    cfg.Int("database-max-idle-conns", 2),
+			MaxOpenConns:    cfg.Int("database-max-open-conns", 0),
+			ConnMaxLifetime: cfg.Duration("database-conn-max-lifetime", time.Hour),
+		},
+		KeysPath:    cfg.String("keys-path", "data/keys"),
+		TokenTTL:    cfg.Duration("token-ttl", authentication.DefaultTokenTTL),
+		CatalogPath: cfg.String("catalog-path", ""),
 	}, nil
 }
