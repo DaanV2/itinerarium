@@ -47,20 +47,24 @@ func charactersRouter(services *Services) *transport.Router {
 		transport.WithHandle("POST /", transport.CreateCharacterHandler(services.Characters)),
 		transport.WithHandle("GET /{id}", transport.GetCharacterHandler(services.Characters)),
 		transport.WithHandle("PATCH /{id}", transport.UpdateCharacterHandler(services.Characters)),
-		transport.WithHandle("PUT /{id}/location", transport.SetCharacterLocationHandler(services.Characters)),
-		transport.WithHandle("DELETE /{id}/location", transport.ClearCharacterLocationHandler(services.Characters)),
+		transport.WithHandle("PUT /{id}/location", transport.SetCharacterLocationHandler(services.Locations)),
+		transport.WithHandle("DELETE /{id}/location", transport.ClearCharacterLocationHandler(services.Locations)),
 		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services)),
 		transport.WithSubRoute("/{id}/money", moneyRouter(services)),
 	)
 }
 
-// locationsRouter serves the campaign's locations under /api/locations.
+// locationsRouter serves locations and their access grants under
+// /api/locations.
 func locationsRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
 		transport.WithHandle("GET /", transport.ListLocationsHandler(services.Locations)),
 		transport.WithHandle("POST /", transport.CreateLocationHandler(services.Locations)),
 		transport.WithHandle("GET /{id}", transport.GetLocationHandler(services.Locations)),
 		transport.WithHandle("PATCH /{id}", transport.UpdateLocationHandler(services.Locations)),
+		transport.WithHandle("GET /{id}/access", transport.ListLocationAccessHandler(services.Locations)),
+		transport.WithHandle("POST /{id}/access", transport.GrantLocationAccessHandler(services.Locations)),
+		transport.WithHandle("DELETE /{id}/access/{accessId}", transport.RevokeLocationAccessHandler(services.Locations)),
 	)
 }
 

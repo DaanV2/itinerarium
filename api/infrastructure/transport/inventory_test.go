@@ -45,7 +45,7 @@ func newInventoryTestEnv(t *testing.T) inventoryTestEnv {
 	currencies := repositories.NewCurrencies(db)
 	itemDefs := repositories.NewItemDefinitions(db)
 	authSvc := application.NewAuthService(tokens, users)
-	characterSvc := application.NewCharacterService(characters, users, repositories.NewLocations(db))
+	characterSvc := application.NewCharacterService(characters, users)
 	catalogSvc := application.NewCatalogService(currencies, itemDefs)
 	inventorySvc := application.NewInventoryService(
 		characterSvc, repositories.NewInventoryItems(db), repositories.NewMoneyBalances(db), currencies, itemDefs,

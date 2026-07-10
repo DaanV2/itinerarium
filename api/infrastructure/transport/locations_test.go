@@ -15,13 +15,14 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
 )
 
-type locationsTestEnv struct {
+type locationHTTPTestEnv struct {
 	router      *transport.Router
 	gmToken     string
 	playerToken string
+	characterID string
 }
 
-func newLocationsTestEnv(t *testing.T) locationsTestEnv {
+func newLocationHTTPTestEnv(t *testing.T) locationHTTPTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
@@ -39,30 +40,30 @@ func newLocationsTestEnv(t *testing.T) locationsTestEnv {
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
-	locationSvc := application.NewLocationService(repositories.NewLocations(db))
+	characters := repositories.NewCharacters(db)
 	authSvc := application.NewAuthService(tokens, users)
+	characterSvc := application.NewCharacterService(characters, users)
+	locationSvc := application.NewLocationService(
+		repositories.NewLocations(db),
+		repositories.NewLocationAccesses(db),
+		repositories.NewGroups(db),
+		characters,
+		characterSvc,
+	)
 	requireAuth := transport.RequireAuth(authSvc)
 
 	ctx := t.Context()
-
 	gm := &models.User{Email: "gm@example.com", PasswordHash: "hash", Role: models.RoleGM}
-	if err := users.Create(ctx, gm); err != nil {
-		t.Fatalf("Create gm: %v", err)
-	}
-
 	player := &models.User{Email: "player@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, player); err != nil {
-		t.Fatalf("Create player: %v", err)
+	for _, u := range []*models.User{gm, player} {
+		if err := users.Create(ctx, u); err != nil {
+			t.Fatalf("Create user: %v", err)
+		}
 	}
 
-	gmToken, err := tokens.Issue(gm.ID)
-	if err != nil {
-		t.Fatalf("Issue(gm): %v", err)
-	}
-
-	playerToken, err := tokens.Issue(player.ID)
-	if err != nil {
-		t.Fatalf("Issue(player): %v", err)
+	character := &models.Character{Name: "Aria", UserID: player.ID}
+	if err := characters.Create(ctx, character); err != nil {
+		t.Fatalf("Create character: %v", err)
 	}
 
 	router := transport.NewRouter(
@@ -70,12 +71,28 @@ func newLocationsTestEnv(t *testing.T) locationsTestEnv {
 		transport.WithHandle("POST /api/locations", requireAuth(transport.CreateLocationHandler(locationSvc))),
 		transport.WithHandle("GET /api/locations/{id}", requireAuth(transport.GetLocationHandler(locationSvc))),
 		transport.WithHandle("PATCH /api/locations/{id}", requireAuth(transport.UpdateLocationHandler(locationSvc))),
+		transport.WithHandle(
+			"POST /api/locations/{id}/access", requireAuth(transport.GrantLocationAccessHandler(locationSvc)),
+		),
+		transport.WithHandle(
+			"GET /api/locations/{id}/access", requireAuth(transport.ListLocationAccessHandler(locationSvc)),
+		),
+		transport.WithHandle(
+			"PUT /api/characters/{id}/location", requireAuth(transport.SetCharacterLocationHandler(locationSvc)),
+		),
 	)
 
-	return locationsTestEnv{router: router, gmToken: gmToken, playerToken: playerToken}
+	return locationHTTPTestEnv{
+		router:      router,
+		gmToken:     issueToken(t, tokens, gm.ID),
+		playerToken: issueToken(t, tokens, player.ID),
+		characterID: character.ID,
+	}
 }
 
-func (e locationsTestEnv) doJSON(t *testing.T, method, path, token string, payload any) *httptest.ResponseRecorder {
+func (e locationHTTPTestEnv) doJSON(
+	t *testing.T, method, path, token string, payload any,
+) *httptest.ResponseRecorder {
 	t.Helper()
 
 	var body bytes.Buffer
@@ -96,73 +113,89 @@ func (e locationsTestEnv) doJSON(t *testing.T, method, path, token string, paylo
 	return rec
 }
 
-func TestCreateLocation_RequiresAuth(t *testing.T) {
-	env := newLocationsTestEnv(t)
+func (e locationHTTPTestEnv) createLocation(t *testing.T, name string) string {
+	t.Helper()
 
-	rec := env.doJSON(t, http.MethodPost, "/api/locations", "", map[string]string{"name": "Waterdeep"})
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestCreateLocation_PlayerForbidden(t *testing.T) {
-	env := newLocationsTestEnv(t)
-
-	rec := env.doJSON(t, http.MethodPost, "/api/locations", env.playerToken, map[string]string{"name": "Waterdeep"})
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
-	}
-}
-
-func TestCreateLocation_GM(t *testing.T) {
-	env := newLocationsTestEnv(t)
-
-	rec := env.doJSON(t, http.MethodPost, "/api/locations", env.gmToken,
-		map[string]string{"name": "Waterdeep", "plane": "Material"})
+	rec := e.doJSON(t, http.MethodPost, "/api/locations", e.gmToken,
+		map[string]any{"name": name, "plane": "Material"})
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("create location: expected 201, got %d: %s", rec.Code, rec.Body.String())
 	}
 
 	var created struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Plane string `json:"plane"`
+		ID string `json:"id"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding body: %v", err)
+		t.Fatalf("decoding location: %v", err)
 	}
-	if created.Name != "Waterdeep" || created.Plane != "Material" {
-		t.Fatalf("created = %+v", created)
+
+	return created.ID
+}
+
+func TestLocations_CreateIsGMOnly(t *testing.T) {
+	env := newLocationHTTPTestEnv(t)
+
+	rec := env.doJSON(t, http.MethodPost, "/api/locations", env.playerToken,
+		map[string]any{"name": "The Tavern"})
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for player create, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
-func TestListLocations_PlayerCanRead(t *testing.T) {
-	env := newLocationsTestEnv(t)
+func TestLocations_HiddenWithoutGrant(t *testing.T) {
+	env := newLocationHTTPTestEnv(t)
+	locationID := env.createLocation(t, "Hidden Vault")
 
-	if rec := env.doJSON(t, http.MethodPost, "/api/locations", env.gmToken,
-		map[string]string{"name": "Waterdeep"}); rec.Code != http.StatusCreated {
-		t.Fatalf("seed: expected 201, got %d: %s", rec.Code, rec.Body.String())
+	// Absent from the list…
+	listRec := env.doJSON(t, http.MethodGet, "/api/locations", env.playerToken, nil)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list: expected 200, got %d: %s", listRec.Code, listRec.Body.String())
+	}
+	if body := listRec.Body.String(); body != "[]" && body != "null" {
+		t.Fatalf("list leaked locations to player without grants: %s", body)
 	}
 
-	rec := env.doJSON(t, http.MethodGet, "/api/locations", env.playerToken, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	// …direct read is 404, not 403.
+	getRec := env.doJSON(t, http.MethodGet, "/api/locations/"+locationID, env.playerToken, nil)
+	if getRec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 without grant, got %d: %s", getRec.Code, getRec.Body.String())
 	}
 
-	var list []struct{ Name string }
-	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
-	if len(list) != 1 {
-		t.Fatalf("expected 1 location, got %d", len(list))
+	// …and the access list is GM-only.
+	accessRec := env.doJSON(t, http.MethodGet, "/api/locations/"+locationID+"/access", env.playerToken, nil)
+	if accessRec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for player access list, got %d: %s", accessRec.Code, accessRec.Body.String())
 	}
 }
 
-func TestGetLocation_Unknown(t *testing.T) {
-	env := newLocationsTestEnv(t)
+func TestLocations_GrantThenVisibleAndAssignable(t *testing.T) {
+	env := newLocationHTTPTestEnv(t)
+	locationID := env.createLocation(t, "The Tavern")
 
-	rec := env.doJSON(t, http.MethodGet, "/api/locations/does-not-exist", env.playerToken, nil)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	grantRec := env.doJSON(t, http.MethodPost, "/api/locations/"+locationID+"/access", env.gmToken,
+		map[string]any{"character_id": env.characterID})
+	if grantRec.Code != http.StatusCreated {
+		t.Fatalf("grant: expected 201, got %d: %s", grantRec.Code, grantRec.Body.String())
+	}
+
+	getRec := env.doJSON(t, http.MethodGet, "/api/locations/"+locationID, env.playerToken, nil)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get with grant: expected 200, got %d: %s", getRec.Code, getRec.Body.String())
+	}
+
+	assignRec := env.doJSON(t, http.MethodPut, "/api/characters/"+env.characterID+"/location",
+		env.playerToken, map[string]any{"location_id": locationID})
+	if assignRec.Code != http.StatusOK {
+		t.Fatalf("assign: expected 200, got %d: %s", assignRec.Code, assignRec.Body.String())
+	}
+
+	var character struct {
+		LocationID string `json:"location_id"`
+	}
+	if err := json.Unmarshal(assignRec.Body.Bytes(), &character); err != nil {
+		t.Fatalf("decoding character: %v", err)
+	}
+	if character.LocationID != locationID {
+		t.Fatalf("location_id = %q, want %q", character.LocationID, locationID)
 	}
 }

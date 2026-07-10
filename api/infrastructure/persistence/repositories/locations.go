@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Locations provides access to the campaign's locations.
+// Locations provides access to campaign locations.
 type Locations struct{ db *persistence.Database }
 
 // NewLocations builds a Locations repository.
@@ -27,8 +27,7 @@ func (r *Locations) Create(ctx context.Context, l *models.Location) error {
 	return nil
 }
 
-// GetByID looks up a location by ID. It returns ErrNotFound if no location
-// matches.
+// GetByID looks up a location by ID, returning ErrNotFound if none matches.
 func (r *Locations) GetByID(ctx context.Context, id string) (*models.Location, error) {
 	var l models.Location
 
@@ -44,11 +43,28 @@ func (r *Locations) GetByID(ctx context.Context, id string) (*models.Location, e
 	return &l, nil
 }
 
-// List returns every location, ordered by plane then name.
+// List returns every location, ordered by plane then name (GM-wide view).
 func (r *Locations) List(ctx context.Context) ([]models.Location, error) {
 	var locations []models.Location
 
-	err := r.db.DB().WithContext(ctx).Order("plane").Order("name").Find(&locations).Error
+	err := r.db.DB().WithContext(ctx).Order("plane, name").Find(&locations).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return locations, nil
+}
+
+// ListByIDs returns the locations with the given IDs, ordered by plane then
+// name. An empty ID list returns no rows.
+func (r *Locations) ListByIDs(ctx context.Context, ids []string) ([]models.Location, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var locations []models.Location
+
+	err := r.db.DB().WithContext(ctx).Where("id IN ?", ids).Order("plane, name").Find(&locations).Error
 	if err != nil {
 		return nil, err
 	}

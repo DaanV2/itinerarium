@@ -13,16 +13,6 @@ import (
 func newTestCharactersEnv(t *testing.T) (*application.CharacterService, *repositories.Users) {
 	t.Helper()
 
-	svc, users, _ := newTestCharactersEnvWithLocations(t)
-
-	return svc, users
-}
-
-func newTestCharactersEnvWithLocations(
-	t *testing.T,
-) (*application.CharacterService, *repositories.Users, *repositories.Locations) {
-	t.Helper()
-
 	db, err := persistence.New(persistence.WithInMemory())
 	if err != nil {
 		t.Fatalf("persistence.New: %v", err)
@@ -33,9 +23,8 @@ func newTestCharactersEnvWithLocations(
 
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
-	locations := repositories.NewLocations(db)
 
-	return application.NewCharacterService(characters, users, locations), users, locations
+	return application.NewCharacterService(characters, users), users
 }
 
 func TestCharacterService_Create_ForSelf(t *testing.T) {
@@ -313,96 +302,5 @@ func TestCharacterService_Update_OtherOwnersCharacterIsHidden(t *testing.T) {
 	_, err = svc.Update(ctx, playerRequester, c.ID, &newName, nil)
 	if !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("Update(other owner's character) = %v, want ErrNotFound", err)
-	}
-}
-
-func TestCharacterService_SetLocation_OwnerCanPlaceCharacter(t *testing.T) {
-	svc, _, locations := newTestCharactersEnvWithLocations(t)
-	ctx := t.Context()
-
-	loc := &models.Location{Name: "Waterdeep"}
-	if err := locations.Create(ctx, loc); err != nil {
-		t.Fatalf("Create location: %v", err)
-	}
-
-	c, err := svc.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	updated, err := svc.SetLocation(ctx, playerRequester, c.ID, &loc.ID)
-	if err != nil {
-		t.Fatalf("SetLocation: %v", err)
-	}
-	if updated.LocationID == nil || *updated.LocationID != loc.ID {
-		t.Fatalf("LocationID = %v, want %q", updated.LocationID, loc.ID)
-	}
-}
-
-func TestCharacterService_SetLocation_ClearsWithNil(t *testing.T) {
-	svc, _, locations := newTestCharactersEnvWithLocations(t)
-	ctx := t.Context()
-
-	loc := &models.Location{Name: "Waterdeep"}
-	if err := locations.Create(ctx, loc); err != nil {
-		t.Fatalf("Create location: %v", err)
-	}
-
-	c, err := svc.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	if _, err := svc.SetLocation(ctx, playerRequester, c.ID, &loc.ID); err != nil {
-		t.Fatalf("SetLocation(set): %v", err)
-	}
-
-	cleared, err := svc.SetLocation(ctx, playerRequester, c.ID, nil)
-	if err != nil {
-		t.Fatalf("SetLocation(clear): %v", err)
-	}
-	if cleared.LocationID != nil {
-		t.Fatalf("LocationID = %v, want nil", cleared.LocationID)
-	}
-}
-
-func TestCharacterService_SetLocation_RejectsUnknownLocation(t *testing.T) {
-	svc, _, _ := newTestCharactersEnvWithLocations(t)
-	ctx := t.Context()
-
-	c, err := svc.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	missing := "does-not-exist"
-
-	_, err = svc.SetLocation(ctx, playerRequester, c.ID, &missing)
-	if !errors.Is(err, application.ErrUnknownLocation) {
-		t.Fatalf("SetLocation(unknown location) = %v, want ErrUnknownLocation", err)
-	}
-}
-
-func TestCharacterService_SetLocation_OtherOwnersCharacterIsHidden(t *testing.T) {
-	svc, users, locations := newTestCharactersEnvWithLocations(t)
-	ctx := t.Context()
-
-	loc := &models.Location{Name: "Waterdeep"}
-	if err := locations.Create(ctx, loc); err != nil {
-		t.Fatalf("Create location: %v", err)
-	}
-
-	other := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, other); err != nil {
-		t.Fatalf("Create user: %v", err)
-	}
-
-	c, err := svc.Create(ctx, gmRequester, other.ID, "Beren")
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	_, err = svc.SetLocation(ctx, playerRequester, c.ID, &loc.ID)
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("SetLocation(other owner's character) = %v, want ErrNotFound", err)
 	}
 }

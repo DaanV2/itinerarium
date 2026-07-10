@@ -6,10 +6,17 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
+	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 )
 
-func newTestLocationService(t *testing.T) *application.LocationService {
+type locationTestEnv struct {
+	locations  *application.LocationService
+	groups     *application.GroupService
+	characters *application.CharacterService
+}
+
+func newTestLocationEnv(t *testing.T) locationTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
@@ -20,52 +27,101 @@ func newTestLocationService(t *testing.T) *application.LocationService {
 		t.Fatalf("Migrate: %v", err)
 	}
 
-	return application.NewLocationService(repositories.NewLocations(db))
+	characterRepo := repositories.NewCharacters(db)
+	groupRepo := repositories.NewGroups(db)
+	charSvc := application.NewCharacterService(characterRepo, repositories.NewUsers(db))
+
+	return locationTestEnv{
+		locations: application.NewLocationService(
+			repositories.NewLocations(db),
+			repositories.NewLocationAccesses(db),
+			groupRepo,
+			characterRepo,
+			charSvc,
+		),
+		groups:     application.NewGroupService(groupRepo, charSvc),
+		characters: charSvc,
+	}
 }
 
-func TestLocationService_Create_GM(t *testing.T) {
-	svc := newTestLocationService(t)
-	ctx := t.Context()
+func (e locationTestEnv) createLocation(t *testing.T, name string) *models.Location {
+	t.Helper()
 
-	loc, err := svc.Create(ctx, gmRequester, "Waterdeep", "City of Splendors", "Material")
+	location, err := e.locations.Create(t.Context(), gmRequester, name, "", "Material")
 	if err != nil {
-		t.Fatalf("Create: %v", err)
+		t.Fatalf("Create location: %v", err)
 	}
-	if loc.Name != "Waterdeep" || loc.Plane != "Material" {
-		t.Fatalf("Create returned %+v", loc)
-	}
+
+	return location
 }
 
 func TestLocationService_Create_PlayerForbidden(t *testing.T) {
-	svc := newTestLocationService(t)
-	ctx := t.Context()
+	env := newTestLocationEnv(t)
 
-	_, err := svc.Create(ctx, playerRequester, "Waterdeep", "", "")
+	_, err := env.locations.Create(t.Context(), playerRequester, "The Feywild", "", "Feywild")
 	if !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("Create(player) = %v, want ErrForbidden", err)
+		t.Fatalf("Create as player = %v, want ErrForbidden", err)
 	}
 }
 
 func TestLocationService_Create_RejectsEmptyName(t *testing.T) {
-	svc := newTestLocationService(t)
-	ctx := t.Context()
+	env := newTestLocationEnv(t)
 
-	_, err := svc.Create(ctx, gmRequester, "", "", "")
+	_, err := env.locations.Create(t.Context(), gmRequester, "", "", "")
 	if !errors.Is(err, application.ErrInvalidName) {
 		t.Fatalf("Create(empty name) = %v, want ErrInvalidName", err)
 	}
 }
 
-func TestLocationService_List_AnyAuthenticated(t *testing.T) {
-	svc := newTestLocationService(t)
-	ctx := t.Context()
+func TestLocationService_Get_UnknownLocation(t *testing.T) {
+	env := newTestLocationEnv(t)
 
-	if _, err := svc.Create(ctx, gmRequester, "Waterdeep", "", ""); err != nil {
-		t.Fatalf("Create: %v", err)
+	_, err := env.locations.Get(t.Context(), gmRequester, "does-not-exist")
+	if !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("Get(unknown) = %v, want ErrNotFound", err)
+	}
+}
+
+func TestLocationService_HiddenWithoutGrant(t *testing.T) {
+	env := newTestLocationEnv(t)
+	ctx := t.Context()
+	location := env.createLocation(t, "Hidden Vault")
+	ownedCharacter(t, env.characters, "Aria")
+
+	// Not in the list…
+	locations, err := env.locations.List(ctx, playerRequester)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(locations) != 0 {
+		t.Fatalf("List leaked %d locations to an unauthorised player", len(locations))
 	}
 
-	// A player is not a GM but may still list locations.
-	locations, err := svc.List(ctx)
+	// …and a direct read is 404, never 403 (existence must not leak).
+	if _, err := env.locations.Get(ctx, playerRequester, location.ID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("Get without grant = %v, want ErrNotFound", err)
+	}
+}
+
+func TestLocationService_DirectGrantRevealsLocation(t *testing.T) {
+	env := newTestLocationEnv(t)
+	ctx := t.Context()
+	location := env.createLocation(t, "The Tavern")
+	character := ownedCharacter(t, env.characters, "Aria")
+
+	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil); err != nil {
+		t.Fatalf("GrantAccess: %v", err)
+	}
+
+	got, err := env.locations.Get(ctx, playerRequester, location.ID)
+	if err != nil {
+		t.Fatalf("Get with grant: %v", err)
+	}
+	if got.ID != location.ID {
+		t.Fatalf("Get returned %s, want %s", got.ID, location.ID)
+	}
+
+	locations, err := env.locations.List(ctx, playerRequester)
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -74,49 +130,160 @@ func TestLocationService_List_AnyAuthenticated(t *testing.T) {
 	}
 }
 
-func TestLocationService_Get_UnknownLocation(t *testing.T) {
-	svc := newTestLocationService(t)
+func TestLocationService_GroupGrantRevealsLocation(t *testing.T) {
+	env := newTestLocationEnv(t)
 	ctx := t.Context()
+	location := env.createLocation(t, "Guild Hall")
+	character := ownedCharacter(t, env.characters, "Aria")
 
-	_, err := svc.Get(ctx, playerRequester, "does-not-exist")
+	group, err := env.groups.Create(ctx, gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
+	if err != nil {
+		t.Fatalf("Create group: %v", err)
+	}
+	if err := env.groups.Join(ctx, playerRequester, group.ID, character.ID); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+
+	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, nil, &group.ID); err != nil {
+		t.Fatalf("GrantAccess(group): %v", err)
+	}
+
+	if _, err := env.locations.Get(ctx, playerRequester, location.ID); err != nil {
+		t.Fatalf("Get via group grant: %v", err)
+	}
+
+	// Leaving the group takes the access away again.
+	if err := env.groups.Leave(ctx, playerRequester, group.ID, character.ID); err != nil {
+		t.Fatalf("Leave: %v", err)
+	}
+	if _, err := env.locations.Get(ctx, playerRequester, location.ID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("Get after leaving group = %v, want ErrNotFound", err)
+	}
+}
+
+func TestLocationService_AnyoneWithAccessCanEdit(t *testing.T) {
+	env := newTestLocationEnv(t)
+	ctx := t.Context()
+	location := env.createLocation(t, "The Tavern")
+	character := ownedCharacter(t, env.characters, "Aria")
+
+	newDescription := "Smells of stale ale."
+
+	// Without access the edit reads as not-found…
+	_, err := env.locations.Update(ctx, playerRequester, location.ID, nil, &newDescription, nil)
 	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Get(unknown) = %v, want ErrNotFound", err)
+		t.Fatalf("Update without grant = %v, want ErrNotFound", err)
+	}
+
+	// …with access it succeeds (rule 7: seeing a location means editing it).
+	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil); err != nil {
+		t.Fatalf("GrantAccess: %v", err)
+	}
+
+	updated, err := env.locations.Update(ctx, playerRequester, location.ID, nil, &newDescription, nil)
+	if err != nil {
+		t.Fatalf("Update with grant: %v", err)
+	}
+	if updated.Description != newDescription {
+		t.Fatalf("Description = %q, want %q", updated.Description, newDescription)
 	}
 }
 
-func TestLocationService_Update_GMCanEdit(t *testing.T) {
-	svc := newTestLocationService(t)
+func TestLocationService_GrantAccess_Validation(t *testing.T) {
+	env := newTestLocationEnv(t)
 	ctx := t.Context()
+	location := env.createLocation(t, "The Tavern")
+	character := ownedCharacter(t, env.characters, "Aria")
 
-	loc, err := svc.Create(ctx, gmRequester, "Waterdeep", "old", "")
-	if err != nil {
-		t.Fatalf("Create: %v", err)
+	if _, err := env.locations.GrantAccess(ctx, playerRequester, location.ID, &character.ID, nil); !errors.Is(err, application.ErrForbidden) {
+		t.Fatalf("GrantAccess as player = %v, want ErrForbidden", err)
 	}
 
-	newDesc := "City of Splendors"
-
-	updated, err := svc.Update(ctx, gmRequester, loc.ID, nil, &newDesc, nil)
-	if err != nil {
-		t.Fatalf("Update: %v", err)
+	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, nil, nil); !errors.Is(err, application.ErrInvalidGrant) {
+		t.Fatalf("GrantAccess with no target = %v, want ErrInvalidGrant", err)
 	}
-	if updated.Description != newDesc {
-		t.Fatalf("Description = %q, want %q", updated.Description, newDesc)
+
+	groupID := "some-group"
+	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, &groupID); !errors.Is(err, application.ErrInvalidGrant) {
+		t.Fatalf("GrantAccess with two targets = %v, want ErrInvalidGrant", err)
+	}
+
+	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil); err != nil {
+		t.Fatalf("GrantAccess: %v", err)
+	}
+	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil); !errors.Is(err, application.ErrAlreadyGranted) {
+		t.Fatalf("duplicate GrantAccess = %v, want ErrAlreadyGranted", err)
 	}
 }
 
-func TestLocationService_Update_PlayerForbidden(t *testing.T) {
-	svc := newTestLocationService(t)
+func TestLocationService_RevokeAccessHidesAgain(t *testing.T) {
+	env := newTestLocationEnv(t)
 	ctx := t.Context()
+	location := env.createLocation(t, "The Tavern")
+	character := ownedCharacter(t, env.characters, "Aria")
 
-	loc, err := svc.Create(ctx, gmRequester, "Waterdeep", "", "")
+	grant, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil)
 	if err != nil {
-		t.Fatalf("Create: %v", err)
+		t.Fatalf("GrantAccess: %v", err)
 	}
 
-	newName := "Neverwinter"
+	if err := env.locations.RevokeAccess(ctx, gmRequester, location.ID, grant.ID); err != nil {
+		t.Fatalf("RevokeAccess: %v", err)
+	}
 
-	_, err = svc.Update(ctx, playerRequester, loc.ID, &newName, nil, nil)
-	if !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("Update(player) = %v, want ErrForbidden", err)
+	if _, err := env.locations.Get(ctx, playerRequester, location.ID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("Get after revoke = %v, want ErrNotFound", err)
+	}
+}
+
+func TestLocationService_AssignCharacter(t *testing.T) {
+	env := newTestLocationEnv(t)
+	ctx := t.Context()
+	location := env.createLocation(t, "The Tavern")
+	character := ownedCharacter(t, env.characters, "Aria")
+
+	// A player cannot place a character at a location it cannot see — and the
+	// error must read as not-found.
+	_, err := env.locations.AssignCharacter(ctx, playerRequester, character.ID, &location.ID)
+	if !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("AssignCharacter without access = %v, want ErrNotFound", err)
+	}
+
+	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil); err != nil {
+		t.Fatalf("GrantAccess: %v", err)
+	}
+
+	updated, err := env.locations.AssignCharacter(ctx, playerRequester, character.ID, &location.ID)
+	if err != nil {
+		t.Fatalf("AssignCharacter with access: %v", err)
+	}
+	if updated.LocationID == nil || *updated.LocationID != location.ID {
+		t.Fatalf("LocationID = %v, want %s", updated.LocationID, location.ID)
+	}
+
+	cleared, err := env.locations.AssignCharacter(ctx, playerRequester, character.ID, nil)
+	if err != nil {
+		t.Fatalf("AssignCharacter(clear): %v", err)
+	}
+	if cleared.LocationID != nil {
+		t.Fatalf("LocationID = %v, want nil after clearing", cleared.LocationID)
+	}
+}
+
+func TestLocationService_AssignCharacter_GMAnywhere_ForeignHidden(t *testing.T) {
+	env := newTestLocationEnv(t)
+	ctx := t.Context()
+	location := env.createLocation(t, "The Tavern")
+	character := ownedCharacter(t, env.characters, "Aria")
+
+	// GMs place any character anywhere, no grant needed.
+	if _, err := env.locations.AssignCharacter(ctx, gmRequester, character.ID, &location.ID); err != nil {
+		t.Fatalf("AssignCharacter as GM: %v", err)
+	}
+
+	// A different player cannot even confirm the character exists.
+	_, err := env.locations.AssignCharacter(ctx, otherPlayer, character.ID, &location.ID)
+	if !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("AssignCharacter foreign character = %v, want ErrNotFound", err)
 	}
 }

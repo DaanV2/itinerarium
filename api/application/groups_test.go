@@ -23,9 +23,7 @@ func newTestGroupEnv(t *testing.T) (
 		t.Fatalf("Migrate: %v", err)
 	}
 
-	charSvc := application.NewCharacterService(
-		repositories.NewCharacters(db), repositories.NewUsers(db), repositories.NewLocations(db),
-	)
+	charSvc := application.NewCharacterService(repositories.NewCharacters(db), repositories.NewUsers(db))
 	groupSvc := application.NewGroupService(repositories.NewGroups(db), charSvc)
 
 	return groupSvc, charSvc, repositories.NewActivityEntries(db)

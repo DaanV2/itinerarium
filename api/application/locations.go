@@ -9,24 +9,45 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 )
 
-// LocationService owns the campaign's locations. In M1 a location is just a
-// name, description, and plane (multi-plane support). Locations are readable by
-// any authenticated user; only a GM may create or edit them.
-//
-// M2 adds location inventories and per-character/group access control, at which
-// point visibility stops being campaign-wide; M3 opens editing to anyone who
-// can see a location. Until then locations are treated like the currency/item
-// catalogs: GM-authored, everyone-readable.
+// ErrInvalidGrant is returned when a location grant does not target exactly
+// one character or group.
+var ErrInvalidGrant = errors.New("grant must target exactly one character or group")
+
+// ErrAlreadyGranted is returned when an identical location grant already
+// exists.
+var ErrAlreadyGranted = errors.New("access already granted")
+
+// LocationService manages locations and their access grants. Locations have a
+// single access level — view + modify — granted per-character or via group
+// membership; GMs always see everything. Without a grant a location's
+// existence must not leak: lists omit it and direct reads return ErrNotFound
+// (core domain rule 3). Anyone who can see a location can edit it (rule 7).
 type LocationService struct {
-	locations *repositories.Locations
+	locations    *repositories.Locations
+	accesses     *repositories.LocationAccesses
+	groups       *repositories.Groups
+	characters   *repositories.Characters
+	characterSvc *CharacterService
 }
 
 // NewLocationService builds a LocationService.
-func NewLocationService(locations *repositories.Locations) *LocationService {
-	return &LocationService{locations: locations}
+func NewLocationService(
+	locations *repositories.Locations,
+	accesses *repositories.LocationAccesses,
+	groups *repositories.Groups,
+	characters *repositories.Characters,
+	characterSvc *CharacterService,
+) *LocationService {
+	return &LocationService{
+		locations:    locations,
+		accesses:     accesses,
+		groups:       groups,
+		characters:   characters,
+		characterSvc: characterSvc,
+	}
 }
 
-// Create adds a location to the campaign. Only a GM may call this.
+// Create adds a new location. GM only.
 func (s *LocationService) Create(
 	ctx context.Context, requester Requester, name, description, plane string,
 ) (*models.Location, error) {
@@ -45,10 +66,29 @@ func (s *LocationService) Create(
 	return location, nil
 }
 
-// List returns every location. Locations are campaign-wide and not secret in
-// M1, so any authenticated caller may read them.
-func (s *LocationService) List(ctx context.Context) ([]models.Location, error) {
-	locations, err := s.locations.List(ctx)
+// List returns every location for a GM, and only the accessible ones for a
+// player (through any of their characters, directly or via groups).
+func (s *LocationService) List(ctx context.Context, requester Requester) ([]models.Location, error) {
+	if requester.IsGM() {
+		locations, err := s.locations.List(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("listing locations: %w", err)
+		}
+
+		return locations, nil
+	}
+
+	characterIDs, groupIDs, err := s.requesterScope(ctx, requester)
+	if err != nil {
+		return nil, err
+	}
+
+	ids, err := s.accesses.AccessibleLocationIDs(ctx, characterIDs, groupIDs)
+	if err != nil {
+		return nil, fmt.Errorf("resolving accessible locations: %w", err)
+	}
+
+	locations, err := s.locations.ListByIDs(ctx, ids)
 	if err != nil {
 		return nil, fmt.Errorf("listing locations: %w", err)
 	}
@@ -56,10 +96,10 @@ func (s *LocationService) List(ctx context.Context) ([]models.Location, error) {
 	return locations, nil
 }
 
-// Get returns a single location. Any authenticated caller may read it; an
-// unknown ID yields ErrNotFound.
-func (s *LocationService) Get(ctx context.Context, _ Requester, id string) (*models.Location, error) {
-	l, err := s.locations.GetByID(ctx, id)
+// Get returns a location only if the requester may see it — otherwise
+// ErrNotFound, never ErrForbidden.
+func (s *LocationService) Get(ctx context.Context, requester Requester, id string) (*models.Location, error) {
+	location, err := s.locations.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, repositories.ErrNotFound) {
 			return nil, ErrNotFound
@@ -68,25 +108,34 @@ func (s *LocationService) Get(ctx context.Context, _ Requester, id string) (*mod
 		return nil, fmt.Errorf("loading location: %w", err)
 	}
 
-	return l, nil
+	if requester.IsGM() {
+		return location, nil
+	}
+
+	characterIDs, groupIDs, err := s.requesterScope(ctx, requester)
+	if err != nil {
+		return nil, err
+	}
+
+	ok, err := s.accesses.HasAccess(ctx, id, characterIDs, groupIDs)
+	if err != nil {
+		return nil, fmt.Errorf("checking location access: %w", err)
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	return location, nil
 }
 
-// Update edits a location's name, description, and/or plane. Only a GM may call
-// this in M1 (M3 opens editing to anyone who can see the location).
+// Update edits a location's name, description, and/or plane. Anyone who can
+// see the location can edit it.
 func (s *LocationService) Update(
 	ctx context.Context, requester Requester, id string, name, description, plane *string,
 ) (*models.Location, error) {
-	if !requester.IsGM() {
-		return nil, ErrForbidden
-	}
-
-	l, err := s.locations.GetByID(ctx, id)
+	location, err := s.Get(ctx, requester, id)
 	if err != nil {
-		if errors.Is(err, repositories.ErrNotFound) {
-			return nil, ErrNotFound
-		}
-
-		return nil, fmt.Errorf("loading location: %w", err)
+		return nil, err
 	}
 
 	if name != nil {
@@ -94,18 +143,205 @@ func (s *LocationService) Update(
 			return nil, ErrInvalidName
 		}
 
-		l.Name = *name
+		location.Name = *name
 	}
 	if description != nil {
-		l.Description = *description
+		location.Description = *description
 	}
 	if plane != nil {
-		l.Plane = *plane
+		location.Plane = *plane
 	}
 
-	if err := s.locations.Update(ctx, l); err != nil {
+	if err := s.locations.Update(ctx, location); err != nil {
 		return nil, fmt.Errorf("updating location: %w", err)
 	}
 
-	return l, nil
+	return location, nil
+}
+
+// GrantAccess gives a character or group (exactly one) access to a location.
+// GM only.
+func (s *LocationService) GrantAccess(
+	ctx context.Context, requester Requester, locationID string, characterID, groupID *string,
+) (*models.LocationAccess, error) {
+	if !requester.IsGM() {
+		return nil, ErrForbidden
+	}
+	if (characterID == nil) == (groupID == nil) {
+		return nil, ErrInvalidGrant
+	}
+
+	if _, err := s.locations.GetByID(ctx, locationID); err != nil {
+		return nil, notFoundOr(err, "loading location")
+	}
+	if characterID != nil {
+		if _, err := s.characters.GetByID(ctx, *characterID); err != nil {
+			return nil, notFoundOr(err, "loading character")
+		}
+	}
+	if groupID != nil {
+		if _, err := s.groups.GetByID(ctx, *groupID); err != nil {
+			return nil, notFoundOr(err, "loading group")
+		}
+	}
+
+	grant := &models.LocationAccess{LocationID: locationID, CharacterID: characterID, GroupID: groupID}
+
+	exists, err := s.accesses.Exists(ctx, grant)
+	if err != nil {
+		return nil, fmt.Errorf("checking existing grant: %w", err)
+	}
+	if exists {
+		return nil, ErrAlreadyGranted
+	}
+
+	if err := s.accesses.Create(ctx, grant); err != nil {
+		return nil, fmt.Errorf("granting access: %w", err)
+	}
+
+	return grant, nil
+}
+
+// ListAccess returns every grant on a location. GM only — players never see
+// the access list.
+func (s *LocationService) ListAccess(
+	ctx context.Context, requester Requester, locationID string,
+) ([]models.LocationAccess, error) {
+	if !requester.IsGM() {
+		return nil, ErrForbidden
+	}
+
+	if _, err := s.locations.GetByID(ctx, locationID); err != nil {
+		return nil, notFoundOr(err, "loading location")
+	}
+
+	accesses, err := s.accesses.ListByLocation(ctx, locationID)
+	if err != nil {
+		return nil, fmt.Errorf("listing grants: %w", err)
+	}
+
+	return accesses, nil
+}
+
+// RevokeAccess removes one grant from a location. GM only.
+func (s *LocationService) RevokeAccess(
+	ctx context.Context, requester Requester, locationID, accessID string,
+) error {
+	if !requester.IsGM() {
+		return ErrForbidden
+	}
+
+	grant, err := s.accesses.GetByID(ctx, accessID)
+	if err != nil {
+		return notFoundOr(err, "loading grant")
+	}
+	if grant.LocationID != locationID {
+		return ErrNotFound
+	}
+
+	if err := s.accesses.Delete(ctx, grant); err != nil {
+		return fmt.Errorf("revoking access: %w", err)
+	}
+
+	return nil
+}
+
+// AssignCharacter associates a character with a location (nil locationID
+// clears the association). The requester must own the character or be a GM.
+// A player may only place a character at a location that character can see —
+// an inaccessible location reads as ErrNotFound so its existence never leaks.
+func (s *LocationService) AssignCharacter(
+	ctx context.Context, requester Requester, characterID string, locationID *string,
+) (*models.Character, error) {
+	character, err := s.characterSvc.Get(ctx, requester, characterID)
+	if err != nil {
+		return nil, err
+	}
+
+	if locationID != nil {
+		if err := s.checkAssignable(ctx, requester, characterID, *locationID); err != nil {
+			return nil, err
+		}
+	}
+
+	character.LocationID = locationID
+	if err := s.characters.Update(ctx, character); err != nil {
+		return nil, fmt.Errorf("assigning character location: %w", err)
+	}
+
+	return character, nil
+}
+
+// checkAssignable confirms the location exists and — for players — that the
+// character can see it. Failures read as ErrNotFound so existence never
+// leaks.
+func (s *LocationService) checkAssignable(
+	ctx context.Context, requester Requester, characterID, locationID string,
+) error {
+	if _, err := s.locations.GetByID(ctx, locationID); err != nil {
+		return notFoundOr(err, "loading location")
+	}
+	if requester.IsGM() {
+		return nil
+	}
+
+	ok, err := s.AccessibleToCharacter(ctx, characterID, locationID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+
+	return nil
+}
+
+// AccessibleToCharacter reports whether one specific character may see the
+// location, directly or through one of its groups. Used when associating a
+// character with a location.
+func (s *LocationService) AccessibleToCharacter(ctx context.Context, characterID, locationID string) (bool, error) {
+	groupIDs, err := s.groups.GroupIDsForCharacters(ctx, []string{characterID})
+	if err != nil {
+		return false, fmt.Errorf("resolving character groups: %w", err)
+	}
+
+	ok, err := s.accesses.HasAccess(ctx, locationID, []string{characterID}, groupIDs)
+	if err != nil {
+		return false, fmt.Errorf("checking location access: %w", err)
+	}
+
+	return ok, nil
+}
+
+// requesterScope resolves a player's characters and those characters' groups —
+// the two paths a location grant can reach them through.
+func (s *LocationService) requesterScope(
+	ctx context.Context, requester Requester,
+) (characterIDs, groupIDs []string, err error) {
+	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	if err != nil {
+		return nil, nil, fmt.Errorf("listing requester characters: %w", err)
+	}
+
+	characterIDs = make([]string, len(characters))
+	for i := range characters {
+		characterIDs[i] = characters[i].ID
+	}
+
+	groupIDs, err = s.groups.GroupIDsForCharacters(ctx, characterIDs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolving requester groups: %w", err)
+	}
+
+	return characterIDs, groupIDs, nil
+}
+
+// notFoundOr maps a repository ErrNotFound to the service-level ErrNotFound
+// and wraps anything else with context.
+func notFoundOr(err error, doing string) error {
+	if errors.Is(err, repositories.ErrNotFound) {
+		return ErrNotFound
+	}
+
+	return fmt.Errorf("%s: %w", doing, err)
 }
