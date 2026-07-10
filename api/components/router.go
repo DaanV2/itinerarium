@@ -14,6 +14,7 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithMiddleware(transport.RequireAuth(services.Auth)),
 		transport.WithSubRoute("/admin", adminRouter(services)),
 		transport.WithSubRoute("/characters", charactersRouter(services)),
+		transport.WithSubRoute("/locations", locationsRouter(services)),
 		transport.WithSubRoute("/currencies", currenciesRouter(services)),
 		transport.WithSubRoute("/items", itemsRouter(services)),
 	)
@@ -45,8 +46,20 @@ func charactersRouter(services *Services) *transport.Router {
 		transport.WithHandle("POST /", transport.CreateCharacterHandler(services.Characters)),
 		transport.WithHandle("GET /{id}", transport.GetCharacterHandler(services.Characters)),
 		transport.WithHandle("PATCH /{id}", transport.UpdateCharacterHandler(services.Characters)),
+		transport.WithHandle("PUT /{id}/location", transport.SetCharacterLocationHandler(services.Characters)),
+		transport.WithHandle("DELETE /{id}/location", transport.ClearCharacterLocationHandler(services.Characters)),
 		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services)),
 		transport.WithSubRoute("/{id}/money", moneyRouter(services)),
+	)
+}
+
+// locationsRouter serves the campaign's locations under /api/locations.
+func locationsRouter(services *Services) *transport.Router {
+	return transport.NewRouter(
+		transport.WithHandle("GET /", transport.ListLocationsHandler(services.Locations)),
+		transport.WithHandle("POST /", transport.CreateLocationHandler(services.Locations)),
+		transport.WithHandle("GET /{id}", transport.GetLocationHandler(services.Locations)),
+		transport.WithHandle("PATCH /{id}", transport.UpdateLocationHandler(services.Locations)),
 	)
 }
 

@@ -105,6 +105,12 @@ In M1, inventories and money are **per character**:
 | `DELETE /api/characters/{id}/inventory/{itemId}` | owner + GM | Remove a line |
 | `GET /api/characters/{id}/money` | owner + GM | List a character's balances |
 | `PUT /api/characters/{id}/money/{currencyId}` | owner + GM | Set a balance to an absolute amount |
+| `PUT /api/characters/{id}/location` | owner + GM | Associate the character with a location (`{"location_id": …}`) |
+| `DELETE /api/characters/{id}/location` | owner + GM | Clear the character's location association |
+| `GET /api/locations` | any authenticated | List locations |
+| `POST /api/locations` | GM | Add a location |
+| `GET /api/locations/{id}` | any authenticated | Get one location |
+| `PATCH /api/locations/{id}` | GM | Edit a location's name/description/plane |
 
 ## Document Format
 

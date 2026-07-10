@@ -8,6 +8,7 @@ func allModels() []any {
 	return []any{
 		&models.User{},
 		&models.RevokedToken{},
+		&models.Location{},
 		&models.Character{},
 		&models.Currency{},
 		&models.ItemDefinition{},
