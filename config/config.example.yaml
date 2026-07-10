@@ -6,8 +6,24 @@
 server:
   # Address the API listens on (flag: --address, env: SERVER_ADDRESS)
   address: ":8080"
+  # Database backend: sqlite (default), memory, postgres, or mysql
+  # (flag: --database-type, env: SERVER_DATABASE_TYPE)
+  database-type: "sqlite"
   # SQLite database file (flag: --database-path, env: SERVER_DATABASE_PATH)
   database-path: "data/itinerarium.db"
+  # Connection string for postgres/mysql (required for those backends). For
+  # sqlite it overrides database-path when set.
+  # (flag: --database-dsn, env: SERVER_DATABASE_DSN)
+  # postgres example:
+  #   database-type: "postgres"
+  #   database-dsn: "host=localhost user=itinerarium password=secret dbname=itinerarium port=5432 sslmode=disable"
+  # mysql example:
+  #   database-type: "mysql"
+  #   database-dsn: "itinerarium:secret@tcp(localhost:3306)/itinerarium?charset=utf8mb4&parseTime=True&loc=Local"
+  # Connection-pool tuning (mostly relevant for postgres/mysql)
+  # database-max-idle-conns: 2
+  # database-max-open-conns: 0        # 0 = unlimited
+  # database-conn-max-lifetime: "1h"
   # Directory holding the RS512 JWT signing key pair, auto-generated on first
   # start (flag: --keys-path, env: SERVER_KEYS_PATH)
   # keys-path: "data/keys"

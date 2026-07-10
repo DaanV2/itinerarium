@@ -134,7 +134,7 @@ This format is intentionally compatible with Obsidian so GMs can author document
 
 ## Search
 
-Full-text search over titles, file names, tags, and content (SQLite FTS5 is the natural fit). Access rules are applied **before** results are returned:
+Full-text search over titles, file names, tags, and content (search backend TBD). Access rules are applied **before** results are returned:
 
 - Documents the character cannot see (wrong group, game day not reached) are excluded entirely — no titles, no hit counts
 - GM-only sections are excluded from the searchable content for non-GM users
