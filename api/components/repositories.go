@@ -14,6 +14,8 @@ type Repositories struct {
 	ItemDefinitions *repositories.ItemDefinitions
 	InventoryItems  *repositories.InventoryItems
 	MoneyBalances   *repositories.MoneyBalances
+	Groups          *repositories.Groups
+	ActivityEntries *repositories.ActivityEntries
 	RevokedTokens   *repositories.RevokedTokens
 }
 
@@ -27,6 +29,8 @@ func NewRepositories(db *persistence.Database) *Repositories {
 		ItemDefinitions: repositories.NewItemDefinitions(db),
 		InventoryItems:  repositories.NewInventoryItems(db),
 		MoneyBalances:   repositories.NewMoneyBalances(db),
+		Groups:          repositories.NewGroups(db),
+		ActivityEntries: repositories.NewActivityEntries(db),
 		RevokedTokens:   repositories.NewRevokedTokens(db),
 	}
 }

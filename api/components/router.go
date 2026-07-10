@@ -14,6 +14,7 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithMiddleware(transport.RequireAuth(services.Auth)),
 		transport.WithSubRoute("/admin", adminRouter(services)),
 		transport.WithSubRoute("/characters", charactersRouter(services)),
+		transport.WithSubRoute("/groups", groupsRouter(services)),
 		transport.WithSubRoute("/locations", locationsRouter(services)),
 		transport.WithSubRoute("/currencies", currenciesRouter(services)),
 		transport.WithSubRoute("/items", itemsRouter(services)),
@@ -79,6 +80,18 @@ func moneyRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
 		transport.WithHandle("GET /", transport.ListMoneyHandler(services.Inventory)),
 		transport.WithHandle("PUT /{currencyId}", transport.SetMoneyHandler(services.Inventory)),
+	)
+}
+
+// groupsRouter serves groups and membership under /api/groups.
+func groupsRouter(services *Services) *transport.Router {
+	return transport.NewRouter(
+		transport.WithHandle("GET /", transport.ListGroupsHandler(services.Groups)),
+		transport.WithHandle("POST /", transport.CreateGroupHandler(services.Groups)),
+		transport.WithHandle("GET /{id}", transport.GetGroupHandler(services.Groups)),
+		transport.WithHandle("PATCH /{id}", transport.UpdateGroupHandler(services.Groups)),
+		transport.WithHandle("POST /{id}/members", transport.JoinGroupHandler(services.Groups)),
+		transport.WithHandle("DELETE /{id}/members/{characterId}", transport.LeaveGroupHandler(services.Groups)),
 	)
 }
 
