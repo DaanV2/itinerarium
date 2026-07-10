@@ -17,6 +17,10 @@ var ErrInvalidName = errors.New("invalid name")
 // value.
 var ErrInvalidGameDay = errors.New("invalid game day")
 
+// ErrUnknownLocation is returned when a character is associated with a location
+// ID that does not exist.
+var ErrUnknownLocation = errors.New("unknown location")
+
 // CharacterService manages player characters. A user account may own
 // multiple characters; only a GM may create a character on behalf of another
 // user or move current_game_day directly (normal play advances it
@@ -24,11 +28,14 @@ var ErrInvalidGameDay = errors.New("invalid game day")
 type CharacterService struct {
 	characters *repositories.Characters
 	users      *repositories.Users
+	locations  *repositories.Locations
 }
 
 // NewCharacterService builds a CharacterService.
-func NewCharacterService(characters *repositories.Characters, users *repositories.Users) *CharacterService {
-	return &CharacterService{characters: characters, users: users}
+func NewCharacterService(
+	characters *repositories.Characters, users *repositories.Users, locations *repositories.Locations,
+) *CharacterService {
+	return &CharacterService{characters: characters, users: users, locations: locations}
 }
 
 // Create adds a new character owned by ownerUserID (defaulting to the
@@ -133,6 +140,37 @@ func (s *CharacterService) Update(
 
 	if err := s.characters.Update(ctx, c); err != nil {
 		return nil, fmt.Errorf("updating character: %w", err)
+	}
+
+	return c, nil
+}
+
+// SetLocation associates a character with a location, or clears the
+// association when locationID is nil. Access follows the character itself:
+// the owner or a GM may place the character, everyone else gets ErrNotFound
+// (existence must not leak). A non-nil location ID that does not exist yields
+// ErrUnknownLocation.
+func (s *CharacterService) SetLocation(
+	ctx context.Context, requester Requester, id string, locationID *string,
+) (*models.Character, error) {
+	c, err := s.Get(ctx, requester, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if locationID != nil {
+		if _, err := s.locations.GetByID(ctx, *locationID); err != nil {
+			if errors.Is(err, repositories.ErrNotFound) {
+				return nil, ErrUnknownLocation
+			}
+
+			return nil, fmt.Errorf("looking up location: %w", err)
+		}
+	}
+
+	c.LocationID = locationID
+	if err := s.characters.Update(ctx, c); err != nil {
+		return nil, fmt.Errorf("updating character location: %w", err)
 	}
 
 	return c, nil

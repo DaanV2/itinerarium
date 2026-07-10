@@ -17,6 +17,7 @@ import (
 
 type charactersTestEnv struct {
 	router      *transport.Router
+	locations   *repositories.Locations
 	gmToken     string
 	playerToken string
 	otherToken  string
@@ -41,8 +42,9 @@ func newCharactersTestEnv(t *testing.T) charactersTestEnv {
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
+	locations := repositories.NewLocations(db)
 	authSvc := application.NewAuthService(tokens, users)
-	characterSvc := application.NewCharacterService(characters, users)
+	characterSvc := application.NewCharacterService(characters, users, locations)
 	requireAuth := transport.RequireAuth(authSvc)
 
 	ctx := t.Context()
@@ -84,9 +86,21 @@ func newCharactersTestEnv(t *testing.T) charactersTestEnv {
 		transport.WithHandle(
 			"PATCH /api/characters/{id}", requireAuth(transport.UpdateCharacterHandler(characterSvc)),
 		),
+		transport.WithHandle(
+			"PUT /api/characters/{id}/location", requireAuth(transport.SetCharacterLocationHandler(characterSvc)),
+		),
+		transport.WithHandle(
+			"DELETE /api/characters/{id}/location", requireAuth(transport.ClearCharacterLocationHandler(characterSvc)),
+		),
 	)
 
-	return charactersTestEnv{router: router, gmToken: gmToken, playerToken: playerToken, otherToken: otherToken}
+	return charactersTestEnv{
+		router:      router,
+		locations:   locations,
+		gmToken:     gmToken,
+		playerToken: playerToken,
+		otherToken:  otherToken,
+	}
 }
 
 func (e charactersTestEnv) doJSON(t *testing.T, method, path, token string, payload any) *httptest.ResponseRecorder {
@@ -241,5 +255,108 @@ func TestUpdateCharacter_GMCanSetGameDay(t *testing.T) {
 	}
 	if updated.CurrentGameDay != 5 {
 		t.Fatalf("CurrentGameDay = %d, want 5", updated.CurrentGameDay)
+	}
+}
+
+func (e charactersTestEnv) createLocation(t *testing.T, name string) string {
+	t.Helper()
+
+	loc := &models.Location{Name: name}
+	if err := e.locations.Create(t.Context(), loc); err != nil {
+		t.Fatalf("Create location: %v", err)
+	}
+
+	return loc.ID
+}
+
+func (e charactersTestEnv) createCharacter(t *testing.T, token, name string) string {
+	t.Helper()
+
+	rec := e.doJSON(t, http.MethodPost, "/api/characters", token, map[string]string{"name": name})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create character: expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var created struct{ ID string }
+	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decoding body: %v", err)
+	}
+
+	return created.ID
+}
+
+func TestSetCharacterLocation_OwnerCanPlaceCharacter(t *testing.T) {
+	env := newCharactersTestEnv(t)
+
+	locID := env.createLocation(t, "Waterdeep")
+	charID := env.createCharacter(t, env.playerToken, "Aria")
+
+	rec := env.doJSON(t, http.MethodPut, "/api/characters/"+charID+"/location", env.playerToken,
+		map[string]string{"location_id": locID})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var updated struct {
+		LocationID *string `json:"location_id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decoding body: %v", err)
+	}
+	if updated.LocationID == nil || *updated.LocationID != locID {
+		t.Fatalf("LocationID = %v, want %q", updated.LocationID, locID)
+	}
+}
+
+func TestSetCharacterLocation_ClearsWithDelete(t *testing.T) {
+	env := newCharactersTestEnv(t)
+
+	locID := env.createLocation(t, "Waterdeep")
+	charID := env.createCharacter(t, env.playerToken, "Aria")
+
+	set := env.doJSON(t, http.MethodPut, "/api/characters/"+charID+"/location", env.playerToken,
+		map[string]string{"location_id": locID})
+	if set.Code != http.StatusOK {
+		t.Fatalf("set: expected 200, got %d: %s", set.Code, set.Body.String())
+	}
+
+	rec := env.doJSON(t, http.MethodDelete, "/api/characters/"+charID+"/location", env.playerToken, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var updated struct {
+		LocationID *string `json:"location_id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("decoding body: %v", err)
+	}
+	if updated.LocationID != nil {
+		t.Fatalf("LocationID = %v, want nil", updated.LocationID)
+	}
+}
+
+func TestSetCharacterLocation_HidesOtherOwnersCharacter(t *testing.T) {
+	env := newCharactersTestEnv(t)
+
+	locID := env.createLocation(t, "Waterdeep")
+	charID := env.createCharacter(t, env.otherToken, "Beren")
+
+	rec := env.doJSON(t, http.MethodPut, "/api/characters/"+charID+"/location", env.playerToken,
+		map[string]string{"location_id": locID})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSetCharacterLocation_RejectsUnknownLocation(t *testing.T) {
+	env := newCharactersTestEnv(t)
+
+	charID := env.createCharacter(t, env.playerToken, "Aria")
+
+	rec := env.doJSON(t, http.MethodPut, "/api/characters/"+charID+"/location", env.playerToken,
+		map[string]string{"location_id": "does-not-exist"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

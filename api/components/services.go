@@ -12,6 +12,7 @@ type Services struct {
 	Auth       *application.AuthService
 	Users      *application.UserService
 	Characters *application.CharacterService
+	Locations  *application.LocationService
 	Catalog    *application.CatalogService
 	Inventory  *application.InventoryService
 }
@@ -19,13 +20,14 @@ type Services struct {
 // NewServices wires the application services over the repositories and token
 // service.
 func NewServices(repos *Repositories, tokens *authentication.TokenService) *Services {
-	characters := application.NewCharacterService(repos.Characters, repos.Users)
+	characters := application.NewCharacterService(repos.Characters, repos.Users, repos.Locations)
 
 	return &Services{
 		Setup:      application.NewSetupService(repos.Users, tokens),
 		Auth:       application.NewAuthService(tokens, repos.Users),
 		Users:      application.NewUserService(repos.Users),
 		Characters: characters,
+		Locations:  application.NewLocationService(repos.Locations),
 		Catalog:    application.NewCatalogService(repos.Currencies, repos.ItemDefinitions),
 		Inventory: application.NewInventoryService(
 			characters,
