@@ -76,3 +76,14 @@ export interface MoneyBalance {
 	currency_id: string;
 	amount: number;
 }
+
+/** A named place in the campaign world — a plane, town, building, or room.
+ * Locations form a hierarchy: a location with no `parent_id` is a top-level
+ * plane, and nesting one under another models physical containment. This is how
+ * multi-plane campaigns are supported. */
+export interface Location {
+	id: string;
+	name: string;
+	description?: string;
+	parent_id?: string;
+}

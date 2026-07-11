@@ -13,6 +13,7 @@ func allModels() []any {
 		&models.ItemDefinition{},
 		&models.InventoryItem{},
 		&models.MoneyBalance{},
+		&models.Location{},
 	}
 }
 

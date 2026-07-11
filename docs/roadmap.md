@@ -28,7 +28,7 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] Personal money (per currency) per character
 - [x] Currency catalog from JSON/YAML with conversion ratios
 - [x] Item catalog from JSON/YAML; free-text custom items always allowed
-- [ ] Locations: name + description, multi-plane support
+- [x] Locations: name + description, multi-plane support
 - [ ] Characters can be associated with a location
 
 ### M2 — Groups & Inventories

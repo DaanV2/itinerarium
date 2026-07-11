@@ -14,6 +14,7 @@ type Services struct {
 	Characters *application.CharacterService
 	Catalog    *application.CatalogService
 	Inventory  *application.InventoryService
+	Locations  *application.LocationService
 }
 
 // NewServices wires the application services over the repositories and token
@@ -34,5 +35,6 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 			repos.Currencies,
 			repos.ItemDefinitions,
 		),
+		Locations: application.NewLocationService(repos.Locations),
 	}
 }

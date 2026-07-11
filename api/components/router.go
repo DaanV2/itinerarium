@@ -16,6 +16,7 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithSubRoute("/characters", charactersRouter(services)),
 		transport.WithSubRoute("/currencies", currenciesRouter(services)),
 		transport.WithSubRoute("/items", itemsRouter(services)),
+		transport.WithSubRoute("/locations", locationsRouter(services)),
 	)
 
 	return transport.NewRouter(
@@ -82,5 +83,17 @@ func itemsRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
 		transport.WithHandle("GET /", transport.ListItemDefinitionsHandler(services.Catalog)),
 		transport.WithHandle("POST /", transport.CreateItemDefinitionHandler(services.Catalog)),
+	)
+}
+
+// locationsRouter serves campaign locations under /api/locations. Reads are
+// open to any authenticated user; writes are GM-only, enforced in the service.
+func locationsRouter(services *Services) *transport.Router {
+	return transport.NewRouter(
+		transport.WithHandle("GET /", transport.ListLocationsHandler(services.Locations)),
+		transport.WithHandle("POST /", transport.CreateLocationHandler(services.Locations)),
+		transport.WithHandle("GET /{id}", transport.GetLocationHandler(services.Locations)),
+		transport.WithHandle("PATCH /{id}", transport.UpdateLocationHandler(services.Locations)),
+		transport.WithHandle("DELETE /{id}", transport.DeleteLocationHandler(services.Locations)),
 	)
 }

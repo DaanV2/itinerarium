@@ -36,7 +36,7 @@ itinerarium/
 | `Session`      | Links characters to a play event. GM advances/rewinds `game_day` per character or in bulk.                                          |
 | `JournalEntry` | Belongs to a character, stamped with `game_day`. Readable by the owning player and GMs only. Can be converted (copied) into a `Document` in the character's private knowledge repository. |
 | `ActivityEntry` | Append-only event log. Stamped with `game_day`. Scoped to an entity (group, location, document). Supports an `announced` flag with explicit target characters or groups that bypasses normal entity-access rules (used for theft, destruction, and GM broadcasts). |
-| `Location`     | Named plane or place (town, building, room, …). Has its own inventory and access-controlled visibility. Characters and sessions can be associated with one. |
+| `Location`     | Named plane or place (town, building, room, …). Self-referential: an optional `parent_id` nests a place inside another, so a parent-less location is a top-level plane and multiple roots give multi-plane campaigns. M2 adds its own inventory; M3 adds access-controlled visibility and player editing. Characters and sessions can be associated with one. |
 
 ## Permission Model
 
@@ -105,6 +105,26 @@ In M1, inventories and money are **per character**:
 | `DELETE /api/characters/{id}/inventory/{itemId}` | owner + GM | Remove a line |
 | `GET /api/characters/{id}/money` | owner + GM | List a character's balances |
 | `PUT /api/characters/{id}/money/{currencyId}` | owner + GM | Set a balance to an absolute amount |
+
+## Locations
+
+Locations are the campaign's places — planes, towns, buildings, rooms. Each has a `name` (required) and optional `description`. An optional `parent_id` nests one location inside another; a location with no parent is a top-level **plane**, so a campaign spanning several planes is just several parent-less roots. The client reconstructs the tree from the `parent_id` links.
+
+- **`Location`** — `name` (required), `description` (optional), `parent_id` (optional, references another `Location`).
+
+The hierarchy is acyclic by construction: `parent_id` is set only at creation and must point at an already-existing location, and re-parenting is not offered, so no cycle can form.
+
+**M1 scope and permissions.** M1 covers name + description + hierarchy only. Locations are campaign-wide and not secret, so **any authenticated user may read** them; **only a GM may create, edit, or delete** (matching the currency/item catalogs). This is deliberately narrower than the eventual model: M2 adds per-location inventories, and M3 adds access-controlled visibility plus the "anyone who can see a location can edit it" rule (core domain rule 7). Deleting a location that still has nested locations is refused (`409`) — remove or re-home the children first.
+
+### Endpoints
+
+| Method & path | Who | Purpose |
+|---|---|---|
+| `GET /api/locations` | any authenticated | List every location (build the tree from `parent_id`) |
+| `POST /api/locations` | GM | Create a location (omit `parent_id` for a plane) |
+| `GET /api/locations/{id}` | any authenticated | Fetch one location |
+| `PATCH /api/locations/{id}` | GM | Edit name and/or description |
+| `DELETE /api/locations/{id}` | GM | Delete a location (refused with `409` if it has children) |
 
 ## Document Format
 
