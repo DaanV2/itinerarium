@@ -33,14 +33,14 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 
 ### M2 — Groups & Inventories
 
-- [ ] Groups with `type` (`organization` / `family` / `other`) — identical mechanics
-- [ ] Characters join and leave groups
-- [ ] Join/leave events recorded with game-day stamp (surfaces in activity log in M5)
-- [ ] Shared group inventory (item list + quantity)
-- [ ] Shared group money (per currency)
-- [ ] Location inventories
-- [ ] Location inventory access control: single level (view + modify), granted per-character or via group; no access = existence hidden
-- [ ] Item movement between character / group / location inventories
+- [x] Groups with `type` (`organization` / `family` / `other`) — identical mechanics
+- [x] Characters join and leave groups
+- [x] Join/leave events recorded with game-day stamp (surfaces in activity log in M5)
+- [x] Shared group inventory (item list + quantity)
+- [x] Shared group money (per currency)
+- [x] Location inventories
+- [x] Location inventory access control: single level (view + modify), granted per-character or via group; no access = existence hidden
+- [x] Item movement between character / group / location inventories
 
 ### M3 — Knowledge
 
