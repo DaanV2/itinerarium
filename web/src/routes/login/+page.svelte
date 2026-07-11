@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { login } from '$lib/api/auth';
-	import { setAccessToken } from '$lib/auth-token';
+	import { setAccessToken, setUserRole } from '$lib/auth-token';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
@@ -20,6 +20,7 @@
 		try {
 			const account = await login(email, password);
 			setAccessToken(account.access_token);
+			setUserRole(account.role);
 			await goto(resolve('/'));
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Login failed.';

@@ -38,6 +38,42 @@ export interface Character {
 	name: string;
 	current_game_day: number;
 	user_id: string;
+	location_id?: string;
+}
+
+/** Cosmetic label — every group type behaves identically. */
+export type GroupType = 'organization' | 'family' | 'other';
+
+/** A group member as exposed to other players: identity only. */
+export interface GroupMember {
+	id: string;
+	name: string;
+}
+
+export interface Group {
+	id: string;
+	name: string;
+	type: GroupType;
+	description?: string;
+	members: GroupMember[];
+}
+
+/** A place or plane. Players only ever receive locations they can access —
+ * an inaccessible location is absent from lists and 404s on direct reads. */
+export interface Location {
+	id: string;
+	name: string;
+	description?: string;
+	plane?: string;
+}
+
+/** A GM-managed grant giving one character or one group access to a
+ * location (view + modify, single level). */
+export interface LocationAccess {
+	id: string;
+	location_id: string;
+	character_id?: string;
+	group_id?: string;
 }
 
 /** A GM-defined unit of money. `ratio` is the value of one unit in the base
@@ -58,21 +94,31 @@ export interface ItemDefinition {
 	category?: string;
 }
 
-/** A line in a character's personal inventory. `item_definition_id` is set when
- * the line references a catalog entry; free-text items omit it. */
+/** A line in an inventory, owned by exactly one character, group, or
+ * location. `item_definition_id` is set when the line references a catalog
+ * entry; free-text items omit it. */
 export interface InventoryItem {
 	id: string;
-	character_id: string;
+	character_id?: string;
+	group_id?: string;
+	location_id?: string;
 	name: string;
 	item_definition_id?: string;
 	quantity: number;
 	description?: string;
 }
 
-/** A character's holding of a single currency. */
+/** A character's or group's holding of a single currency. */
 export interface MoneyBalance {
 	id: string;
-	character_id: string;
+	character_id?: string;
+	group_id?: string;
 	currency_id: string;
 	amount: number;
+}
+
+/** Addresses one inventory (or money pouch) by its owning entity. */
+export interface InventoryOwnerRef {
+	kind: 'character' | 'group' | 'location';
+	id: string;
 }

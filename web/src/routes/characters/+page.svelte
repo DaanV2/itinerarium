@@ -48,6 +48,11 @@
 <main>
 	<h1>Characters</h1>
 
+	<nav>
+		<a href={resolve('/groups')}>Groups</a> ·
+		<a href={resolve('/locations')}>Locations</a>
+	</nav>
+
 	<ErrorAlert message={error} />
 
 	<section>

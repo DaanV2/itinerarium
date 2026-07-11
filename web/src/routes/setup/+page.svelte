@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { createInitialAccount } from '$lib/api/setup';
-	import { setAccessToken } from '$lib/auth-token';
+	import { setAccessToken, setUserRole } from '$lib/auth-token';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
@@ -26,6 +26,8 @@
 		try {
 			const account = await createInitialAccount(email, password);
 			setAccessToken(account.access_token);
+			// The setup wizard only ever creates the initial GM account.
+			setUserRole('gm');
 			await goto(resolve('/'));
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Setup failed.';
