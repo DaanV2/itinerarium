@@ -18,6 +18,7 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithSubRoute("/locations", locationsRouter(services)),
 		transport.WithSubRoute("/currencies", currenciesRouter(services)),
 		transport.WithSubRoute("/items", itemsRouter(services)),
+		transport.WithHandle("POST /inventory/move", transport.MoveInventoryItemHandler(services.Inventory)),
 	)
 
 	return transport.NewRouter(
@@ -49,8 +50,8 @@ func charactersRouter(services *Services) *transport.Router {
 		transport.WithHandle("PATCH /{id}", transport.UpdateCharacterHandler(services.Characters)),
 		transport.WithHandle("PUT /{id}/location", transport.SetCharacterLocationHandler(services.Locations)),
 		transport.WithHandle("DELETE /{id}/location", transport.ClearCharacterLocationHandler(services.Locations)),
-		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services)),
-		transport.WithSubRoute("/{id}/money", moneyRouter(services)),
+		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, transport.CharacterOwner)),
+		transport.WithSubRoute("/{id}/money", moneyRouter(services, transport.CharacterOwner)),
 	)
 }
 
@@ -65,25 +66,27 @@ func locationsRouter(services *Services) *transport.Router {
 		transport.WithHandle("GET /{id}/access", transport.ListLocationAccessHandler(services.Locations)),
 		transport.WithHandle("POST /{id}/access", transport.GrantLocationAccessHandler(services.Locations)),
 		transport.WithHandle("DELETE /{id}/access/{accessId}", transport.RevokeLocationAccessHandler(services.Locations)),
+		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, transport.LocationOwner)),
 	)
 }
 
-// inventoryRouter serves a character's inventory under
-// /api/characters/{id}/inventory.
-func inventoryRouter(services *Services) *transport.Router {
+// inventoryRouter serves one inventory (character, group, or location — the
+// extractor decides what {id} names) under <resource>/{id}/inventory.
+func inventoryRouter(services *Services, owner transport.OwnerExtractor) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListInventoryHandler(services.Inventory)),
-		transport.WithHandle("POST /", transport.AddInventoryItemHandler(services.Inventory)),
-		transport.WithHandle("PATCH /{itemId}", transport.UpdateInventoryItemHandler(services.Inventory)),
-		transport.WithHandle("DELETE /{itemId}", transport.RemoveInventoryItemHandler(services.Inventory)),
+		transport.WithHandle("GET /", transport.ListInventoryHandler(services.Inventory, owner)),
+		transport.WithHandle("POST /", transport.AddInventoryItemHandler(services.Inventory, owner)),
+		transport.WithHandle("PATCH /{itemId}", transport.UpdateInventoryItemHandler(services.Inventory, owner)),
+		transport.WithHandle("DELETE /{itemId}", transport.RemoveInventoryItemHandler(services.Inventory, owner)),
 	)
 }
 
-// moneyRouter serves a character's balances under /api/characters/{id}/money.
-func moneyRouter(services *Services) *transport.Router {
+// moneyRouter serves one owner's balances (character or group) under
+// <resource>/{id}/money.
+func moneyRouter(services *Services, owner transport.OwnerExtractor) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListMoneyHandler(services.Inventory)),
-		transport.WithHandle("PUT /{currencyId}", transport.SetMoneyHandler(services.Inventory)),
+		transport.WithHandle("GET /", transport.ListMoneyHandler(services.Inventory, owner)),
+		transport.WithHandle("PUT /{currencyId}", transport.SetMoneyHandler(services.Inventory, owner)),
 	)
 }
 
@@ -96,6 +99,8 @@ func groupsRouter(services *Services) *transport.Router {
 		transport.WithHandle("PATCH /{id}", transport.UpdateGroupHandler(services.Groups)),
 		transport.WithHandle("POST /{id}/members", transport.JoinGroupHandler(services.Groups)),
 		transport.WithHandle("DELETE /{id}/members/{characterId}", transport.LeaveGroupHandler(services.Groups)),
+		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, transport.GroupOwner)),
+		transport.WithSubRoute("/{id}/money", moneyRouter(services, transport.GroupOwner)),
 	)
 }
 

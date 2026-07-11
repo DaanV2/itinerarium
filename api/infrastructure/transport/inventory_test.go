@@ -46,9 +46,14 @@ func newInventoryTestEnv(t *testing.T) inventoryTestEnv {
 	itemDefs := repositories.NewItemDefinitions(db)
 	authSvc := application.NewAuthService(tokens, users)
 	characterSvc := application.NewCharacterService(characters, users)
+	groups := repositories.NewGroups(db)
+	locationSvc := application.NewLocationService(
+		repositories.NewLocations(db), repositories.NewLocationAccesses(db), groups, characters, characterSvc,
+	)
 	catalogSvc := application.NewCatalogService(currencies, itemDefs)
 	inventorySvc := application.NewInventoryService(
-		characterSvc, repositories.NewInventoryItems(db), repositories.NewMoneyBalances(db), currencies, itemDefs,
+		characterSvc, locationSvc, groups, characters,
+		repositories.NewInventoryItems(db), repositories.NewMoneyBalances(db), currencies, itemDefs,
 	)
 	requireAuth := transport.RequireAuth(authSvc)
 
@@ -73,20 +78,24 @@ func newInventoryTestEnv(t *testing.T) inventoryTestEnv {
 		transport.WithHandle("GET /api/items", requireAuth(transport.ListItemDefinitionsHandler(catalogSvc))),
 		transport.WithHandle("POST /api/items", requireAuth(transport.CreateItemDefinitionHandler(catalogSvc))),
 		transport.WithHandle(
-			"GET /api/characters/{id}/inventory", requireAuth(transport.ListInventoryHandler(inventorySvc)),
+			"GET /api/characters/{id}/inventory",
+			requireAuth(transport.ListInventoryHandler(inventorySvc, transport.CharacterOwner)),
 		),
 		transport.WithHandle(
-			"POST /api/characters/{id}/inventory", requireAuth(transport.AddInventoryItemHandler(inventorySvc)),
+			"POST /api/characters/{id}/inventory",
+			requireAuth(transport.AddInventoryItemHandler(inventorySvc, transport.CharacterOwner)),
 		),
 		transport.WithHandle(
 			"DELETE /api/characters/{id}/inventory/{itemId}",
-			requireAuth(transport.RemoveInventoryItemHandler(inventorySvc)),
+			requireAuth(transport.RemoveInventoryItemHandler(inventorySvc, transport.CharacterOwner)),
 		),
 		transport.WithHandle(
-			"GET /api/characters/{id}/money", requireAuth(transport.ListMoneyHandler(inventorySvc)),
+			"GET /api/characters/{id}/money",
+			requireAuth(transport.ListMoneyHandler(inventorySvc, transport.CharacterOwner)),
 		),
 		transport.WithHandle(
-			"PUT /api/characters/{id}/money/{currencyId}", requireAuth(transport.SetMoneyHandler(inventorySvc)),
+			"PUT /api/characters/{id}/money/{currencyId}",
+			requireAuth(transport.SetMoneyHandler(inventorySvc, transport.CharacterOwner)),
 		),
 	)
 

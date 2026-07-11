@@ -25,12 +25,19 @@ func newTestInventoryEnv(t *testing.T) (*application.InventoryService, *applicat
 	}
 
 	characters := repositories.NewCharacters(db)
+	groups := repositories.NewGroups(db)
 	currencies := repositories.NewCurrencies(db)
 	itemDefs := repositories.NewItemDefinitions(db)
 	charSvc := application.NewCharacterService(characters, repositories.NewUsers(db))
+	locationSvc := application.NewLocationService(
+		repositories.NewLocations(db), repositories.NewLocationAccesses(db), groups, characters, charSvc,
+	)
 	catalogSvc := application.NewCatalogService(currencies, itemDefs)
 	invSvc := application.NewInventoryService(
 		charSvc,
+		locationSvc,
+		groups,
+		characters,
 		repositories.NewInventoryItems(db),
 		repositories.NewMoneyBalances(db),
 		currencies,
@@ -57,7 +64,7 @@ func TestInventoryService_AddItem_FreeTextAllowed(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	item, err := inv.AddItem(ctx, playerRequester, c.ID, "Mysterious Trinket", nil, 1, "found in a ditch")
+	item, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "Mysterious Trinket", nil, 1, "found in a ditch")
 	if err != nil {
 		t.Fatalf("AddItem(free text): %v", err)
 	}
@@ -76,7 +83,7 @@ func TestInventoryService_AddItem_WithCatalogDefinition(t *testing.T) {
 		t.Fatalf("CreateItemDefinition: %v", err)
 	}
 
-	item, err := inv.AddItem(ctx, playerRequester, c.ID, "Torch", &def.ID, 3, "")
+	item, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "Torch", &def.ID, 3, "")
 	if err != nil {
 		t.Fatalf("AddItem(with def): %v", err)
 	}
@@ -92,7 +99,7 @@ func TestInventoryService_AddItem_UnknownDefinitionRejected(t *testing.T) {
 
 	missing := "does-not-exist"
 
-	_, err := inv.AddItem(ctx, playerRequester, c.ID, "Torch", &missing, 1, "")
+	_, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "Torch", &missing, 1, "")
 	if !errors.Is(err, application.ErrUnknownItemDefinition) {
 		t.Fatalf("AddItem(unknown def) = %v, want ErrUnknownItemDefinition", err)
 	}
@@ -103,10 +110,10 @@ func TestInventoryService_AddItem_RejectsEmptyNameAndBadQuantity(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	if _, err := inv.AddItem(ctx, playerRequester, c.ID, "", nil, 1, ""); !errors.Is(err, application.ErrInvalidName) {
+	if _, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "", nil, 1, ""); !errors.Is(err, application.ErrInvalidName) {
 		t.Fatalf("AddItem(empty name) = %v, want ErrInvalidName", err)
 	}
-	if _, err := inv.AddItem(ctx, playerRequester, c.ID, "Torch", nil, 0, ""); !errors.Is(err, application.ErrInvalidQuantity) {
+	if _, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "Torch", nil, 0, ""); !errors.Is(err, application.ErrInvalidQuantity) {
 		t.Fatalf("AddItem(quantity 0) = %v, want ErrInvalidQuantity", err)
 	}
 }
@@ -116,7 +123,7 @@ func TestInventoryService_AddItem_OtherPlayersCharacterHidden(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	_, err := inv.AddItem(ctx, otherPlayer, c.ID, "Torch", nil, 1, "")
+	_, err := inv.AddItem(ctx, otherPlayer, models.CharacterOwner(c.ID), "Torch", nil, 1, "")
 	if !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("AddItem(other player) = %v, want ErrNotFound", err)
 	}
@@ -127,11 +134,11 @@ func TestInventoryService_ListInventory_OtherPlayerGetsNotFound(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	if _, err := inv.AddItem(ctx, playerRequester, c.ID, "Torch", nil, 1, ""); err != nil {
+	if _, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "Torch", nil, 1, ""); err != nil {
 		t.Fatalf("AddItem: %v", err)
 	}
 
-	_, err := inv.ListInventory(ctx, otherPlayer, c.ID)
+	_, err := inv.ListInventory(ctx, otherPlayer, models.CharacterOwner(c.ID))
 	if !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("ListInventory(other player) = %v, want ErrNotFound", err)
 	}
@@ -142,11 +149,11 @@ func TestInventoryService_ListInventory_GMSeesOwnedByOthers(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	if _, err := inv.AddItem(ctx, playerRequester, c.ID, "Torch", nil, 1, ""); err != nil {
+	if _, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "Torch", nil, 1, ""); err != nil {
 		t.Fatalf("AddItem: %v", err)
 	}
 
-	items, err := inv.ListInventory(ctx, gmRequester, c.ID)
+	items, err := inv.ListInventory(ctx, gmRequester, models.CharacterOwner(c.ID))
 	if err != nil {
 		t.Fatalf("ListInventory(GM): %v", err)
 	}
@@ -160,14 +167,14 @@ func TestInventoryService_UpdateItem_ChangesQuantity(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	item, err := inv.AddItem(ctx, playerRequester, c.ID, "Torch", nil, 1, "")
+	item, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "Torch", nil, 1, "")
 	if err != nil {
 		t.Fatalf("AddItem: %v", err)
 	}
 
 	qty := 5
 
-	updated, err := inv.UpdateItem(ctx, playerRequester, c.ID, item.ID, nil, &qty, nil)
+	updated, err := inv.UpdateItem(ctx, playerRequester, models.CharacterOwner(c.ID), item.ID, nil, &qty, nil)
 	if err != nil {
 		t.Fatalf("UpdateItem: %v", err)
 	}
@@ -181,14 +188,14 @@ func TestInventoryService_UpdateItem_RejectsZeroQuantity(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	item, err := inv.AddItem(ctx, playerRequester, c.ID, "Torch", nil, 1, "")
+	item, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "Torch", nil, 1, "")
 	if err != nil {
 		t.Fatalf("AddItem: %v", err)
 	}
 
 	qty := 0
 
-	_, err = inv.UpdateItem(ctx, playerRequester, c.ID, item.ID, nil, &qty, nil)
+	_, err = inv.UpdateItem(ctx, playerRequester, models.CharacterOwner(c.ID), item.ID, nil, &qty, nil)
 	if !errors.Is(err, application.ErrInvalidQuantity) {
 		t.Fatalf("UpdateItem(qty 0) = %v, want ErrInvalidQuantity", err)
 	}
@@ -203,14 +210,14 @@ func TestInventoryService_UpdateItem_ItemFromAnotherCharacterHidden(t *testing.T
 	charA := ownedCharacter(t, charSvc, "Aria")
 	charB := ownedCharacter(t, charSvc, "Beren")
 
-	item, err := inv.AddItem(ctx, playerRequester, charA.ID, "Torch", nil, 1, "")
+	item, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(charA.ID), "Torch", nil, 1, "")
 	if err != nil {
 		t.Fatalf("AddItem: %v", err)
 	}
 
 	name := "Hijacked"
 
-	_, err = inv.UpdateItem(ctx, playerRequester, charB.ID, item.ID, &name, nil, nil)
+	_, err = inv.UpdateItem(ctx, playerRequester, models.CharacterOwner(charB.ID), item.ID, &name, nil, nil)
 	if !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("UpdateItem(cross-character) = %v, want ErrNotFound", err)
 	}
@@ -221,12 +228,12 @@ func TestInventoryService_RemoveItem_OtherPlayerGetsNotFound(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	item, err := inv.AddItem(ctx, playerRequester, c.ID, "Torch", nil, 1, "")
+	item, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "Torch", nil, 1, "")
 	if err != nil {
 		t.Fatalf("AddItem: %v", err)
 	}
 
-	err = inv.RemoveItem(ctx, otherPlayer, c.ID, item.ID)
+	err = inv.RemoveItem(ctx, otherPlayer, models.CharacterOwner(c.ID), item.ID)
 	if !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("RemoveItem(other player) = %v, want ErrNotFound", err)
 	}
@@ -237,15 +244,15 @@ func TestInventoryService_RemoveItem_Removes(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	item, err := inv.AddItem(ctx, playerRequester, c.ID, "Torch", nil, 1, "")
+	item, err := inv.AddItem(ctx, playerRequester, models.CharacterOwner(c.ID), "Torch", nil, 1, "")
 	if err != nil {
 		t.Fatalf("AddItem: %v", err)
 	}
-	if err := inv.RemoveItem(ctx, playerRequester, c.ID, item.ID); err != nil {
+	if err := inv.RemoveItem(ctx, playerRequester, models.CharacterOwner(c.ID), item.ID); err != nil {
 		t.Fatalf("RemoveItem: %v", err)
 	}
 
-	items, err := inv.ListInventory(ctx, playerRequester, c.ID)
+	items, err := inv.ListInventory(ctx, playerRequester, models.CharacterOwner(c.ID))
 	if err != nil {
 		t.Fatalf("ListInventory: %v", err)
 	}
@@ -264,11 +271,11 @@ func TestInventoryService_SetMoney_UpsertsBalance(t *testing.T) {
 		t.Fatalf("CreateCurrency: %v", err)
 	}
 
-	if _, err := inv.SetMoney(ctx, playerRequester, c.ID, gp.ID, 50); err != nil {
+	if _, err := inv.SetMoney(ctx, playerRequester, models.CharacterOwner(c.ID), gp.ID, 50); err != nil {
 		t.Fatalf("SetMoney(first): %v", err)
 	}
 
-	balance, err := inv.SetMoney(ctx, playerRequester, c.ID, gp.ID, 75)
+	balance, err := inv.SetMoney(ctx, playerRequester, models.CharacterOwner(c.ID), gp.ID, 75)
 	if err != nil {
 		t.Fatalf("SetMoney(update): %v", err)
 	}
@@ -276,7 +283,7 @@ func TestInventoryService_SetMoney_UpsertsBalance(t *testing.T) {
 		t.Fatalf("Amount = %d, want 75", balance.Amount)
 	}
 
-	balances, err := inv.ListMoney(ctx, playerRequester, c.ID)
+	balances, err := inv.ListMoney(ctx, playerRequester, models.CharacterOwner(c.ID))
 	if err != nil {
 		t.Fatalf("ListMoney: %v", err)
 	}
@@ -290,7 +297,7 @@ func TestInventoryService_SetMoney_UnknownCurrencyRejected(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	_, err := inv.SetMoney(ctx, playerRequester, c.ID, "does-not-exist", 50)
+	_, err := inv.SetMoney(ctx, playerRequester, models.CharacterOwner(c.ID), "does-not-exist", 50)
 	if !errors.Is(err, application.ErrUnknownCurrency) {
 		t.Fatalf("SetMoney(unknown currency) = %v, want ErrUnknownCurrency", err)
 	}
@@ -306,7 +313,7 @@ func TestInventoryService_SetMoney_RejectsNegativeAmount(t *testing.T) {
 		t.Fatalf("CreateCurrency: %v", err)
 	}
 
-	_, err = inv.SetMoney(ctx, playerRequester, c.ID, gp.ID, -1)
+	_, err = inv.SetMoney(ctx, playerRequester, models.CharacterOwner(c.ID), gp.ID, -1)
 	if !errors.Is(err, application.ErrInvalidAmount) {
 		t.Fatalf("SetMoney(negative) = %v, want ErrInvalidAmount", err)
 	}
@@ -317,7 +324,7 @@ func TestInventoryService_ListMoney_OtherPlayerGetsNotFound(t *testing.T) {
 	ctx := t.Context()
 	c := ownedCharacter(t, charSvc, "Aria")
 
-	_, err := inv.ListMoney(ctx, otherPlayer, c.ID)
+	_, err := inv.ListMoney(ctx, otherPlayer, models.CharacterOwner(c.ID))
 	if !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("ListMoney(other player) = %v, want ErrNotFound", err)
 	}
@@ -333,7 +340,7 @@ func TestInventoryService_SetMoney_OtherPlayerGetsNotFound(t *testing.T) {
 		t.Fatalf("CreateCurrency: %v", err)
 	}
 
-	_, err = inv.SetMoney(ctx, otherPlayer, c.ID, gp.ID, 50)
+	_, err = inv.SetMoney(ctx, otherPlayer, models.CharacterOwner(c.ID), gp.ID, 50)
 	if !errors.Is(err, application.ErrNotFound) {
 		t.Fatalf("SetMoney(other player) = %v, want ErrNotFound", err)
 	}

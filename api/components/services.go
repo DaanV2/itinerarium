@@ -22,6 +22,13 @@ type Services struct {
 // service.
 func NewServices(repos *Repositories, tokens *authentication.TokenService) *Services {
 	characters := application.NewCharacterService(repos.Characters, repos.Users)
+	locations := application.NewLocationService(
+		repos.Locations,
+		repos.LocationAccesses,
+		repos.Groups,
+		repos.Characters,
+		characters,
+	)
 
 	return &Services{
 		Setup:      application.NewSetupService(repos.Users, tokens),
@@ -31,18 +38,15 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 		Catalog:    application.NewCatalogService(repos.Currencies, repos.ItemDefinitions),
 		Inventory: application.NewInventoryService(
 			characters,
+			locations,
+			repos.Groups,
+			repos.Characters,
 			repos.InventoryItems,
 			repos.MoneyBalances,
 			repos.Currencies,
 			repos.ItemDefinitions,
 		),
-		Groups: application.NewGroupService(repos.Groups, characters),
-		Locations: application.NewLocationService(
-			repos.Locations,
-			repos.LocationAccesses,
-			repos.Groups,
-			repos.Characters,
-			characters,
-		),
+		Groups:    application.NewGroupService(repos.Groups, characters),
+		Locations: locations,
 	}
 }
