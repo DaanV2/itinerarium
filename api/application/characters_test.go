@@ -24,7 +24,7 @@ func newTestCharactersEnv(t *testing.T) (*application.CharacterService, *reposit
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
 
-	return application.NewCharacterService(characters, users), users
+	return application.NewCharacterService(characters, users, repositories.NewKnowledgeRepositories(db)), users
 }
 
 func TestCharacterService_Create_ForSelf(t *testing.T) {

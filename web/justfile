@@ -1,0 +1,42 @@
+# Task runner for Itinerarium. Run `just` to list recipes.
+# Requires: go, node/npm, golangci-lint, and (optionally) docker.
+
+set windows-shell := ["cmd.exe", "/c"]
+
+# Show available recipes
+default:
+    @just --list
+
+# --- Web (SvelteKit, from web/) ---
+
+# Start the frontend dev server on :5173 (/api proxied to :8080)
+dev:
+    npm run dev
+
+# Install frontend dependencies
+install:
+    npm install
+
+# Format frontend code
+fmt:
+    npm run format
+
+# Run prettier + eslint checks
+lint:
+    npm run lint
+
+# Run svelte-check (type checking)
+check:
+    npm run check
+
+# Run frontend tests
+test:
+    npm run test
+
+# Production build
+build:
+    npm run build
+
+# Everything the web CI job checks
+verify: lint check test build
+

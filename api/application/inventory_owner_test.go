@@ -33,7 +33,8 @@ func newOwnerInventoryTestEnv(t *testing.T) ownerInventoryTestEnv {
 	groups := repositories.NewGroups(db)
 	currencies := repositories.NewCurrencies(db)
 	itemDefs := repositories.NewItemDefinitions(db)
-	charSvc := application.NewCharacterService(characters, repositories.NewUsers(db))
+	knowledgeRepo := repositories.NewKnowledgeRepositories(db)
+	charSvc := application.NewCharacterService(characters, repositories.NewUsers(db), knowledgeRepo)
 	locationSvc := application.NewLocationService(
 		repositories.NewLocations(db), repositories.NewLocationAccesses(db), groups, characters, charSvc,
 	)
@@ -51,7 +52,7 @@ func newOwnerInventoryTestEnv(t *testing.T) ownerInventoryTestEnv {
 		),
 		catalog:   application.NewCatalogService(currencies, itemDefs),
 		chars:     charSvc,
-		groups:    application.NewGroupService(groups, charSvc),
+		groups:    application.NewGroupService(groups, charSvc, knowledgeRepo),
 		locations: locationSvc,
 	}
 }

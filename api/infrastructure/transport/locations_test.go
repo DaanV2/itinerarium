@@ -42,7 +42,7 @@ func newLocationHTTPTestEnv(t *testing.T) locationHTTPTestEnv {
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
 	authSvc := application.NewAuthService(tokens, users)
-	characterSvc := application.NewCharacterService(characters, users)
+	characterSvc := application.NewCharacterService(characters, users, repositories.NewKnowledgeRepositories(db))
 	locationSvc := application.NewLocationService(
 		repositories.NewLocations(db),
 		repositories.NewLocationAccesses(db),

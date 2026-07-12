@@ -18,6 +18,7 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithSubRoute("/locations", locationsRouter(services)),
 		transport.WithSubRoute("/currencies", currenciesRouter(services)),
 		transport.WithSubRoute("/items", itemsRouter(services)),
+		transport.WithSubRoute("/repositories", repositoriesRouter(services)),
 		transport.WithHandle("POST /inventory/move", transport.MoveInventoryItemHandler(services.Inventory)),
 	)
 
@@ -117,5 +118,15 @@ func itemsRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
 		transport.WithHandle("GET /", transport.ListItemDefinitionsHandler(services.Catalog)),
 		transport.WithHandle("POST /", transport.CreateItemDefinitionHandler(services.Catalog)),
+	)
+}
+
+// repositoriesRouter serves knowledge repositories (read-only — they are
+// provisioned automatically, never created by a caller) under
+// /api/repositories.
+func repositoriesRouter(services *Services) *transport.Router {
+	return transport.NewRouter(
+		transport.WithHandle("GET /", transport.ListRepositoriesHandler(services.Repositories)),
+		transport.WithHandle("GET /{id}", transport.GetRepositoryHandler(services.Repositories)),
 	)
 }

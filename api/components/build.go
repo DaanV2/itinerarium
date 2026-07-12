@@ -46,6 +46,10 @@ func BuildServer(ctx context.Context) (*ServerComponents, error) {
 
 	services := NewServices(repos, tokens)
 
+	if err := services.Repositories.EnsureSystemRepositories(ctx); err != nil {
+		return nil, err
+	}
+
 	if err := seedCatalog(ctx, cfg, services, logger); err != nil {
 		return nil, err
 	}

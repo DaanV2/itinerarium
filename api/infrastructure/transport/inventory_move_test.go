@@ -46,7 +46,7 @@ func newMoveTestEnv(t *testing.T) moveTestEnv {
 	currencies := repositories.NewCurrencies(db)
 	itemDefs := repositories.NewItemDefinitions(db)
 	authSvc := application.NewAuthService(tokens, users)
-	characterSvc := application.NewCharacterService(characters, users)
+	characterSvc := application.NewCharacterService(characters, users, repositories.NewKnowledgeRepositories(db))
 	locationSvc := application.NewLocationService(
 		repositories.NewLocations(db), repositories.NewLocationAccesses(db), groups, characters, characterSvc,
 	)

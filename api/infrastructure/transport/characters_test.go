@@ -42,7 +42,7 @@ func newCharactersTestEnv(t *testing.T) charactersTestEnv {
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
 	authSvc := application.NewAuthService(tokens, users)
-	characterSvc := application.NewCharacterService(characters, users)
+	characterSvc := application.NewCharacterService(characters, users, repositories.NewKnowledgeRepositories(db))
 	requireAuth := transport.RequireAuth(authSvc)
 
 	ctx := t.Context()
