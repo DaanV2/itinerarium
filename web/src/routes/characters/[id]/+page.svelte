@@ -3,56 +3,31 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import { getCharacter } from '$lib/api/characters';
-	import {
-		listInventory,
-		addInventoryItem,
-		removeInventoryItem,
-		listMoney,
-		setMoney
-	} from '$lib/api/inventory';
-	import { listCurrencies, listItemDefinitions } from '$lib/api/catalog';
+	import { listLocations, setCharacterLocation, clearCharacterLocation } from '$lib/api/locations';
 	import { getAccessToken } from '$lib/auth-token';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
-	import FormField from '$lib/components/FormField.svelte';
-	import SubmitButton from '$lib/components/SubmitButton.svelte';
-	import { mergeBalances, type CurrencyBalance } from '$lib/inventory-view';
-	import type {
-		Character,
-		Currency,
-		InventoryItem,
-		ItemDefinition,
-		MoneyBalance
-	} from '$lib/types';
+	import InventoryPanel from '$lib/components/InventoryPanel.svelte';
+	import MoneyPanel from '$lib/components/MoneyPanel.svelte';
+	import type { Character, InventoryOwnerRef, Location } from '$lib/types';
 
 	// Always present for this route; `?? ''` keeps the type a plain string.
 	const characterId = page.params.id ?? '';
+	const owner: InventoryOwnerRef = { kind: 'character', id: characterId };
 
 	let character = $state<Character | null>(null);
-	let items = $state<InventoryItem[]>([]);
-	let currencies = $state<Currency[]>([]);
-	let balances = $state<MoneyBalance[]>([]);
-	let itemDefinitions = $state<ItemDefinition[]>([]);
+	let locations = $state<Location[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 
-	// Add-item form state.
-	let itemName = $state('');
-	let itemDefinitionId = $state('');
-	let itemQuantity = $state(1);
-	let addingItem = $state(false);
-
-	let moneyRows = $derived<CurrencyBalance[]>(mergeBalances(currencies, balances));
+	let currentLocation = $derived(locations.find((l) => l.id === character?.location_id) ?? null);
 
 	async function loadAll() {
 		loading = true;
 		const token = getAccessToken();
 		try {
-			[character, items, currencies, balances, itemDefinitions] = await Promise.all([
+			[character, locations] = await Promise.all([
 				getCharacter(characterId, token),
-				listInventory(characterId, token),
-				listCurrencies(token),
-				listMoney(characterId, token),
-				listItemDefinitions(token)
+				listLocations(token)
 			]);
 			error = '';
 		} catch (err) {
@@ -64,61 +39,14 @@
 
 	onMount(loadAll);
 
-	// When a catalog item is picked, mirror its name into the free-text field so
-	// the label stays visible and editable.
-	function onPickDefinition() {
-		const def = itemDefinitions.find((d) => d.id === itemDefinitionId);
-		if (def) {
-			itemName = def.name;
-		}
-	}
-
-	async function refreshInventory() {
-		items = await listInventory(characterId, getAccessToken());
-	}
-
-	async function handleAddItem(event: SubmitEvent) {
-		event.preventDefault();
-		error = '';
-		addingItem = true;
-		try {
-			await addInventoryItem(
-				characterId,
-				{
-					name: itemName,
-					quantity: itemQuantity,
-					item_definition_id: itemDefinitionId || undefined
-				},
-				getAccessToken()
-			);
-			itemName = '';
-			itemDefinitionId = '';
-			itemQuantity = 1;
-			await refreshInventory();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to add item.';
-		} finally {
-			addingItem = false;
-		}
-	}
-
-	async function handleRemoveItem(itemId: string) {
+	async function handleLocationChange(locationId: string) {
 		error = '';
 		try {
-			await removeInventoryItem(characterId, itemId, getAccessToken());
-			await refreshInventory();
+			character = locationId
+				? await setCharacterLocation(characterId, locationId, getAccessToken())
+				: await clearCharacterLocation(characterId, getAccessToken());
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to remove item.';
-		}
-	}
-
-	async function handleSetMoney(currencyId: string, amount: number) {
-		error = '';
-		try {
-			await setMoney(characterId, currencyId, amount, getAccessToken());
-			balances = await listMoney(characterId, getAccessToken());
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to update money.';
+			error = err instanceof Error ? err.message : 'Failed to update location.';
 		}
 	}
 </script>
@@ -137,67 +65,34 @@
 		<p>Game day {character.current_game_day}</p>
 
 		<section>
-			<h2>Inventory</h2>
-			{#if items.length === 0}
-				<p>No items yet.</p>
+			<h2>Location</h2>
+			{#if currentLocation}
+				<p>
+					Currently at
+					<a href={resolve('/locations/[id]', { id: currentLocation.id })}>
+						{currentLocation.name}
+					</a>
+				</p>
 			{:else}
-				<ul>
-					{#each items as item (item.id)}
-						<li>
-							{item.quantity}× {item.name}
-							{#if item.description}<span> — {item.description}</span>{/if}
-							<button type="button" onclick={() => handleRemoveItem(item.id)}>Remove</button>
-						</li>
-					{/each}
-				</ul>
+				<p>No location set.</p>
 			{/if}
 
-			<form onsubmit={handleAddItem}>
-				<h3>Add item</h3>
-				<label for="item-def">From catalog (optional)</label>
-				<select id="item-def" bind:value={itemDefinitionId} onchange={onPickDefinition}>
-					<option value="">Free-text item…</option>
-					{#each itemDefinitions as def (def.id)}
-						<option value={def.id}>{def.name}</option>
-					{/each}
-				</select>
-
-				<FormField id="item-name" label="Name" type="text" required bind:value={itemName} />
-
-				<FormField
-					id="item-qty"
-					label="Quantity"
-					type="number"
-					min={1}
-					required
-					bind:value={itemQuantity}
-				/>
-
-				<SubmitButton pending={addingItem} label="Add item" pendingLabel="Adding…" />
-			</form>
+			<label for="character-location">Move to</label>
+			<select
+				id="character-location"
+				value={character.location_id ?? ''}
+				onchange={(e) => handleLocationChange((e.target as HTMLSelectElement).value)}
+			>
+				<option value="">— no location —</option>
+				{#each locations as location (location.id)}
+					<option value={location.id}>
+						{location.name}{location.plane ? ` (${location.plane})` : ''}
+					</option>
+				{/each}
+			</select>
 		</section>
 
-		<section>
-			<h2>Money</h2>
-			{#if moneyRows.length === 0}
-				<p>No currencies defined. A GM can add them to the catalog.</p>
-			{:else}
-				<ul>
-					{#each moneyRows as row (row.currency.id)}
-						<li>
-							<label for="money-{row.currency.id}">{row.currency.name} ({row.currency.code})</label>
-							<input
-								id="money-{row.currency.id}"
-								type="number"
-								min="0"
-								value={row.amount}
-								onchange={(e) =>
-									handleSetMoney(row.currency.id, Number((e.target as HTMLInputElement).value))}
-							/>
-						</li>
-					{/each}
-				</ul>
-			{/if}
-		</section>
+		<InventoryPanel {owner} />
+		<MoneyPanel {owner} />
 	{/if}
 </main>

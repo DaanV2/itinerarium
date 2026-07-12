@@ -19,10 +19,6 @@ type updateCharacterRequest struct {
 	CurrentGameDay *int    `json:"current_game_day,omitempty"`
 }
 
-type setLocationRequest struct {
-	LocationID string `json:"location_id"`
-}
-
 type characterResponse struct {
 	ID             string  `json:"id"`
 	Name           string  `json:"name"`
@@ -116,60 +112,13 @@ func UpdateCharacterHandler(svc *application.CharacterService) http.Handler {
 	})
 }
 
-// SetCharacterLocationHandler associates a character with a location. The body
-// carries the location_id. Access follows the character: owner or GM only.
-// Must be wrapped in RequireAuth.
-func SetCharacterLocationHandler(svc *application.CharacterService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req setLocationRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
-
-			return
-		}
-		if req.LocationID == "" {
-			writeError(w, http.StatusBadRequest, "location_id is required")
-
-			return
-		}
-
-		locationID := req.LocationID
-
-		c, err := svc.SetLocation(r.Context(), requesterFrom(r), r.PathValue("id"), &locationID)
-		if err != nil {
-			writeCharacterServiceError(w, err)
-
-			return
-		}
-
-		writeJSON(w, http.StatusOK, toCharacterResponse(c))
-	})
-}
-
-// ClearCharacterLocationHandler removes a character's location association.
-// Access follows the character: owner or GM only. Must be wrapped in
-// RequireAuth.
-func ClearCharacterLocationHandler(svc *application.CharacterService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := svc.SetLocation(r.Context(), requesterFrom(r), r.PathValue("id"), nil)
-		if err != nil {
-			writeCharacterServiceError(w, err)
-
-			return
-		}
-
-		writeJSON(w, http.StatusOK, toCharacterResponse(c))
-	})
-}
-
 func writeCharacterServiceError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, application.ErrForbidden):
 		writeError(w, http.StatusForbidden, err.Error())
 	case errors.Is(err, application.ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, application.ErrInvalidName), errors.Is(err, application.ErrInvalidGameDay),
-		errors.Is(err, application.ErrUnknownLocation):
+	case errors.Is(err, application.ErrInvalidName), errors.Is(err, application.ErrInvalidGameDay):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, "processing request")

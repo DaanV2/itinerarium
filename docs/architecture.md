@@ -31,12 +31,13 @@ itinerarium/
 | `Document`     | Markdown content with a folder `path` inside exactly one `Repository`. Has sections with a `gm_only` flag. Can additionally be shared directly to specific characters on a game day. |
 | `Currency`     | GM-defined via JSON/YAML list, with conversion ratios to a base unit. Shared by all inventories. |
 | `ItemDefinition` | Entry in the GM's default item catalog (JSON/YAML). Inventory items may reference a definition or be free-text — the catalog never restricts. |
-| `InventoryItem` | A line in a character's personal inventory (M1): name + quantity, optionally referencing an `ItemDefinition`. Owner + GM only. M2 extends inventories to groups and locations. |
-| `MoneyBalance` | A character's holding of a single `Currency` (M1): `amount` in that currency's own unit, one per (character, currency). Owner + GM only. |
+| `InventoryItem` | A line in an inventory: name + quantity, optionally referencing an `ItemDefinition`. Owned by exactly one character, group, or location (embedded `InventoryOwner`); visibility follows the owner. |
+| `MoneyBalance` | A character's or group's holding of a single `Currency`: `amount` in that currency's own unit, one per (owner, currency). Locations hold items, not money. |
+| `LocationAccess` | A GM-managed grant giving one character or one group a location's single access level (view + modify, including its inventory). No grant = the location's existence is hidden. |
 | `Session`      | Links characters to a play event. GM advances/rewinds `game_day` per character or in bulk.                                          |
 | `JournalEntry` | Belongs to a character, stamped with `game_day`. Readable by the owning player and GMs only. Can be converted (copied) into a `Document` in the character's private knowledge repository. |
-| `ActivityEntry` | Append-only event log. Stamped with `game_day`. Scoped to an entity (group, location, document). Supports an `announced` flag with explicit target characters or groups that bypasses normal entity-access rules (used for theft, destruction, and GM broadcasts). |
-| `Location`     | Named plane or place (town, building, room, …). Has its own inventory and access-controlled visibility. Characters and sessions can be associated with one. |
+| `ActivityEntry` | Append-only event log. Stamped with `game_day`. Scoped to an entity (group, location, document). M2 records group join/leave events; M5 adds the per-character feed and an `announced` flag with explicit target characters or groups that bypasses normal entity-access rules (used for theft, destruction, and GM broadcasts). |
+| `Location`     | Named plane or place (town, building, room, …). `plane` is a free-text label grouping locations into planes of existence. Has its own inventory and access-controlled visibility via `LocationAccess`. Characters and sessions can be associated with one. |
 
 ## Permission Model
 
@@ -67,6 +68,17 @@ GM-only document sections are stripped **server-side** before the response is se
 
 Location inventories apply the same access-control check: if a character lacks access to a location, the inventory (and its existence) must not appear in any API response.
 
+### Groups and locations (M2)
+
+- **Groups are campaign structure, their content is not.** Any authenticated user may list groups and see member identity (id + name only — never a member's game day or owning account); only a GM creates or edits a group. The group's *content* — shared inventory, shared money, and (from M3) its repository — is member-only: a non-member gets `404`, never a `403`.
+- **Membership changes** are allowed to the character's owner and to GMs. Every join/leave writes an `ActivityEntry` (`joined`/`left`) stamped with the character's `current_game_day`, in the same transaction as the membership change, so history and membership can never drift apart.
+- **Location visibility is grant-gated.** GMs see every location; a player sees one only through a `LocationAccess` grant held by one of their characters, directly or via a group that character belongs to. One grant is the single access level: view + modify, location fields and inventory alike. Grants are GM-managed; players never see the grant list.
+- **Character ↔ location association**: the owner or a GM sets it. A player may only place a character at a location *that character* can see — an inaccessible location reads as `404` so its existence never leaks. GMs place anyone anywhere.
+
+### Item movement (M2)
+
+`POST /api/inventory/move` transfers `quantity` units of an inventory line into another inventory. The caller needs access to **both** ends: no source access means the item itself reads as `404`; no target access means the target does. Moving the full quantity re-owns the line; a partial quantity splits it; if the target already holds a line with the same name and catalog reference, the moved units merge into it. The whole move runs in one database transaction.
+
 Activity entries have two visibility paths:
 1. **Normal** — character has access to the source entity AND `current_game_day >= entry.game_day`
 2. **Announced** — entry has `announced: true` and the character (or one of their groups) is in the `announced_to` list; entity-access check is skipped. The `actor` field is stripped server-side for non-GM users — players see what happened and to what, but not who did it.
@@ -82,14 +94,12 @@ The GM defines two campaign-wide catalogs, both readable by any authenticated us
 
 Both catalogs can be seeded from a JSON/YAML file at startup via `--catalog-path` (env `SERVER_CATALOG_PATH`). The loader **upserts** — currencies by `code`, items by `name` — so restarting with an edited file updates entries in place instead of duplicating them. See `config/catalog.example.yaml`.
 
-In M1, inventories and money are **per character**:
+Since M2, inventories are **owner-based** — a line belongs to exactly one character, group, or location:
 
-- **`InventoryItem`** — a line in a character's inventory: `character_id`, `name` (required), optional `item_definition_id` (a catalog reference; omitting it makes the line a free-text item), `quantity` (≥ 1), optional `description`.
-- **`MoneyBalance`** — a character's holding of one currency: `character_id`, `currency_id`, `amount` (≥ 0). At most one balance per (character, currency), enforced by a composite unique index; `SetMoney` upserts it.
+- **`InventoryItem`** — a line in an inventory: one owner id (`character_id` / `group_id` / `location_id`), `name` (required), optional `item_definition_id` (a catalog reference; omitting it makes the line a free-text item), `quantity` (≥ 1), optional `description`.
+- **`MoneyBalance`** — a character's or group's holding of one currency: `character_id` *or* `group_id`, `currency_id`, `amount` (≥ 0). At most one balance per (owner, currency), enforced by composite unique indexes; `SetMoney` upserts it. Locations hold items, not money.
 
-**Permission rule.** A character's inventory and money follow the same visibility as the character itself: **owner + GM only**. Every inventory/money service method resolves access through the character-visibility check first, so a caller who is neither the owner nor a GM gets `404` (existence hidden, never `403`). An inventory line addressed through the wrong character's path is likewise reported as `404`.
-
-> M1 scopes inventories to characters. M2 generalises inventories to groups and locations and adds item movement between them.
+**Permission rule.** Access is a single level — whoever can view an inventory can modify it — and resolves through the owning entity's own visibility rule: character inventories are **owner + GM only**, group inventories/money are **members + GM** (via any of the caller's characters), location inventories follow the location's **access grants**. A caller without access gets `404` (existence hidden, never `403`), and a line addressed through the wrong owner's path is likewise `404`.
 
 ### Endpoints
 
@@ -99,18 +109,21 @@ In M1, inventories and money are **per character**:
 | `POST /api/currencies` | GM | Add a currency |
 | `GET /api/items` | any authenticated | List the item catalog |
 | `POST /api/items` | GM | Add an item definition |
-| `GET /api/characters/{id}/inventory` | owner + GM | List a character's inventory |
-| `POST /api/characters/{id}/inventory` | owner + GM | Add an inventory line |
-| `PATCH /api/characters/{id}/inventory/{itemId}` | owner + GM | Edit name/quantity/description |
-| `DELETE /api/characters/{id}/inventory/{itemId}` | owner + GM | Remove a line |
+| `GET\|POST /api/<owner>/{id}/inventory` | per owner rule | List / add inventory lines (`<owner>` = `characters`, `groups`, or `locations`) |
+| `PATCH\|DELETE /api/<owner>/{id}/inventory/{itemId}` | per owner rule | Edit / remove a line |
+| `POST /api/inventory/move` | access to both ends | Move item quantity between inventories |
 | `GET /api/characters/{id}/money` | owner + GM | List a character's balances |
 | `PUT /api/characters/{id}/money/{currencyId}` | owner + GM | Set a balance to an absolute amount |
-| `PUT /api/characters/{id}/location` | owner + GM | Associate the character with a location (`{"location_id": …}`) |
-| `DELETE /api/characters/{id}/location` | owner + GM | Clear the character's location association |
-| `GET /api/locations` | any authenticated | List locations |
-| `POST /api/locations` | GM | Add a location |
-| `GET /api/locations/{id}` | any authenticated | Get one location |
-| `PATCH /api/locations/{id}` | GM | Edit a location's name/description/plane |
+| `GET\|PUT /api/groups/{id}/money…` | members + GM | Same, for a group's shared money |
+| `GET /api/groups` | any authenticated | List groups with member identity |
+| `POST /api/groups`, `PATCH /api/groups/{id}` | GM | Create / edit a group |
+| `POST /api/groups/{id}/members` | character owner + GM | Join a character to a group |
+| `DELETE /api/groups/{id}/members/{characterId}` | character owner + GM | Leave a group |
+| `GET /api/locations` | GM all, players accessible only | List visible locations |
+| `POST /api/locations` | GM | Create a location |
+| `GET\|PATCH /api/locations/{id}` | anyone with access | Read / edit a location (404 without access) |
+| `GET\|POST /api/locations/{id}/access`, `DELETE …/access/{accessId}` | GM | Manage a location's grants |
+| `PUT\|DELETE /api/characters/{id}/location` | owner + GM | Set / clear a character's location (players only to locations the character can see) |
 
 ## Document Format
 
