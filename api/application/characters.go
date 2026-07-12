@@ -24,11 +24,14 @@ var ErrInvalidGameDay = errors.New("invalid game day")
 type CharacterService struct {
 	characters *repositories.Characters
 	users      *repositories.Users
+	knowledge  *repositories.KnowledgeRepositories
 }
 
 // NewCharacterService builds a CharacterService.
-func NewCharacterService(characters *repositories.Characters, users *repositories.Users) *CharacterService {
-	return &CharacterService{characters: characters, users: users}
+func NewCharacterService(
+	characters *repositories.Characters, users *repositories.Users, knowledge *repositories.KnowledgeRepositories,
+) *CharacterService {
+	return &CharacterService{characters: characters, users: users, knowledge: knowledge}
 }
 
 // Create adds a new character owned by ownerUserID (defaulting to the
@@ -60,6 +63,10 @@ func (s *CharacterService) Create(
 	character := &models.Character{Name: name, UserID: ownerUserID}
 	if err := s.characters.Create(ctx, character); err != nil {
 		return nil, fmt.Errorf("creating character: %w", err)
+	}
+
+	if _, err := s.knowledge.EnsureForCharacter(ctx, character.ID); err != nil {
+		return nil, fmt.Errorf("provisioning character repository: %w", err)
 	}
 
 	return character, nil

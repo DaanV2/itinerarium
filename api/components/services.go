@@ -8,20 +8,21 @@ import (
 // Services bundles every application-layer service. Services own the business
 // logic and permission rules; the transport layer calls into them.
 type Services struct {
-	Setup      *application.SetupService
-	Auth       *application.AuthService
-	Users      *application.UserService
-	Characters *application.CharacterService
-	Catalog    *application.CatalogService
-	Inventory  *application.InventoryService
-	Groups     *application.GroupService
-	Locations  *application.LocationService
+	Setup        *application.SetupService
+	Auth         *application.AuthService
+	Users        *application.UserService
+	Characters   *application.CharacterService
+	Catalog      *application.CatalogService
+	Inventory    *application.InventoryService
+	Groups       *application.GroupService
+	Locations    *application.LocationService
+	Repositories *application.RepositoryService
 }
 
 // NewServices wires the application services over the repositories and token
 // service.
 func NewServices(repos *Repositories, tokens *authentication.TokenService) *Services {
-	characters := application.NewCharacterService(repos.Characters, repos.Users)
+	characters := application.NewCharacterService(repos.Characters, repos.Users, repos.KnowledgeRepositories)
 	locations := application.NewLocationService(
 		repos.Locations,
 		repos.LocationAccesses,
@@ -46,7 +47,10 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 			repos.Currencies,
 			repos.ItemDefinitions,
 		),
-		Groups:    application.NewGroupService(repos.Groups, characters),
+		Groups:    application.NewGroupService(repos.Groups, characters, repos.KnowledgeRepositories),
 		Locations: locations,
+		Repositories: application.NewRepositoryService(
+			repos.KnowledgeRepositories, repos.Groups, repos.Characters,
+		),
 	}
 }

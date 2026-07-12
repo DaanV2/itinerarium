@@ -28,7 +28,7 @@ func newTestInventoryEnv(t *testing.T) (*application.InventoryService, *applicat
 	groups := repositories.NewGroups(db)
 	currencies := repositories.NewCurrencies(db)
 	itemDefs := repositories.NewItemDefinitions(db)
-	charSvc := application.NewCharacterService(characters, repositories.NewUsers(db))
+	charSvc := application.NewCharacterService(characters, repositories.NewUsers(db), repositories.NewKnowledgeRepositories(db))
 	locationSvc := application.NewLocationService(
 		repositories.NewLocations(db), repositories.NewLocationAccesses(db), groups, characters, charSvc,
 	)

@@ -33,11 +33,14 @@ var ErrNotMember = errors.New("character is not a member")
 type GroupService struct {
 	groups     *repositories.Groups
 	characters *CharacterService
+	knowledge  *repositories.KnowledgeRepositories
 }
 
 // NewGroupService builds a GroupService.
-func NewGroupService(groups *repositories.Groups, characters *CharacterService) *GroupService {
-	return &GroupService{groups: groups, characters: characters}
+func NewGroupService(
+	groups *repositories.Groups, characters *CharacterService, knowledge *repositories.KnowledgeRepositories,
+) *GroupService {
+	return &GroupService{groups: groups, characters: characters, knowledge: knowledge}
 }
 
 // Create adds a new group. GM only.
@@ -57,6 +60,10 @@ func (s *GroupService) Create(
 	group := &models.Group{Name: name, Type: groupType, Description: description}
 	if err := s.groups.Create(ctx, group); err != nil {
 		return nil, fmt.Errorf("creating group: %w", err)
+	}
+
+	if _, err := s.knowledge.EnsureForGroup(ctx, group.ID); err != nil {
+		return nil, fmt.Errorf("provisioning group repository: %w", err)
 	}
 
 	return group, nil

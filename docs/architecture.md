@@ -27,7 +27,7 @@ itinerarium/
 | `User`         | Player or GM role. GMs create player accounts directly.                                                                             |
 | `Character`    | Belongs to a User. Has its own `current_game_day`, optional `Location`, personal inventory, and money.                              |
 | `Group`        | Unified model for organisations/families/other. `type` is cosmetic. Shares inventory, money, and documents among member characters. Join/leave events are recorded as `ActivityEntry` rows stamped with the game day. |
-| `Repository`   | A named vault with its own folder tree. Types: `general` (everyone), `group` (one per group, members only), `template` (everyone), `character` (owner + GM only). |
+| `Repository`   | A named vault with its own folder tree. Types: `general` (everyone), `group` (one per group, members only), `template` (everyone), `character` (owner + GM only). The `general` and `template` singletons and one repository per group/character are provisioned automatically — never created directly by a caller (M3). |
 | `Document`     | Markdown content with a folder `path` inside exactly one `Repository`. Has sections with a `gm_only` flag. Can additionally be shared directly to specific characters on a game day. |
 | `Currency`     | GM-defined via JSON/YAML list, with conversion ratios to a base unit. Shared by all inventories. |
 | `ItemDefinition` | Entry in the GM's default item catalog (JSON/YAML). Inventory items may reference a definition or be free-text — the catalog never restricts. |
@@ -74,6 +74,11 @@ Location inventories apply the same access-control check: if a character lacks a
 - **Membership changes** are allowed to the character's owner and to GMs. Every join/leave writes an `ActivityEntry` (`joined`/`left`) stamped with the character's `current_game_day`, in the same transaction as the membership change, so history and membership can never drift apart.
 - **Location visibility is grant-gated.** GMs see every location; a player sees one only through a `LocationAccess` grant held by one of their characters, directly or via a group that character belongs to. One grant is the single access level: view + modify, location fields and inventory alike. Grants are GM-managed; players never see the grant list.
 - **Character ↔ location association**: the owner or a GM sets it. A player may only place a character at a location *that character* can see — an inaccessible location reads as `404` so its existence never leaks. GMs place anyone anywhere.
+
+### Repositories (M3)
+
+- **Provisioning is automatic, not user-driven.** The `general` and `template` repositories are singletons created once at startup (`RepositoryService.EnsureSystemRepositories`, idempotent). A group's repository is created in `GroupService.Create`; a character's repository is created in `CharacterService.Create`. There is no create endpoint — repositories only ever come from these paths, so "one per group, one per character" can never drift.
+- **Visibility mirrors the entity it belongs to.** `general`/`template` are visible to everyone; a `group` repository follows that group's membership; a `character` repository follows character ownership. GMs see every repository. A caller without access gets `404`, never `403` — same existence-hiding rule as locations.
 
 ### Item movement (M2)
 
@@ -124,6 +129,8 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `GET\|PATCH /api/locations/{id}` | anyone with access | Read / edit a location (404 without access) |
 | `GET\|POST /api/locations/{id}/access`, `DELETE …/access/{accessId}` | GM | Manage a location's grants |
 | `PUT\|DELETE /api/characters/{id}/location` | owner + GM | Set / clear a character's location (players only to locations the character can see) |
+| `GET /api/repositories` | any authenticated | List visible repositories: general, template, plus own character/group repositories (GM sees all) |
+| `GET /api/repositories/{id}` | per repository rule | Read one repository (404 without access) |
 
 ## Document Format
 

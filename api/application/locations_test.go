@@ -29,7 +29,8 @@ func newTestLocationEnv(t *testing.T) locationTestEnv {
 
 	characterRepo := repositories.NewCharacters(db)
 	groupRepo := repositories.NewGroups(db)
-	charSvc := application.NewCharacterService(characterRepo, repositories.NewUsers(db))
+	knowledgeRepo := repositories.NewKnowledgeRepositories(db)
+	charSvc := application.NewCharacterService(characterRepo, repositories.NewUsers(db), knowledgeRepo)
 
 	return locationTestEnv{
 		locations: application.NewLocationService(
@@ -39,7 +40,7 @@ func newTestLocationEnv(t *testing.T) locationTestEnv {
 			characterRepo,
 			charSvc,
 		),
-		groups:     application.NewGroupService(groupRepo, charSvc),
+		groups:     application.NewGroupService(groupRepo, charSvc, knowledgeRepo),
 		characters: charSvc,
 	}
 }

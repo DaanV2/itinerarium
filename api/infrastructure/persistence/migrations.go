@@ -17,6 +17,7 @@ func allModels() []any {
 		&models.MoneyBalance{},
 		&models.Group{},
 		&models.ActivityEntry{},
+		&models.Repository{},
 	}
 }
 

@@ -43,8 +43,9 @@ func newGroupTestEnv(t *testing.T) groupTestEnv {
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
 	authSvc := application.NewAuthService(tokens, users)
-	characterSvc := application.NewCharacterService(characters, users)
-	groupSvc := application.NewGroupService(repositories.NewGroups(db), characterSvc)
+	knowledgeRepo := repositories.NewKnowledgeRepositories(db)
+	characterSvc := application.NewCharacterService(characters, users, knowledgeRepo)
+	groupSvc := application.NewGroupService(repositories.NewGroups(db), characterSvc, knowledgeRepo)
 	requireAuth := transport.RequireAuth(authSvc)
 
 	ctx := t.Context()
