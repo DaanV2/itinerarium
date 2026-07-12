@@ -34,7 +34,7 @@ itinerarium/
 | `InventoryItem` | A line in an inventory: name + quantity, optionally referencing an `ItemDefinition`. Owned by exactly one character, group, or location (embedded `InventoryOwner`); visibility follows the owner. |
 | `MoneyBalance` | A character's or group's holding of a single `Currency`: `amount` in that currency's own unit, one per (owner, currency). Locations hold items, not money. |
 | `LocationAccess` | A GM-managed grant giving one character or one group a location's single access level (view + modify, including its inventory). No grant = the location's existence is hidden. |
-| `Session`      | Links characters to a play event. GM advances/rewinds `game_day` per character or in bulk.                                          |
+| `Session`      | Links characters to a play event via a `many2many` participant list. Carries no game day of its own — advancing/rewinding a session moves each participant's own `Character.CurrentGameDay`, either for everyone at once or for one character catching up. GM-only: creation, editing, participant management, and game-day advances. |
 | `JournalEntry` | Belongs to a character, stamped with `game_day`. Readable by the owning player and GMs only. Can be converted (copied) into a `Document` in the character's private knowledge repository. |
 | `ActivityEntry` | Append-only event log. Stamped with `game_day`. Scoped to an entity (group, location, document). M2 records group join/leave events; M5 adds the per-character feed and an `announced` flag with explicit target characters or groups that bypasses normal entity-access rules (used for theft, destruction, and GM broadcasts). |
 | `Location`     | Named plane or place (town, building, room, …). `plane` is a free-text label grouping locations into planes of existence. Has its own inventory and access-controlled visibility via `LocationAccess`. Characters and sessions can be associated with one. |
@@ -133,6 +133,11 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `GET /api/repositories/{id}` | per repository rule | Read one repository (404 without access) |
 | `GET\|POST /api/characters/{id}/journal` | owner + GM | List / add a character's journal entries. New entries are stamped with the character's current `current_game_day` |
 | `GET\|PATCH /api/characters/{id}/journal/{entryId}` | owner + GM | Read / edit a journal entry's content (404 without access; game day never changes after creation) |
+| `GET\|POST /api/sessions` | GM | List / create sessions |
+| `GET\|PATCH /api/sessions/{id}` | GM | Read / edit a session |
+| `POST /api/sessions/{id}/participants` | GM | Add a character to a session |
+| `DELETE /api/sessions/{id}/participants/{characterId}` | GM | Remove a character from a session |
+| `POST /api/sessions/{id}/game-day` | GM | Advance/rewind `game_day` for every participant (or one, via `character_id`) by a signed `delta` |
 
 ## Document Format
 

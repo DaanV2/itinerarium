@@ -117,6 +117,7 @@ The actor field is GM-only on announced entries, so players know *that* somethin
 - Track which characters participate in a session
 - Each character has its own `current_game_day` tracked independently
 - GM can advance or rewind game day for all session participants, or per character for players catching up
+- Sessions are a GM-only tool: creating/editing sessions, managing participants, and advancing/rewinding game day all require the GM role — players don't interact with sessions directly
 
 ## Locations / Planes
 

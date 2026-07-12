@@ -66,10 +66,10 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 
 ### M4 — Sessions & Game Day
 
-- [ ] Sessions with character participants
-- [ ] GM advances/rewinds game day for all session participants at once
-- [ ] GM advances/rewinds game day per individual character (catch-up)
-- [ ] Visibility recalculates correctly after rewind (documents/entries disappear again)
+- [x] Sessions with character participants
+- [x] GM advances/rewinds game day for all session participants at once
+- [x] GM advances/rewinds game day per individual character (catch-up)
+- [ ] Visibility recalculates correctly after rewind (documents/entries disappear again) *(depends on M3 knowledge gating, not yet built)*
 
 ## Beta (M5–M6)
 
