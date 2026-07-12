@@ -19,6 +19,7 @@ type Repositories struct {
 	LocationAccesses      *repositories.LocationAccesses
 	RevokedTokens         *repositories.RevokedTokens
 	KnowledgeRepositories *repositories.KnowledgeRepositories
+	JournalEntries        *repositories.JournalEntries
 }
 
 // NewRepositories constructs every repository against the given database.
@@ -36,5 +37,6 @@ func NewRepositories(db *persistence.Database) *Repositories {
 		LocationAccesses:      repositories.NewLocationAccesses(db),
 		RevokedTokens:         repositories.NewRevokedTokens(db),
 		KnowledgeRepositories: repositories.NewKnowledgeRepositories(db),
+		JournalEntries:        repositories.NewJournalEntries(db),
 	}
 }

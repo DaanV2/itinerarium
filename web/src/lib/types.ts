@@ -122,3 +122,13 @@ export interface InventoryOwnerRef {
 	kind: 'character' | 'group' | 'location';
 	id: string;
 }
+
+/** A per-character journal page. Readable and editable only by the owning
+ * player and GMs — other players never see it. `game_day` is stamped at
+ * creation from the character's `current_game_day` and never changes. */
+export interface JournalEntry {
+	id: string;
+	character_id: string;
+	game_day: number;
+	content: string;
+}

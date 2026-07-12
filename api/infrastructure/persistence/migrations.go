@@ -18,6 +18,7 @@ func allModels() []any {
 		&models.Group{},
 		&models.ActivityEntry{},
 		&models.Repository{},
+		&models.JournalEntry{},
 	}
 }
 

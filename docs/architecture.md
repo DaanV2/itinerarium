@@ -131,6 +131,8 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `PUT\|DELETE /api/characters/{id}/location` | owner + GM | Set / clear a character's location (players only to locations the character can see) |
 | `GET /api/repositories` | any authenticated | List visible repositories: general, template, plus own character/group repositories (GM sees all) |
 | `GET /api/repositories/{id}` | per repository rule | Read one repository (404 without access) |
+| `GET\|POST /api/characters/{id}/journal` | owner + GM | List / add a character's journal entries. New entries are stamped with the character's current `current_game_day` |
+| `GET\|PATCH /api/characters/{id}/journal/{entryId}` | owner + GM | Read / edit a journal entry's content (404 without access; game day never changes after creation) |
 
 ## Document Format
 

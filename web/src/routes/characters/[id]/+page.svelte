@@ -7,6 +7,7 @@
 	import { getAccessToken } from '$lib/auth-token';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import InventoryPanel from '$lib/components/InventoryPanel.svelte';
+	import JournalPanel from '$lib/components/JournalPanel.svelte';
 	import MoneyPanel from '$lib/components/MoneyPanel.svelte';
 	import type { Character, InventoryOwnerRef, Location } from '$lib/types';
 
@@ -94,5 +95,6 @@
 
 		<InventoryPanel {owner} />
 		<MoneyPanel {owner} />
+		<JournalPanel {characterId} />
 	{/if}
 </main>
