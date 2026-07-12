@@ -158,10 +158,16 @@ func findMatch(
 ) (*models.InventoryItem, error) {
 	var match models.InventoryItem
 
-	err := ownerScope(tx, target).
-		Where("name = ?", source.Name).
-		Where("item_definition_id IS ?", source.ItemDefinitionID).
-		First(&match).Error
+	query := ownerScope(tx, target).Where("name = ?", source.Name)
+	// Null-safe catalog match spelled out per case: `IS ?` with a non-NULL
+	// parameter is SQLite-only, and the postgres/mysql backends reject it.
+	if source.ItemDefinitionID == nil {
+		query = query.Where("item_definition_id IS NULL")
+	} else {
+		query = query.Where("item_definition_id = ?", *source.ItemDefinitionID)
+	}
+
+	err := query.First(&match).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrNotFound
