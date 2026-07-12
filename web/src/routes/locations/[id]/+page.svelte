@@ -14,6 +14,7 @@
 	import { getAccessToken, isGM } from '$lib/auth-token';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
+	import GmOnly from '$lib/components/GmOnly.svelte';
 	import InventoryPanel from '$lib/components/InventoryPanel.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import type { Character, Group, InventoryOwnerRef, Location, LocationAccess } from '$lib/types';
@@ -152,7 +153,7 @@
 			</form>
 		</section>
 
-		{#if gm}
+		<GmOnly>
 			<section>
 				<h2>Access</h2>
 				{#if grants.length === 0}
@@ -193,7 +194,7 @@
 					<SubmitButton pending={granting} label="Grant" pendingLabel="Granting…" />
 				</form>
 			</section>
-		{/if}
+		</GmOnly>
 
 		<InventoryPanel {owner} />
 	{/if}

@@ -4,25 +4,20 @@
 	import { resolve } from '$app/paths';
 	import Card from '$lib/components/Card.svelte';
 
-	let isgm = $state(false);
-
 	$effect.pre(() => {
 		if (!isLoggedIn()) {
 			void goto(resolve('/login'));
 		}
 
-		isgm = isGM();
+		if (!isGM()) {
+			void goto(resolve('/'));
+		}
 	});
 </script>
 
 <div>
 	<div>
-		{#if isgm}
-			<Card text="Admin" href={resolve('/admin')} gm />
-		{/if}
-
-		<Card text="Characters" href={resolve('/characters')} />
-		<Card text="Groups" href={resolve('/groups')} />
-		<Card text="Locations" href={resolve('/locations')} />
+		<Card title="Users" text="Manage user accounts" href={resolve('/admin/users')} />
+		<Card title="Characters" text="Manage all characters" href={resolve('/admin/characters')} />
 	</div>
 </div>

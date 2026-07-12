@@ -2,9 +2,10 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { createGroup, listGroups } from '$lib/api/groups';
-	import { getAccessToken, isGM } from '$lib/auth-token';
+	import { getAccessToken } from '$lib/auth-token';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
+	import GmOnly from '$lib/components/GmOnly.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import type { Group, GroupType } from '$lib/types';
 
@@ -57,7 +58,7 @@
 
 	<ErrorAlert message={error} />
 
-	{#if isGM()}
+	<GmOnly>
 		<section>
 			<h2>Create group</h2>
 			<form onsubmit={handleCreate}>
@@ -80,7 +81,7 @@
 				<SubmitButton pending={submitting} label="Create group" pendingLabel="Creating…" />
 			</form>
 		</section>
-	{/if}
+	</GmOnly>
 
 	<section>
 		<h2>All groups</h2>

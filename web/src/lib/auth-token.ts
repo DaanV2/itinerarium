@@ -33,8 +33,20 @@ export function setUserRole(role: Role): void {
 	localStorage.setItem(ROLE_KEY, role);
 }
 
+export function getUserRole(): Role | "none" {
+	if (typeof localStorage === 'undefined') return "none";
+	const role = localStorage.getItem(ROLE_KEY);
+	if (role === 'gm' || role === 'player') return role;
+
+	return "none";
+}
+
 /** Whether the logged-in account is a GM, per the stored role. */
 export function isGM(): boolean {
-	if (typeof localStorage === 'undefined') return false;
-	return localStorage.getItem(ROLE_KEY) === 'gm';
+	return getUserRole() === 'gm';
+}
+
+/** Whether the logged-in account is a player, per the stored role. */
+export function isLoggedIn(): boolean {
+	return getAccessToken() !== '';
 }

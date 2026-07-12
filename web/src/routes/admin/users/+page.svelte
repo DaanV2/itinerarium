@@ -65,11 +65,13 @@
 	<ErrorAlert message={error} />
 
 	{#if issuedCredential}
-		<p role="status">
-			Temporary password for <strong>{issuedCredential.email}</strong>:
-			<code>{issuedCredential.password}</code>
-			— hand this to the account holder now, it will not be shown again.
-		</p>
+		<div role="status">
+			<p>
+				Temporary password for <strong>{issuedCredential.email}</strong> — hand this to the account holder
+				now, it will not be shown again:
+			</p>
+			<pre>{issuedCredential.password}</pre>
+		</div>
 	{/if}
 
 	<section>

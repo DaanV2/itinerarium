@@ -2,9 +2,10 @@
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { createLocation, listLocations } from '$lib/api/locations';
-	import { getAccessToken, isGM } from '$lib/auth-token';
+	import { getAccessToken } from '$lib/auth-token';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
+	import GmOnly from '$lib/components/GmOnly.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import type { Location } from '$lib/types';
 
@@ -60,7 +61,7 @@
 
 	<ErrorAlert message={error} />
 
-	{#if isGM()}
+	<GmOnly>
 		<section>
 			<h2>Create location</h2>
 			<form onsubmit={handleCreate}>
@@ -76,7 +77,7 @@
 				<SubmitButton pending={submitting} label="Create location" pendingLabel="Creating…" />
 			</form>
 		</section>
-	{/if}
+	</GmOnly>
 
 	<section>
 		<h2>Known locations</h2>
