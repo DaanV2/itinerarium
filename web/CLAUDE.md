@@ -87,6 +87,12 @@ The client renders **only what the API returns**. Never:
 
 A 404 from the API on something that "should exist" may be intentional (hidden means invisible) — surface it as not-found, don't retry or special-case it.
 
+### Marking GM-only controls
+
+Actions/sections that only make sense for a GM (create forms, access grants, admin nav) get a visual cue — transparent green background + dashed green border — so it's obvious at a glance without reading copy. Wrap block-level content in `<GmOnly>` (`lib/components/GmOnly.svelte`); it checks `isGM()` and renders nothing for players. For `Card`, pass the `gm` prop instead of wrapping it, so the tint applies to the card itself rather than nesting another bordered box.
+
+This is the same client-side check called out above: styling, not access control. The API still enforces who can actually call the create/grant endpoint — don't skip that because the button is only visible to GMs.
+
 ## Testing
 
 - Unit tests: `*.spec.ts` / `*.test.ts` next to the code, run by Vitest in node environment (see `src/lib/vitest-examples/`).
