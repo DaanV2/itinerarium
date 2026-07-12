@@ -53,6 +53,18 @@ func charactersRouter(services *Services) *transport.Router {
 		transport.WithHandle("DELETE /{id}/location", transport.ClearCharacterLocationHandler(services.Locations)),
 		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, transport.CharacterOwner)),
 		transport.WithSubRoute("/{id}/money", moneyRouter(services, transport.CharacterOwner)),
+		transport.WithSubRoute("/{id}/journal", journalRouter(services)),
+	)
+}
+
+// journalRouter serves one character's journal entries under
+// /api/characters/{id}/journal.
+func journalRouter(services *Services) *transport.Router {
+	return transport.NewRouter(
+		transport.WithHandle("GET /", transport.ListJournalEntriesHandler(services.Journals)),
+		transport.WithHandle("POST /", transport.CreateJournalEntryHandler(services.Journals)),
+		transport.WithHandle("GET /{entryId}", transport.GetJournalEntryHandler(services.Journals)),
+		transport.WithHandle("PATCH /{entryId}", transport.UpdateJournalEntryHandler(services.Journals)),
 	)
 }
 
