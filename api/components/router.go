@@ -15,6 +15,7 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithSubRoute("/admin", adminRouter(services)),
 		transport.WithSubRoute("/characters", charactersRouter(services)),
 		transport.WithSubRoute("/groups", groupsRouter(services)),
+		transport.WithSubRoute("/sessions", sessionsRouter(services)),
 		transport.WithSubRoute("/locations", locationsRouter(services)),
 		transport.WithSubRoute("/currencies", currenciesRouter(services)),
 		transport.WithSubRoute("/items", itemsRouter(services)),
@@ -114,6 +115,22 @@ func groupsRouter(services *Services) *transport.Router {
 		transport.WithHandle("DELETE /{id}/members/{characterId}", transport.LeaveGroupHandler(services.Groups)),
 		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, transport.GroupOwner)),
 		transport.WithSubRoute("/{id}/money", moneyRouter(services, transport.GroupOwner)),
+	)
+}
+
+// sessionsRouter serves sessions, participants, and game-day advances under
+// /api/sessions.
+func sessionsRouter(services *Services) *transport.Router {
+	return transport.NewRouter(
+		transport.WithHandle("GET /", transport.ListSessionsHandler(services.Sessions)),
+		transport.WithHandle("POST /", transport.CreateSessionHandler(services.Sessions)),
+		transport.WithHandle("GET /{id}", transport.GetSessionHandler(services.Sessions)),
+		transport.WithHandle("PATCH /{id}", transport.UpdateSessionHandler(services.Sessions)),
+		transport.WithHandle("POST /{id}/participants", transport.AddSessionParticipantHandler(services.Sessions)),
+		transport.WithHandle(
+			"DELETE /{id}/participants/{characterId}", transport.RemoveSessionParticipantHandler(services.Sessions),
+		),
+		transport.WithHandle("POST /{id}/game-day", transport.AdvanceSessionGameDayHandler(services.Sessions)),
 	)
 }
 

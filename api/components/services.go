@@ -16,6 +16,7 @@ type Services struct {
 	Inventory    *application.InventoryService
 	Groups       *application.GroupService
 	Locations    *application.LocationService
+	Sessions     *application.SessionService
 	Repositories *application.RepositoryService
 	Journals     *application.JournalEntryService
 }
@@ -50,6 +51,7 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 		),
 		Groups:    application.NewGroupService(repos.Groups, characters, repos.KnowledgeRepositories),
 		Locations: locations,
+		Sessions:  application.NewSessionService(repos.Sessions, characters),
 		Repositories: application.NewRepositoryService(
 			repos.KnowledgeRepositories, repos.Groups, repos.Characters,
 		),
