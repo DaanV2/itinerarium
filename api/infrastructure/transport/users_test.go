@@ -16,8 +16,8 @@ import (
 )
 
 type usersTestEnv struct {
-	router     *transport.Router
-	gmToken    string
+	router      *transport.Router
+	gmToken     string
 	playerToken string
 }
 
