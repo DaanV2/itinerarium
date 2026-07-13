@@ -162,6 +162,7 @@ func repositoriesRouter(services *Services) *transport.Router {
 		transport.WithHandle("GET /{id}", transport.GetRepositoryHandler(services.Repositories)),
 		transport.WithHandle("GET /{id}/documents", transport.ListDocumentsHandler(services.Documents)),
 		transport.WithHandle("POST /{id}/documents", transport.CreateDocumentHandler(services.Documents)),
+		transport.WithHandle("GET /{id}/documents/tree", transport.GetDocumentFolderTreeHandler(services.Documents)),
 	)
 }
 

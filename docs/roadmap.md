@@ -46,8 +46,8 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 ### M3 — Knowledge
 
 - [x] Repositories: general, template, one per group, one per character
-- [ ] Folder tree per repository, alphabetical sorting
-- [ ] Folders hidden when they contain no accessible documents
+- [x] Folder tree per repository, alphabetical sorting
+- [x] Folders hidden when they contain no accessible documents
 - [x] Markdown documents with YAML frontmatter (`title`, `tags`, `repository`, `game_day`)
 - [x] GM-only sections, stripped server-side for players
 - [ ] Section-boundary banners in the reader (GM/player sections clearly marked)

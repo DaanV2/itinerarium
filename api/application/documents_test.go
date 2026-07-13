@@ -605,4 +605,86 @@ func TestDocumentService_RevealedFlag_TracksCharacterGameDays(t *testing.T) {
 	}
 }
 
+func TestDocumentService_FolderTree_NestsAndSortsAlphabetically(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
+
+	mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{Path: "zebra"})
+	mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{Path: "apple"})
+	mustCreateDocument(t, env, gmRequester, general.ID,
+		&application.CreateDocumentInput{Path: "factions/thieves-guild"})
+	mustCreateDocument(t, env, gmRequester, general.ID,
+		&application.CreateDocumentInput{Path: "factions/city-watch"})
+	mustCreateDocument(t, env, gmRequester, general.ID,
+		&application.CreateDocumentInput{Path: "factions/watch/roster"})
+
+	tree, err := env.docs.FolderTree(ctx, gmRequester, general.ID)
+	if err != nil {
+		t.Fatalf("FolderTree: %v", err)
+	}
+
+	if len(tree.Documents) != 2 || tree.Documents[0].Title != "apple" || tree.Documents[1].Title != "zebra" {
+		t.Fatalf("root documents = %+v, want [apple zebra]", tree.Documents)
+	}
+	if len(tree.Folders) != 1 || tree.Folders[0].Name != "factions" {
+		t.Fatalf("root folders = %+v, want [factions]", tree.Folders)
+	}
+
+	factions := tree.Folders[0]
+	if factions.Path != "factions" {
+		t.Fatalf("factions.Path = %q, want %q", factions.Path, "factions")
+	}
+	if len(factions.Documents) != 2 ||
+		factions.Documents[0].Title != "city-watch" || factions.Documents[1].Title != "thieves-guild" {
+		t.Fatalf("factions documents = %+v, want [city-watch thieves-guild]", factions.Documents)
+	}
+	if len(factions.Folders) != 1 || factions.Folders[0].Name != "watch" {
+		t.Fatalf("factions folders = %+v, want [watch]", factions.Folders)
+	}
+	if factions.Folders[0].Path != "factions/watch" {
+		t.Fatalf("watch.Path = %q, want %q", factions.Folders[0].Path, "factions/watch")
+	}
+	if len(factions.Folders[0].Documents) != 1 || factions.Folders[0].Documents[0].Title != "roster" {
+		t.Fatalf("watch documents = %+v, want [roster]", factions.Folders[0].Documents)
+	}
+}
+
+func TestDocumentService_FolderTree_HidesFoldersWithNoAccessibleDocuments(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
+
+	character, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	if err != nil {
+		t.Fatalf("Create character: %v", err)
+	}
+
+	mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{
+		Path:            "secrets/the-betrayal",
+		SharedOnGameDay: intPtr(5),
+	})
+	mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{Path: "lore/creation"})
+
+	tree, err := env.docs.FolderTree(ctx, playerRequester, general.ID)
+	if err != nil {
+		t.Fatalf("FolderTree: %v", err)
+	}
+
+	if len(tree.Folders) != 1 || tree.Folders[0].Name != "lore" {
+		t.Fatalf("folders = %+v, want [lore] — the unrevealed secrets folder must not leak", tree.Folders)
+	}
+
+	// Reaching the reveal day makes the previously-empty folder appear.
+	env.setGameDay(t, character.ID, 5)
+
+	tree, err = env.docs.FolderTree(ctx, playerRequester, general.ID)
+	if err != nil {
+		t.Fatalf("FolderTree after reveal: %v", err)
+	}
+	if len(tree.Folders) != 2 {
+		t.Fatalf("folders = %+v, want [lore secrets] after reveal", tree.Folders)
+	}
+}
+
 func intPtr(v int) *int { return &v }

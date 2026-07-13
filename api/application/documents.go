@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
@@ -130,6 +131,78 @@ func (s *DocumentService) ListByRepository(
 	}
 
 	return visible, nil
+}
+
+// FolderNode is one folder (or the repository root) in a document folder
+// tree. Folders and Documents are each sorted alphabetically by name/title.
+type FolderNode struct {
+	Name      string
+	Path      string
+	Folders   []*FolderNode
+	Documents []models.Document
+}
+
+// FolderTree arranges the repository's documents the requester may see into
+// a folder tree by path. It is built purely from ListByRepository's result,
+// so a folder appears only when it (directly or through a subfolder)
+// contains at least one document the requester may see — hidden means
+// invisible for folders too (core domain rule 3, roadmap M3).
+func (s *DocumentService) FolderTree(
+	ctx context.Context, requester Requester, repositoryID string,
+) (*FolderNode, error) {
+	docs, err := s.ListByRepository(ctx, requester, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+
+	return buildFolderTree(docs), nil
+}
+
+// buildFolderTree groups documents into nested folders by path segment and
+// sorts every level alphabetically.
+func buildFolderTree(docs []models.Document) *FolderNode {
+	root := &FolderNode{}
+	folders := make(map[string]*FolderNode)
+
+	for i := range docs {
+		doc := docs[i]
+		segments := strings.Split(doc.Path, "/")
+
+		node := root
+		path := ""
+		for _, seg := range segments[:len(segments)-1] {
+			if path == "" {
+				path = seg
+			} else {
+				path += "/" + seg
+			}
+
+			child, ok := folders[path]
+			if !ok {
+				child = &FolderNode{Name: seg, Path: path}
+				folders[path] = child
+				node.Folders = append(node.Folders, child)
+			}
+			node = child
+		}
+
+		node.Documents = append(node.Documents, doc)
+	}
+
+	sortFolderTree(root)
+
+	return root
+}
+
+// sortFolderTree sorts a folder's subfolders by name and documents by title,
+// recursively.
+func sortFolderTree(node *FolderNode) {
+	sort.Slice(node.Folders, func(i, j int) bool { return node.Folders[i].Name < node.Folders[j].Name })
+	sort.Slice(node.Documents, func(i, j int) bool { return node.Documents[i].Title < node.Documents[j].Title })
+
+	for _, f := range node.Folders {
+		sortFolderTree(f)
+	}
 }
 
 // Get returns one document with the sections the requester may see. Players

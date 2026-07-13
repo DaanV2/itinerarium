@@ -94,6 +94,9 @@ func newDocumentsTransportEnv(t *testing.T) documentsTransportEnv {
 		transport.WithHandle(
 			"POST /api/repositories/{id}/documents", requireAuth(transport.CreateDocumentHandler(docSvc)),
 		),
+		transport.WithHandle(
+			"GET /api/repositories/{id}/documents/tree", requireAuth(transport.GetDocumentFolderTreeHandler(docSvc)),
+		),
 		transport.WithHandle("GET /api/documents/{id}", requireAuth(transport.GetDocumentHandler(docSvc))),
 		transport.WithHandle("PATCH /api/documents/{id}", requireAuth(transport.UpdateDocumentHandler(docSvc))),
 	)
@@ -188,6 +191,34 @@ func TestDocumentRoutes_GameDayGate_Returns404NotForbidden(t *testing.T) {
 	}
 	if body := list.Body.String(); strings.Contains(body, "the-betrayal") {
 		t.Fatalf("gated document leaked into list: %s", body)
+	}
+}
+
+func TestDocumentRoutes_FolderTree_HidesGatedFolder(t *testing.T) {
+	env := newDocumentsTransportEnv(t)
+
+	env.createDocument(t, map[string]any{"path": "lore/creation"})
+	env.createDocument(t, map[string]any{
+		"path":               "secrets/the-betrayal",
+		"shared_on_game_day": 5,
+	})
+
+	rec := env.do(t, http.MethodGet, "/api/repositories/"+env.generalID+"/documents/tree", env.playerToken, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("tree GET status = %d body %s", rec.Code, rec.Body.String())
+	}
+
+	var tree struct {
+		Folders []struct {
+			Name string `json:"name"`
+		} `json:"folders"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &tree); err != nil {
+		t.Fatalf("decode tree: %v", err)
+	}
+
+	if len(tree.Folders) != 1 || tree.Folders[0].Name != "lore" {
+		t.Fatalf("folders = %+v, want [lore] — the unrevealed secrets folder must not leak", tree.Folders)
 	}
 }
 
