@@ -18,6 +18,7 @@ type Services struct {
 	Locations    *application.LocationService
 	Sessions     *application.SessionService
 	Repositories *application.RepositoryService
+	Documents    *application.DocumentService
 	Journals     *application.JournalEntryService
 }
 
@@ -31,6 +32,10 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 		repos.Groups,
 		repos.Characters,
 		characters,
+	)
+
+	repositoryService := application.NewRepositoryService(
+		repos.KnowledgeRepositories, repos.Groups, repos.Characters,
 	)
 
 	return &Services{
@@ -49,11 +54,12 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 			repos.Currencies,
 			repos.ItemDefinitions,
 		),
-		Groups:    application.NewGroupService(repos.Groups, characters, repos.KnowledgeRepositories),
-		Locations: locations,
-		Sessions:  application.NewSessionService(repos.Sessions, characters),
-		Repositories: application.NewRepositoryService(
-			repos.KnowledgeRepositories, repos.Groups, repos.Characters,
+		Groups:       application.NewGroupService(repos.Groups, characters, repos.KnowledgeRepositories),
+		Locations:    locations,
+		Sessions:     application.NewSessionService(repos.Sessions, characters),
+		Repositories: repositoryService,
+		Documents: application.NewDocumentService(
+			repos.Documents, repositoryService, repos.Characters, repos.Groups,
 		),
 		Journals: application.NewJournalEntryService(repos.JournalEntries, repos.Characters),
 	}

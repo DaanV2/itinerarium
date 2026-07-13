@@ -80,6 +80,16 @@ Location inventories apply the same access-control check: if a character lacks a
 - **Provisioning is automatic, not user-driven.** The `general` and `template` repositories are singletons created once at startup (`RepositoryService.EnsureSystemRepositories`, idempotent). A group's repository is created in `GroupService.Create`; a character's repository is created in `CharacterService.Create`. There is no create endpoint — repositories only ever come from these paths, so "one per group, one per character" can never drift.
 - **Visibility mirrors the entity it belongs to.** `general`/`template` are visible to everyone; a `group` repository follows that group's membership; a `character` repository follows character ownership. GMs see every repository. A caller without access gets `404`, never `403` — same existence-hiding rule as locations.
 
+### Documents (M3)
+
+- **Content model.** A `Document` holds metadata (path, title, tags, `shared_on_game_day`) plus ordered `DocumentSection` rows, each with a `gm_only` flag. GM-only sections are stripped in the service layer before any non-GM response is built — a player payload never contains them, not even as empty placeholders.
+- **A player's game day for a repository** is the highest `current_game_day` among *their* characters that the repository's own rule grants access (owner for character repos, members for group repos, all of their characters for general/template). No qualifying character means no documents — the repository looks empty and direct reads are `404`.
+- **Anyone who can see a repository can create documents in it**, and anyone who can see a document can edit it. Only GMs can mark sections GM-only or change `shared_on_game_day` after creation.
+- **Player edits merge, never clobber**: a player's save replaces only the visible sections (by section ID); GM-only rows keep their position untouched. New sections land player-visible at the end — so an edit on an all-GM-only document becomes a new player-visible section (core domain rule 7). A player submitting a GM-only section ID gets the same "unknown section" error as a garbage ID, so GM-ness never leaks.
+- **Warnings, not blocks** (both `409` with a machine-readable `code`): creating/moving onto an occupied path returns `path_collision` unless `allow_collision` is set; saving with a stale `expected_version` returns `concurrent_edit` unless `force` is set. `version` is an integer that increments on every save — editors echo it back.
+- **Reveal state for the editor**: document responses carry `revealed` — whether any character with repository access has reached `shared_on_game_day` — so the editor can warn that edits to an already-revealed document are immediately visible (documents are not versioned).
+- **Frontmatter**: `POST … /documents` accepts raw markdown whose leading `---` YAML block sets `title`, `tags`, and `game_day` (explicit request fields win). This is the same Obsidian-compatible format the M6 vault import will use.
+
 ### Item movement (M2)
 
 `POST /api/inventory/move` transfers `quantity` units of an inventory line into another inventory. The caller needs access to **both** ends: no source access means the item itself reads as `404`; no target access means the target does. Moving the full quantity re-owns the line; a partial quantity splits it; if the target already holds a line with the same name and catalog reference, the moved units merge into it. The whole move runs in one database transaction.
@@ -133,6 +143,10 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `PUT\|DELETE /api/characters/{id}/location` | owner + GM | Set / clear a character's location (players only to locations the character can see) |
 | `GET /api/repositories` | any authenticated | List visible repositories: general, template, plus own character/group repositories (GM sees all) |
 | `GET /api/repositories/{id}` | per repository rule | Read one repository (404 without access) |
+| `GET /api/repositories/{id}/documents` | per repository rule | List the repository's documents the caller may see (game-day gated for players; no sections) |
+| `POST /api/repositories/{id}/documents` | anyone who sees the repository | Create a document (structured `sections`, or raw `markdown` with optional YAML frontmatter) |
+| `GET /api/documents/{id}` | per document rule | Read one document; GM-only sections are stripped server-side for players (404 without access) |
+| `PATCH /api/documents/{id}` | anyone who sees the document | Replace metadata + the caller's visible sections (players can never touch GM-only sections or the reveal day) |
 | `GET\|POST /api/characters/{id}/journal` | owner + GM | List / add a character's journal entries. New entries are stamped with the character's current `current_game_day` |
 | `GET\|PATCH /api/characters/{id}/journal/{entryId}` | owner + GM | Read / edit a journal entry's content (404 without access; game day never changes after creation) |
 | `GET\|POST /api/sessions` | GM | List / create sessions |

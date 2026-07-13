@@ -48,16 +48,16 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] Repositories: general, template, one per group, one per character
 - [ ] Folder tree per repository, alphabetical sorting
 - [ ] Folders hidden when they contain no accessible documents
-- [ ] Markdown documents with YAML frontmatter (`title`, `tags`, `repository`, `game_day`)
-- [ ] GM-only sections, stripped server-side for players
+- [x] Markdown documents with YAML frontmatter (`title`, `tags`, `repository`, `game_day`)
+- [x] GM-only sections, stripped server-side for players
 - [ ] Section-boundary banners in the reader (GM/player sections clearly marked)
-- [ ] Game-day gating: document visible when `current_game_day >= shared_on_game_day`
+- [x] Game-day gating: document visible when `current_game_day >= shared_on_game_day`
 - [ ] Direct document shares to specific characters on a game day
 - [ ] Sharing from a character repository to a group repository on a game day
-- [ ] Open editing: anyone who can see a document can edit it
-- [ ] Path-collision warning within a repository (rename or continue)
-- [ ] Concurrent-edit warning before overwriting
-- [ ] Player edit on an all-GM-only document creates a new player-visible section
+- [x] Open editing: anyone who can see a document can edit it
+- [ ] Path-collision warning within a repository (rename or continue) *(API warns with 409 `path_collision`; editor dialog pending)*
+- [ ] Concurrent-edit warning before overwriting *(API warns with 409 `concurrent_edit` on stale `version`; editor dialog pending)*
+- [x] Player edit on an all-GM-only document creates a new player-visible section
 - [ ] Editor shows reveal settings ("Revealed at game day X to …")
 - [ ] Editor warning banner when editing an already-revealed document
 - [x] Journals: per-character entries stamped with game day, readable by owner + GM only

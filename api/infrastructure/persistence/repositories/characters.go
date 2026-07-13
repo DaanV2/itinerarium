@@ -69,6 +69,21 @@ func (r *Characters) List(ctx context.Context) ([]models.Character, error) {
 	return characters, nil
 }
 
+// AnyWithGameDayAtLeast reports whether any character's current_game_day has
+// reached the given day — used to decide whether a campaign-wide document
+// counts as already revealed.
+func (r *Characters) AnyWithGameDayAtLeast(ctx context.Context, day int) (bool, error) {
+	var count int64
+
+	err := r.db.DB().WithContext(ctx).Model(&models.Character{}).
+		Where("current_game_day >= ?", day).Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
 // Update persists changes to an existing character.
 func (r *Characters) Update(ctx context.Context, c *models.Character) error {
 	err := r.db.DB().WithContext(ctx).Save(c).Error
