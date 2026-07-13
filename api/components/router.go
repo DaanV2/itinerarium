@@ -20,6 +20,7 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithSubRoute("/currencies", currenciesRouter(services)),
 		transport.WithSubRoute("/items", itemsRouter(services)),
 		transport.WithSubRoute("/repositories", repositoriesRouter(services)),
+		transport.WithSubRoute("/documents", documentsRouter(services)),
 		transport.WithHandle("POST /inventory/move", transport.MoveInventoryItemHandler(services.Inventory)),
 	)
 
@@ -157,5 +158,17 @@ func repositoriesRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
 		transport.WithHandle("GET /", transport.ListRepositoriesHandler(services.Repositories)),
 		transport.WithHandle("GET /{id}", transport.GetRepositoryHandler(services.Repositories)),
+		transport.WithHandle("GET /{id}/documents", transport.ListDocumentsHandler(services.Documents)),
+		transport.WithHandle("POST /{id}/documents", transport.CreateDocumentHandler(services.Documents)),
+	)
+}
+
+// documentsRouter serves single documents under /api/documents. Documents
+// are created through their repository; reads and edits address the document
+// directly.
+func documentsRouter(services *Services) *transport.Router {
+	return transport.NewRouter(
+		transport.WithHandle("GET /{id}", transport.GetDocumentHandler(services.Documents)),
+		transport.WithHandle("PATCH /{id}", transport.UpdateDocumentHandler(services.Documents)),
 	)
 }
