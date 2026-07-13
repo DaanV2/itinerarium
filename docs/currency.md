@@ -42,9 +42,10 @@ floating-point rounding error. Pick your smallest real denomination as the base
 
 A character's money is stored **per currency, in that currency's own unit** —
 not pre-converted to base units. A character holding "150 gold" has a balance
-row of `amount: 150` against the gold currency. The API does not auto-convert
-between currencies; it returns each balance and the currency ratios, and the
-client derives conversions when it needs to display a combined total.
+row of `amount: 150` against the gold currency. Balances themselves are never
+auto-converted or merged server-side; the [calculator endpoints](#currency-calculator)
+below do the conversion math on demand from amounts the caller supplies, they
+don't read or write any balance.
 
 A consequence worth knowing: **changing a currency's ratio does not rescale
 existing balances.** A character with 150 gp still has 150 gp after you change
@@ -90,6 +91,64 @@ through an error code. This is enforced server-side in the service layer; see
 Balances are returned highest-value denomination first (by ratio). Each balance
 carries its `currency_id`; join it against `GET /api/currencies` to render names
 and compute conversions.
+
+## Currency calculator
+
+Two stateless endpoints do conversion/addition/simplification math over the
+catalog's ratios. Neither reads nor writes any balance — they take amounts
+in the request body and return a computed result. Both are open to **any
+authenticated user**, same as reading the catalog. A currency in the request
+body may be identified by its `code` (e.g. `"pp"`) or its `id` — either works.
+
+| Method & path | Purpose |
+|---------------|---------|
+| `POST /api/currencies/convert` | Add up one or more currency amounts and express the total in a target currency |
+| `POST /api/currencies/simplify` | Add up one or more currency amounts and break the total into the fewest coins across the whole catalog |
+
+### Convert (and add)
+
+`POST /api/currencies/convert` answers "how much of X is Y" — and, since
+`amounts` is a list, also adds amounts across different currencies together
+before converting. A single-entry list is a plain conversion; more than one
+entry sums them first.
+
+```json
+// Request: how much is 5 platinum in silver?
+{ "amounts": [{ "currency": "pp", "amount": 5 }], "to": "sp" }
+
+// Response
+{ "currency": { "id": "...", "code": "sp", "name": "Silver", "ratio": 10 },
+  "whole": 500, "remainder": 0, "base_value": 5000 }
+```
+
+`base_value` is the sum in the campaign's base unit. `whole` is how many
+units of the target currency that's worth; `remainder` is whatever is left
+over, in base units, when the total isn't an exact multiple of the target's
+ratio (e.g. converting 137 copper into gold at ratio 100 gives `whole: 1,
+remainder: 37` — 37 copper doesn't make a whole gold piece).
+
+### Simplify
+
+`POST /api/currencies/simplify` adds up the given amounts and re-expresses
+the total as the fewest coins: greedily filling the highest-ratio currency
+first, then the next, down to the base unit. Denominations the total doesn't
+need are omitted from the response.
+
+```json
+// Request: simplify 1234 copper (with cp=1, sp=10, gp=100 in the catalog)
+{ "amounts": [{ "currency": "cp", "amount": 1234 }] }
+
+// Response
+[
+  { "currency": { "id": "...", "code": "gp", "name": "Gold", "ratio": 100 }, "amount": 12 },
+  { "currency": { "id": "...", "code": "sp", "name": "Silver", "ratio": 10 }, "amount": 3 },
+  { "currency": { "id": "...", "code": "cp", "name": "Copper", "ratio": 1 }, "amount": 4 }
+]
+```
+
+The greedy approach is optimal for standard denomination systems (each
+higher ratio a clean multiple of the ones below it, as `docs/currency.md`
+recommends); it is not a general knapsack solver.
 
 ## See also
 

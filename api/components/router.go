@@ -139,6 +139,8 @@ func currenciesRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
 		transport.WithHandle("GET /", transport.ListCurrenciesHandler(services.Catalog)),
 		transport.WithHandle("POST /", transport.CreateCurrencyHandler(services.Catalog)),
+		transport.WithHandle("POST /convert", transport.ConvertCurrencyHandler(services.Catalog)),
+		transport.WithHandle("POST /simplify", transport.SimplifyCurrencyHandler(services.Catalog)),
 	)
 }
 

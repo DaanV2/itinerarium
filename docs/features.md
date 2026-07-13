@@ -34,6 +34,7 @@ Joining a group grants access to all its knowledge (subject to the game-day rule
 ## Items & Currencies
 
 - Currencies are defined by the GM as a JSON/YAML list with **conversion ratios** (e.g. 1 gold = 10 silver = 100 copper), shared by all inventories (character, group, location)
+- A **currency calculator API** answers "how much of X is Y", adds amounts across currencies, and simplifies a total into the fewest coins — available to any authenticated user, no balance read or write involved
 - The GM can provide a **default item catalog** (JSON/YAML list) so players pick from known items when adding to an inventory
 - **Custom free-text items are always allowed** alongside catalog items — the catalog is a convenience, not a restriction
 

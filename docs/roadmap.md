@@ -27,6 +27,7 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] Personal inventory (item list + quantity) per character
 - [x] Personal money (per currency) per character
 - [x] Currency catalog from JSON/YAML with conversion ratios
+- [x] Currency calculator API: convert/add amounts across currencies, and simplify a total into the fewest denominations
 - [x] Item catalog from JSON/YAML; free-text custom items always allowed
 - [x] Locations: name + description, multi-plane support
 - [x] Characters can be associated with a location

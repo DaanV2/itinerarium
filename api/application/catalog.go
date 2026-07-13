@@ -8,6 +8,7 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/google/uuid"
 	"go.yaml.in/yaml/v3"
 )
 
@@ -22,6 +23,10 @@ var ErrCurrencyExists = errors.New("currency code already in use")
 // ErrItemDefinitionExists is returned when creating a catalog item whose name
 // is already in use.
 var ErrItemDefinitionExists = errors.New("item definition name already in use")
+
+// ErrNoAmounts is returned when a conversion/simplification request carries
+// no currency amounts to work with.
+var ErrNoAmounts = errors.New("no amounts given")
 
 // CatalogService owns the GM-defined currency and item catalogs. Currencies
 // carry conversion ratios; item definitions are a convenience for players and
@@ -112,6 +117,137 @@ func (s *CatalogService) CreateItemDefinition(
 	}
 
 	return def, nil
+}
+
+// CurrencyAmount is one entry in a conversion, addition, or simplification
+// request: an amount in a currency identified by its ID or its code.
+type CurrencyAmount struct {
+	Currency string
+	Amount   int64
+}
+
+// ConversionResult is the outcome of converting/adding a set of currency
+// amounts into a single target currency. Whole is how many units of the
+// target currency the total is worth; Remainder is whatever is left over
+// expressed in base units, since it may not be a whole number of the target
+// currency's unit (e.g. 137 cp into gp at ratio 100 leaves 37 cp over).
+type ConversionResult struct {
+	Currency  models.Currency
+	Whole     int64
+	Remainder int64
+	BaseValue int64
+}
+
+// SimplifiedAmount is one denomination in a Simplify breakdown.
+type SimplifiedAmount struct {
+	Currency models.Currency
+	Amount   int64
+}
+
+// resolveCurrency looks a currency up by ID, falling back to its code. Either
+// form is accepted so callers can use whichever they have on hand. The ID
+// lookup only runs when idOrCode actually parses as a UUID — Postgres/MySQL
+// reject a non-UUID value against a uuid column outright, so a currency code
+// must go straight to GetByCode rather than through a doomed ID lookup.
+func (s *CatalogService) resolveCurrency(ctx context.Context, idOrCode string) (*models.Currency, error) {
+	if _, err := uuid.Parse(idOrCode); err == nil {
+		c, err := s.currencies.GetByID(ctx, idOrCode)
+		if err == nil {
+			return c, nil
+		}
+		if !errors.Is(err, repositories.ErrNotFound) {
+			return nil, fmt.Errorf("loading currency: %w", err)
+		}
+	}
+
+	c, err := s.currencies.GetByCode(ctx, idOrCode)
+	if err != nil {
+		if errors.Is(err, repositories.ErrNotFound) {
+			return nil, ErrUnknownCurrency
+		}
+
+		return nil, fmt.Errorf("loading currency: %w", err)
+	}
+
+	return c, nil
+}
+
+// baseValue sums a set of currency amounts into the campaign's base unit
+// (amount × ratio for each entry). Every currency must exist in the catalog
+// and every amount must be non-negative.
+func (s *CatalogService) baseValue(ctx context.Context, amounts []CurrencyAmount) (int64, error) {
+	if len(amounts) == 0 {
+		return 0, ErrNoAmounts
+	}
+
+	var total int64
+	for _, a := range amounts {
+		if a.Amount < 0 {
+			return 0, ErrInvalidAmount
+		}
+
+		c, err := s.resolveCurrency(ctx, a.Currency)
+		if err != nil {
+			return 0, err
+		}
+
+		total += a.Amount * c.Ratio
+	}
+
+	return total, nil
+}
+
+// Convert adds up amounts (one currency amount, or several to add together)
+// and expresses the total in the target currency. Any authenticated user may
+// call this — currencies and their ratios are not secret.
+func (s *CatalogService) Convert(ctx context.Context, amounts []CurrencyAmount, target string) (*ConversionResult, error) {
+	total, err := s.baseValue(ctx, amounts)
+	if err != nil {
+		return nil, err
+	}
+
+	targetCurrency, err := s.resolveCurrency(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ConversionResult{
+		Currency:  *targetCurrency,
+		Whole:     total / targetCurrency.Ratio,
+		Remainder: total % targetCurrency.Ratio,
+		BaseValue: total,
+	}, nil
+}
+
+// Simplify adds up amounts and re-expresses the total as the fewest coins
+// across the whole catalog: greedily filling the highest-ratio currency
+// first, then the next, down to the base unit. Denominations the total
+// doesn't need are omitted.
+func (s *CatalogService) Simplify(ctx context.Context, amounts []CurrencyAmount) ([]SimplifiedAmount, error) {
+	total, err := s.baseValue(ctx, amounts)
+	if err != nil {
+		return nil, err
+	}
+
+	catalog, err := s.currencies.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing currencies: %w", err)
+	}
+
+	breakdown := make([]SimplifiedAmount, 0, len(catalog))
+	for i := len(catalog) - 1; i >= 0; i-- {
+		c := catalog[i]
+
+		units := total / c.Ratio
+		if units == 0 {
+			continue
+		}
+
+		total -= units * c.Ratio
+		breakdown = append(breakdown, SimplifiedAmount{Currency: c, Amount: units})
+	}
+
+	return breakdown, nil
 }
 
 // catalogFile is the on-disk shape of a seed file. YAML is a superset of JSON,
