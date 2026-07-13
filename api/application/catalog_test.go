@@ -179,6 +179,126 @@ items:
 	}
 }
 
+func TestCatalogService_Convert_AddsAndConvertsAcrossCurrencies(t *testing.T) {
+	svc := newTestCatalogEnv(t)
+	ctx := t.Context()
+
+	cp, err := svc.CreateCurrency(ctx, gmRequester, "cp", "Copper", 1)
+	if err != nil {
+		t.Fatalf("CreateCurrency(cp): %v", err)
+	}
+	sp, err := svc.CreateCurrency(ctx, gmRequester, "sp", "Silver", 10)
+	if err != nil {
+		t.Fatalf("CreateCurrency(sp): %v", err)
+	}
+	if _, err := svc.CreateCurrency(ctx, gmRequester, "pp", "Platinum", 1000); err != nil {
+		t.Fatalf("CreateCurrency(pp): %v", err)
+	}
+
+	result, err := svc.Convert(ctx, []application.CurrencyAmount{
+		{Currency: "pp", Amount: 5},
+		{Currency: cp.Code, Amount: 3},
+	}, sp.ID)
+	if err != nil {
+		t.Fatalf("Convert: %v", err)
+	}
+	// 5 pp = 5000 cp, plus 3 cp = 5003 cp base value; sp ratio 10 -> 500 sp, remainder 3.
+	if result.Whole != 500 || result.Remainder != 3 || result.BaseValue != 5003 {
+		t.Fatalf("Convert result = %+v, want whole 500 remainder 3 base 5003", result)
+	}
+	if result.Currency.Code != "sp" {
+		t.Fatalf("Convert currency = %s, want sp", result.Currency.Code)
+	}
+}
+
+func TestCatalogService_Convert_UnknownCurrency(t *testing.T) {
+	svc := newTestCatalogEnv(t)
+	ctx := t.Context()
+
+	if _, err := svc.CreateCurrency(ctx, gmRequester, "cp", "Copper", 1); err != nil {
+		t.Fatalf("CreateCurrency: %v", err)
+	}
+
+	_, err := svc.Convert(ctx, []application.CurrencyAmount{{Currency: "cp", Amount: 5}}, "gp")
+	if !errors.Is(err, application.ErrUnknownCurrency) {
+		t.Fatalf("Convert(unknown target) = %v, want ErrUnknownCurrency", err)
+	}
+}
+
+func TestCatalogService_Convert_RejectsNegativeAmount(t *testing.T) {
+	svc := newTestCatalogEnv(t)
+	ctx := t.Context()
+
+	if _, err := svc.CreateCurrency(ctx, gmRequester, "cp", "Copper", 1); err != nil {
+		t.Fatalf("CreateCurrency: %v", err)
+	}
+
+	_, err := svc.Convert(ctx, []application.CurrencyAmount{{Currency: "cp", Amount: -1}}, "cp")
+	if !errors.Is(err, application.ErrInvalidAmount) {
+		t.Fatalf("Convert(negative) = %v, want ErrInvalidAmount", err)
+	}
+}
+
+func TestCatalogService_Convert_RejectsEmptyAmounts(t *testing.T) {
+	svc := newTestCatalogEnv(t)
+	ctx := t.Context()
+
+	_, err := svc.Convert(ctx, nil, "cp")
+	if !errors.Is(err, application.ErrNoAmounts) {
+		t.Fatalf("Convert(empty) = %v, want ErrNoAmounts", err)
+	}
+}
+
+func TestCatalogService_Simplify_GreedyBreakdown(t *testing.T) {
+	svc := newTestCatalogEnv(t)
+	ctx := t.Context()
+
+	if _, err := svc.CreateCurrency(ctx, gmRequester, "cp", "Copper", 1); err != nil {
+		t.Fatalf("CreateCurrency(cp): %v", err)
+	}
+	if _, err := svc.CreateCurrency(ctx, gmRequester, "sp", "Silver", 10); err != nil {
+		t.Fatalf("CreateCurrency(sp): %v", err)
+	}
+	if _, err := svc.CreateCurrency(ctx, gmRequester, "gp", "Gold", 100); err != nil {
+		t.Fatalf("CreateCurrency(gp): %v", err)
+	}
+
+	breakdown, err := svc.Simplify(ctx, []application.CurrencyAmount{{Currency: "cp", Amount: 1234}})
+	if err != nil {
+		t.Fatalf("Simplify: %v", err)
+	}
+	if len(breakdown) != 3 {
+		t.Fatalf("Simplify returned %d denominations, want 3: %+v", len(breakdown), breakdown)
+	}
+
+	want := map[string]int64{"gp": 12, "sp": 3, "cp": 4}
+	for _, entry := range breakdown {
+		if entry.Amount != want[entry.Currency.Code] {
+			t.Fatalf("Simplify %s = %d, want %d", entry.Currency.Code, entry.Amount, want[entry.Currency.Code])
+		}
+	}
+}
+
+func TestCatalogService_Simplify_OmitsUnneededDenominations(t *testing.T) {
+	svc := newTestCatalogEnv(t)
+	ctx := t.Context()
+
+	if _, err := svc.CreateCurrency(ctx, gmRequester, "cp", "Copper", 1); err != nil {
+		t.Fatalf("CreateCurrency(cp): %v", err)
+	}
+	if _, err := svc.CreateCurrency(ctx, gmRequester, "gp", "Gold", 100); err != nil {
+		t.Fatalf("CreateCurrency(gp): %v", err)
+	}
+
+	breakdown, err := svc.Simplify(ctx, []application.CurrencyAmount{{Currency: "gp", Amount: 2}})
+	if err != nil {
+		t.Fatalf("Simplify: %v", err)
+	}
+	if len(breakdown) != 1 || breakdown[0].Currency.Code != "gp" || breakdown[0].Amount != 2 {
+		t.Fatalf("Simplify = %+v, want just 2 gp", breakdown)
+	}
+}
+
 func TestCatalogService_LoadFile_RejectsInvalidCurrency(t *testing.T) {
 	svc := newTestCatalogEnv(t)
 	ctx := t.Context()

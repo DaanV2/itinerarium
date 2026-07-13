@@ -75,6 +75,8 @@ func newInventoryTestEnv(t *testing.T) inventoryTestEnv {
 	router := transport.NewRouter(
 		transport.WithHandle("GET /api/currencies", requireAuth(transport.ListCurrenciesHandler(catalogSvc))),
 		transport.WithHandle("POST /api/currencies", requireAuth(transport.CreateCurrencyHandler(catalogSvc))),
+		transport.WithHandle("POST /api/currencies/convert", requireAuth(transport.ConvertCurrencyHandler(catalogSvc))),
+		transport.WithHandle("POST /api/currencies/simplify", requireAuth(transport.SimplifyCurrencyHandler(catalogSvc))),
 		transport.WithHandle("GET /api/items", requireAuth(transport.ListItemDefinitionsHandler(catalogSvc))),
 		transport.WithHandle("POST /api/items", requireAuth(transport.CreateItemDefinitionHandler(catalogSvc))),
 		transport.WithHandle(
@@ -237,5 +239,85 @@ func TestCurrency_PlayerCannotCreate(t *testing.T) {
 		map[string]any{"code": "gp", "name": "Gold", "ratio": 100})
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for player creating currency, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func seedGoldSilverCopper(t *testing.T, env inventoryTestEnv) {
+	t.Helper()
+
+	for _, c := range []map[string]any{
+		{"code": "cp", "name": "Copper", "ratio": 1},
+		{"code": "sp", "name": "Silver", "ratio": 10},
+		{"code": "gp", "name": "Gold", "ratio": 100},
+	} {
+		rec := env.doJSON(t, http.MethodPost, "/api/currencies", env.gmToken, c)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("seeding currency %v: %d %s", c, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestCurrency_Convert_PlayerCanUse(t *testing.T) {
+	env := newInventoryTestEnv(t)
+	seedGoldSilverCopper(t, env)
+
+	rec := env.doJSON(t, http.MethodPost, "/api/currencies/convert", env.playerToken,
+		map[string]any{"amounts": []map[string]any{{"currency": "gp", "amount": 5}}, "to": "sp"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Convert expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var body struct {
+		Whole     int64 `json:"whole"`
+		Remainder int64 `json:"remainder"`
+		BaseValue int64 `json:"base_value"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decoding body: %v", err)
+	}
+	if body.Whole != 50 || body.Remainder != 0 || body.BaseValue != 500 {
+		t.Fatalf("Convert body = %+v, want whole 50 remainder 0 base 500", body)
+	}
+}
+
+func TestCurrency_Convert_UnknownCurrencyIs404(t *testing.T) {
+	env := newInventoryTestEnv(t)
+	seedGoldSilverCopper(t, env)
+
+	rec := env.doJSON(t, http.MethodPost, "/api/currencies/convert", env.playerToken,
+		map[string]any{"amounts": []map[string]any{{"currency": "nope", "amount": 5}}, "to": "sp"})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown currency, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestCurrency_Simplify_BreaksIntoDenominations(t *testing.T) {
+	env := newInventoryTestEnv(t)
+	seedGoldSilverCopper(t, env)
+
+	rec := env.doJSON(t, http.MethodPost, "/api/currencies/simplify", env.playerToken,
+		map[string]any{"amounts": []map[string]any{{"currency": "cp", "amount": 1234}}})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Simplify expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var breakdown []struct {
+		Currency struct {
+			Code string `json:"code"`
+		} `json:"currency"`
+		Amount int64 `json:"amount"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &breakdown); err != nil {
+		t.Fatalf("decoding body: %v", err)
+	}
+
+	want := map[string]int64{"gp": 12, "sp": 3, "cp": 4}
+	if len(breakdown) != len(want) {
+		t.Fatalf("Simplify returned %d entries, want %d: %+v", len(breakdown), len(want), breakdown)
+	}
+	for _, entry := range breakdown {
+		if entry.Amount != want[entry.Currency.Code] {
+			t.Fatalf("Simplify %s = %d, want %d", entry.Currency.Code, entry.Amount, want[entry.Currency.Code])
+		}
 	}
 }

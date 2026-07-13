@@ -112,6 +112,8 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 |---|---|---|
 | `GET /api/currencies` | any authenticated | List the currency catalog |
 | `POST /api/currencies` | GM | Add a currency |
+| `POST /api/currencies/convert` | any authenticated | Add up currency amounts and express the total in a target currency (stateless — no balance read/write) |
+| `POST /api/currencies/simplify` | any authenticated | Add up currency amounts and break the total into the fewest coins across the catalog (stateless) |
 | `GET /api/items` | any authenticated | List the item catalog |
 | `POST /api/items` | GM | Add an item definition |
 | `GET\|POST /api/<owner>/{id}/inventory` | per owner rule | List / add inventory lines (`<owner>` = `characters`, `groups`, or `locations`) |
