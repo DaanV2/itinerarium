@@ -228,8 +228,8 @@ func SimplifyCurrencyHandler(svc *application.CatalogService) http.Handler {
 		}
 
 		responses := make([]simplifiedAmountResponse, len(breakdown))
-		for i, a := range breakdown {
-			responses[i] = simplifiedAmountResponse{Currency: toCurrencyResponse(&a.Currency), Amount: a.Amount}
+		for i := range breakdown {
+			responses[i] = simplifiedAmountResponse{Currency: toCurrencyResponse(&breakdown[i].Currency), Amount: breakdown[i].Amount}
 		}
 
 		writeJSON(w, http.StatusOK, responses)
