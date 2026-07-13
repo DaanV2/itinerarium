@@ -144,6 +144,7 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `GET /api/repositories` | any authenticated | List visible repositories: general, template, plus own character/group repositories (GM sees all) |
 | `GET /api/repositories/{id}` | per repository rule | Read one repository (404 without access) |
 | `GET /api/repositories/{id}/documents` | per repository rule | List the repository's documents the caller may see (game-day gated for players; no sections) |
+| `GET /api/repositories/{id}/documents/tree` | per repository rule | The same documents arranged into a folder tree by path, alphabetically sorted; a folder appears only if it (directly or via a subfolder) contains at least one accessible document |
 | `POST /api/repositories/{id}/documents` | anyone who sees the repository | Create a document (structured `sections`, or raw `markdown` with optional YAML frontmatter) |
 | `GET /api/documents/{id}` | per document rule | Read one document; GM-only sections are stripped server-side for players (404 without access) |
 | `PATCH /api/documents/{id}` | anyone who sees the document | Replace metadata + the caller's visible sections (players can never touch GM-only sections or the reveal day) |

@@ -52,6 +52,13 @@ type documentResponse struct {
 	Sections []documentSectionPayload `json:"sections"`
 }
 
+type folderTreeNodeResponse struct {
+	Name      string                     `json:"name"`
+	Path      string                     `json:"path"`
+	Folders   []folderTreeNodeResponse   `json:"folders"`
+	Documents []documentListItemResponse `json:"documents"`
+}
+
 func toDocumentListItemResponse(d *models.Document) documentListItemResponse {
 	tags := d.Tags
 	if tags == nil {
@@ -109,6 +116,38 @@ func ListDocumentsHandler(svc *application.DocumentService) http.Handler {
 		}
 
 		writeJSON(w, http.StatusOK, responses)
+	})
+}
+
+// toFolderTreeResponse converts a folder tree node, recursively.
+func toFolderTreeResponse(node *application.FolderNode) folderTreeNodeResponse {
+	folders := make([]folderTreeNodeResponse, len(node.Folders))
+	for i, f := range node.Folders {
+		folders[i] = toFolderTreeResponse(f)
+	}
+
+	docs := make([]documentListItemResponse, len(node.Documents))
+	for i := range node.Documents {
+		docs[i] = toDocumentListItemResponse(&node.Documents[i])
+	}
+
+	return folderTreeNodeResponse{Name: node.Name, Path: node.Path, Folders: folders, Documents: docs}
+}
+
+// GetDocumentFolderTreeHandler returns the repository named by {id} as a
+// folder tree of the documents the caller may see, sorted alphabetically at
+// every level. Folders with no accessible documents never appear. Must be
+// wrapped in RequireAuth.
+func GetDocumentFolderTreeHandler(svc *application.DocumentService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tree, err := svc.FolderTree(r.Context(), requesterFrom(r), r.PathValue("id"))
+		if err != nil {
+			writeDocumentServiceError(w, err)
+
+			return
+		}
+
+		writeJSON(w, http.StatusOK, toFolderTreeResponse(tree))
 	})
 }
 
