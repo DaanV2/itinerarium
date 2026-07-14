@@ -33,6 +33,7 @@
 		border: 1px solid #ccc;
 		border-radius: 5px;
 		padding: 1rem;
+		margin: 0.2rem;
 		color: inherit;
 		text-decoration: none;
 	}

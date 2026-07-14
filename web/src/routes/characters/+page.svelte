@@ -45,7 +45,7 @@
 	}
 </script>
 
-<main>
+<main class="main-page">
 	<h1>Characters</h1>
 
 	<nav>

@@ -51,7 +51,7 @@
 	}
 </script>
 
-<main>
+<main class="main-page">
 	<p><a href={resolve('/characters')}>← Characters</a></p>
 
 	<h1>Groups</h1>

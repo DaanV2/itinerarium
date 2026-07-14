@@ -15,9 +15,8 @@
 	});
 </script>
 
-<div>
-	<div>
-		<Card title="Users" text="Manage user accounts" href={resolve('/admin/users')} />
-		<Card title="Characters" text="Manage all characters" href={resolve('/admin/characters')} />
-	</div>
-</div>
+<main class="main-page">
+	<h1>Admin Control</h1>
+	<Card title="Users" text="Manage user accounts" href={resolve('/admin/users')} />
+	<Card title="Characters" text="Manage all characters" href={resolve('/admin/characters')} />
+</main>

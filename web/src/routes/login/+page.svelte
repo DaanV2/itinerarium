@@ -30,7 +30,7 @@
 	}
 </script>
 
-<main>
+<main class="main-page">
 	<h1>Log in</h1>
 
 	<form onsubmit={handleSubmit}>

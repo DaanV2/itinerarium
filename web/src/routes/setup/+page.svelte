@@ -37,7 +37,7 @@
 	}
 </script>
 
-<main>
+<main class="main-page">
 	<h1>Welcome to Itinerarium</h1>
 	<p>This installation has no accounts yet. Create the game master account to get started.</p>
 

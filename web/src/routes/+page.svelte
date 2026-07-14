@@ -15,14 +15,12 @@
 	});
 </script>
 
-<div>
-	<div>
-		{#if isgm}
-			<Card text="Admin" href={resolve('/admin')} gm />
-		{/if}
+<main class="main-page">
+	{#if isgm}
+		<Card text="Admin" href={resolve('/admin')} gm />
+	{/if}
 
-		<Card text="Characters" href={resolve('/characters')} />
-		<Card text="Groups" href={resolve('/groups')} />
-		<Card text="Locations" href={resolve('/locations')} />
-	</div>
-</div>
+	<Card text="Characters" href={resolve('/characters')} />
+	<Card text="Groups" href={resolve('/groups')} />
+	<Card text="Locations" href={resolve('/locations')} />
+</main>

@@ -59,7 +59,7 @@
 	}
 </script>
 
-<main>
+<main class="main-page">
 	<h1>Accounts</h1>
 
 	<ErrorAlert message={error} />

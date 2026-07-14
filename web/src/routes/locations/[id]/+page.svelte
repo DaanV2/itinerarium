@@ -123,7 +123,7 @@
 	}
 </script>
 
-<main>
+<main class="main-page">
 	<p><a href={resolve('/locations')}>← Locations</a></p>
 
 	<ErrorAlert message={error} />
