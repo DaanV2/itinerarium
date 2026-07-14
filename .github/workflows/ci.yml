@@ -36,6 +36,7 @@ jobs:
         with:
           version: v2.12
           working-directory: api
+
   web:
     name: Web (SvelteKit)
     runs-on: ubuntu-latest
@@ -70,3 +71,24 @@ jobs:
 
       - name: 🧪 Test
         run: npm run test
+
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [api, web]
+    steps:
+      - name: 📦 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ⚒️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: 🛠️ Build
+        uses: docker/build-push-action@v7
+        with:
+          context: ./${{ matrix.component }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
