@@ -1,0 +1,90 @@
+# To get started with Dependabot version updates, you'll need to specify which
+# package ecosystems to update and where the package manifests are located.
+# Please see the documentation for all configuration options:
+# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+
+version: 2
+updates:
+  - package-ecosystem: "npm" # See documentation for possible values
+    directories:
+      - /web # Location of package manifests
+    labels:
+      - dependencies
+    schedule:
+      interval: "weekly"
+    groups:
+      eslint:
+        patterns:
+          - "eslint*"
+          - "@eslint*"
+          - "*eslint*"
+      prettier:
+        patterns:
+          - "prettier*"
+      testing:
+        patterns:
+          - "@playwright*"
+          - "playwright*"
+      building:
+        patterns:
+          - "vite*"
+          - "@vitejs*"
+      svelte:
+        patterns:
+          - "svelte*"
+          - "@sveltejs*"
+      typescript:
+        patterns:
+          - "typescript*"
+          - "@types*"
+      all:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions" # See documentation for possible values
+    directory: "/" # Location of package manifests
+    labels:
+      - dependencies
+    schedule:
+      interval: "monthly"
+    groups:
+      all:
+        patterns:
+          - "*"
+
+  - package-ecosystem: gomod
+    directory: /api
+    labels:
+      - dependencies
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker
+    directories:
+      - /api
+      - /web
+    labels:
+      - dependencies
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
+
+  - package-ecosystem: docker-compose
+    directories:
+      - "/"
+    labels:
+      - dependencies
+    schedule:
+      interval: "weekly"
+    groups:
+      all:
+        patterns:
+          - "*"
+
