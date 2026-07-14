@@ -5,13 +5,10 @@ import (
 )
 
 // SetupAuthentication loads (or generates on first run) the RS512 signing key
-// pair and builds the token service that issues and revokes JWTs. The
-// revocation store is a repository from NewRepositories.
-func SetupAuthentication(
-	cfg *ServerConfig,
-	revocation authentication.RevocationStore,
-) (*authentication.TokenService, error) {
-	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(cfg.KeysPath))
+// pair from the "auth" flags and builds the token service that issues and
+// revokes JWTs. The revocation store is a repository from NewRepositories.
+func SetupAuthentication(revocation authentication.RevocationStore) (*authentication.TokenService, error) {
+	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(authentication.KeysPathFlag.Value()))
 	if err != nil {
 		return nil, err
 	}
@@ -19,7 +16,7 @@ func SetupAuthentication(
 	tokens := authentication.NewTokenService(
 		keys,
 		revocation,
-		authentication.WithTTL(cfg.TokenTTL),
+		authentication.WithTTL(authentication.TokenTTLFlag.Value()),
 	)
 
 	return tokens, nil

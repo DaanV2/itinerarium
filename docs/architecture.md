@@ -108,7 +108,7 @@ The GM defines two campaign-wide catalogs, both readable by any authenticated us
 - **`Currency`** — `code` (unique), `name`, and an integer `ratio` giving the value of one unit in the campaign's **base unit** (the smallest denomination, which itself has `ratio` 1). For "1 gold = 10 silver = 100 copper", copper is the base (`ratio` 1), silver `ratio` 10, gold `ratio` 100. Storing an integer ratio keeps all money arithmetic in whole base units, avoiding floating-point rounding.
 - **`ItemDefinition`** — `name` (unique), optional `description` and `category`. A convenience for picking known items; it never restricts inventories (core domain rule 8).
 
-Both catalogs can be seeded from a JSON/YAML file at startup via `--catalog-path` (env `SERVER_CATALOG_PATH`). The loader **upserts** — currencies by `code`, items by `name` — so restarting with an edited file updates entries in place instead of duplicating them. See `config/catalog.example.yaml`.
+Both catalogs can be seeded from a JSON/YAML file at startup via `--catalog.path` (env `CATALOG_PATH`). The loader **upserts** — currencies by `code`, items by `name` — so restarting with an edited file updates entries in place instead of duplicating them. See `config/catalog.example.yaml`.
 
 Since M2, inventories are **owner-based** — a line belongs to exactly one character, group, or location:
 

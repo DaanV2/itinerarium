@@ -18,7 +18,7 @@
     {
       "name": "app",
       "runtimeExecutable": "./itinerarium.exe",
-      "runtimeArgs": ["serve", "--address", ":8090"],
+      "runtimeArgs": ["serve", "--server.address", ":8090"],
       "cwd": "api",
       "port": 8090
     }

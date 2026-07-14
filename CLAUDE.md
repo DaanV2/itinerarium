@@ -73,7 +73,7 @@ Raw equivalents (what CI runs): from `api/` — `go build ./... && go vet ./... 
 - **Models**: embed a shared `Model` base (UUID `ID` generated in `BeforeCreate`, timestamps, `gorm.DeletedAt` soft delete). `AutoMigrate()` in `migrations.go`. Many-to-many via `many2many:` tags with named junction tables.
 - **Repository pattern**: one file per entity under `infrastructure/persistence/repositories/`; all DB access goes through repositories; services in `application/` own business logic.
 - **Functional options**: all constructors take `...Option` variadic args (database, server, router setup).
-- **Config**: Viper singleton; priority flags → env (`my-flag` → `MY_FLAG`) → YAML → defaults; per-component config contexts in a thread-safe `sync.Map`.
+- **Config**: Viper-backed; priority flags → env → YAML → defaults. Each component declares its settings as typed flags on a named config set (`config.New("database")`); commands opt in via `AddToSet`. Flag name = YAML key = env var: `database.path` → `--database.path` → `DATABASE_PATH`.
 - **HTTP**: standard `http.ServeMux` with functional options (`WithHandle`); server wraps `*http.Server` with 10 s read-header timeout and graceful `Shutdown()`.
 - **Lifecycle**: components implement shutdown hooks (`BeforeShutdown()` / `AfterShutDown()` / `ShutdownCleanup()`); Cobra coordinates shutdown via context cancellation with a 1-minute timeout.
 

@@ -12,21 +12,35 @@ import (
 	"github.com/charmbracelet/log"
 )
 
-// Setup builds the global default logger from the "log" config context:
-//
-//	log.level          flag --level          env LOG_LEVEL          (debug|info|warn|error|fatal, default "info")
-//	log.format         flag --format         env LOG_FORMAT         (text|json|logfmt, default "text")
-//	log.report-caller  flag --report-caller  env LOG_REPORT_CALLER  (default false)
-func Setup() {
-	cfg := config.GetContext("log")
+// LoggerConfigSet groups the logging flags. The set is declared here, next
+// to the code that consumes it; the root command adds it to its persistent
+// flags so every subcommand can tune logging.
+var (
+	LoggerConfigSet = config.New("log").WithValidate(validateLogger)
 
+	LevelFlag = LoggerConfigSet.String("log.level", "info",
+		"log level: debug, info, warn, error, fatal")
+	FormatFlag = LoggerConfigSet.String("log.format", "text",
+		"log format: text, json, logfmt")
+	ReportCallerFlag = LoggerConfigSet.Bool("log.report-caller", false,
+		"include the file:line that emitted each log entry")
+)
+
+func validateLogger(c *config.Config) error {
+	_, err := log.ParseLevel(c.GetString("log.level"))
+
+	return err
+}
+
+// Setup builds the global default logger from the "log" config set.
+func Setup() {
 	logger := log.NewWithOptions(os.Stderr, log.Options{
 		TimeFormat:      time.DateTime,
 		ReportTimestamp: true,
 		Formatter:       log.TextFormatter,
 	})
 
-	apply(logger, cfg.Bool("report-caller", false), cfg.String("level", "info"), cfg.String("format", "text"))
+	apply(logger, ReportCallerFlag.Value(), LevelFlag.Value(), FormatFlag.Value())
 	log.SetDefault(logger)
 }
 

@@ -6,7 +6,8 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/components"
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
-	"github.com/DaanV2/itinerarium/api/infrastructure/config"
+	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
+	"github.com/DaanV2/itinerarium/api/infrastructure/servers"
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 )
@@ -22,12 +23,11 @@ var serveCmd = &cobra.Command{
 }
 
 func init() {
-	serveCmd.Flags().String("address", ":8080", "address the API server listens on")
-	serveCmd.Flags().String("keys-path", "data/keys", "directory holding the RS512 JWT signing key pair")
-	serveCmd.Flags().Duration("token-ttl", authentication.DefaultTokenTTL, "access token lifetime")
-	serveCmd.Flags().String("catalog-path", "", "optional JSON/YAML file seeding the currency and item catalog on startup")
-	config.MustBindFlags("server", serveCmd.Flags())
-	addDatabaseFlags(serveCmd)
+	fs := serveCmd.Flags()
+	servers.ServerConfigSet.AddToSet(fs)
+	persistence.DatabaseConfigSet.AddToSet(fs)
+	authentication.AuthConfigSet.AddToSet(fs)
+	components.CatalogConfigSet.AddToSet(fs)
 }
 
 func runServe(cmd *cobra.Command, _ []string) error {

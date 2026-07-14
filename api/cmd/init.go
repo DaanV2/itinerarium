@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/DaanV2/itinerarium/api/components"
+	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
+	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +24,8 @@ func init() {
 	initCmd.Flags().String("password", "", "password for the initial GM account")
 	_ = initCmd.MarkFlagRequired("email")
 	_ = initCmd.MarkFlagRequired("password")
-	addDatabaseFlags(initCmd)
+	persistence.DatabaseConfigSet.AddToSet(initCmd.Flags())
+	authentication.AuthConfigSet.AddToSet(initCmd.Flags())
 	rootCmd.AddCommand(initCmd)
 }
 
@@ -40,12 +43,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	cfg, err := components.LoadServerConfig()
-	if err != nil {
-		return err
-	}
-
-	db, err := components.SetupDatabase(cfg)
+	db, err := components.SetupDatabase()
 	if err != nil {
 		return err
 	}
@@ -53,7 +51,7 @@ func runInit(cmd *cobra.Command, _ []string) error {
 
 	repos := components.NewRepositories(db)
 
-	tokens, err := components.SetupAuthentication(cfg, repos.RevokedTokens)
+	tokens, err := components.SetupAuthentication(repos.RevokedTokens)
 	if err != nil {
 		return err
 	}
