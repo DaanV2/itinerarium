@@ -13,10 +13,6 @@ jobs:
       packages: write # Required for pushing to ghcr.io
       id-token: write # OIDC token if needed
 
-    strategy:
-      matrix:
-        component: [api, web]
-
     steps:
       - name: 📦 Checkout Repository
         uses: actions/checkout@v7
@@ -41,14 +37,14 @@ jobs:
         id: docker-build
         uses: docker/build-push-action@v7
         with:
-          context: ./${{ matrix.component }}
+          context: .
           push: true
-          cache-from: type=gha,scope=${{ matrix.component }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
           tags: |
-            ghcr.io/${{ steps.repo.outputs.repo }}-${{ matrix.component }}:latest
-            ghcr.io/${{ steps.repo.outputs.repo }}-${{ matrix.component }}:${{ github.sha }}
-            ghcr.io/${{ steps.repo.outputs.repo }}-${{ matrix.component }}:${{ github.ref_name }}
+            ghcr.io/${{ steps.repo.outputs.repo }}:latest
+            ghcr.io/${{ steps.repo.outputs.repo }}:${{ github.sha }}
+            ghcr.io/${{ steps.repo.outputs.repo }}:${{ github.ref_name }}
 
       - name: 📌 Update Release Notes with Docker Image
         uses: softprops/action-gh-release@v3
@@ -57,6 +53,6 @@ jobs:
           append_body: true
           body: |
             ---
-            🐳 **Docker image for this release (${{ matrix.component }}):**
-            - `ghcr.io/${{ steps.repo.outputs.repo }}-${{ matrix.component }}:latest`
-            - `ghcr.io/${{ steps.repo.outputs.repo }}-${{ matrix.component }}:${{ github.event.release.tag_name }}`
+            🐳 **Docker image for this release:**
+            - `ghcr.io/${{ steps.repo.outputs.repo }}:latest`
+            - `ghcr.io/${{ steps.repo.outputs.repo }}:${{ github.event.release.tag_name }}`

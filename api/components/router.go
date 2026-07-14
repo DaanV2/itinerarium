@@ -2,6 +2,7 @@ package components
 
 import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/DaanV2/itinerarium/api/infrastructure/webapp"
 	"github.com/charmbracelet/log"
 )
 
@@ -24,14 +25,25 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithHandle("POST /inventory/move", transport.MoveInventoryItemHandler(services.Inventory)),
 	)
 
-	return transport.NewRouter(
+	opts := []transport.Option{
 		transport.WithMiddleware(transport.Logging(logger)),
 		transport.WithHandle("GET /api/health", transport.HealthHandler()),
 		transport.WithHandle("GET /api/setup", transport.SetupStatusHandler(services.Setup)),
 		transport.WithHandle("POST /api/setup", transport.CreateInitialGMHandler(services.Setup)),
 		transport.WithHandle("POST /api/login", transport.LoginHandler(services.Auth)),
 		transport.WithSubRoute("/api", authenticated),
-	)
+	}
+
+	// Everything outside /api serves the frontend embedded in the binary.
+	// Builds without the embedweb tag (dev, plain `go build`) are API-only;
+	// there the vite dev server hosts the frontend instead.
+	if assets, ok := webapp.Assets(); ok {
+		opts = append(opts, transport.WithHandle("/", transport.SPAHandler(assets)))
+	} else {
+		logger.Warn("built without the embedded web UI (embedweb build tag), serving the API only")
+	}
+
+	return transport.NewRouter(opts...)
 }
 
 // adminRouter serves account administration under /api/admin.

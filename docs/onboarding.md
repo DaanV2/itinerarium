@@ -53,10 +53,13 @@ cd api && go run . init --email gm@example.com --password <password>
 
 (Both fail once any account exists — that's intentional.)
 
-### Run the full stack in Docker (closest to production)
+### Run the production build (closest to production)
+
+Production is **one binary**: the frontend is compiled to a static SPA and embedded into the Go server, which serves the UI and the API together on `:8080`.
 
 ```bash
-just up       # API :8080, web :3000, via docker-compose
+just build    # builds web, embeds it, produces api/itinerarium(.exe)
+just up       # same thing as a single Docker container on :8080 (needs Docker)
 ```
 
 ## Where things live
@@ -72,7 +75,8 @@ api/
 │   │   ├── models/      # GORM structs
 │   │   ├── repositories/# all DB access, one file per entity
 │   │   └── migrations.go# register every new model here
-│   └── transport/       # routers, handlers, middleware
+│   ├── transport/       # routers, handlers, middleware
+│   └── webapp/          # embedded web build (embedweb build tag)
 └── main.go
 
 web/src/
@@ -104,6 +108,7 @@ Everything security-relevant flows from those. The full set of invariants (game-
 | Run frontend | `just web` |
 | Format everything | `just fmt` |
 | **Every check CI runs** (before finishing anything) | `just verify` |
+| Single production binary (API + embedded web UI) | `just build` |
 | Full stack in Docker | `just up` |
 | API-only checks | `just api-verify` |
 | Web-only checks | `just web-verify` |

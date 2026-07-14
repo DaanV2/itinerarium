@@ -33,7 +33,7 @@ check:
 test:
     npm run test
 
-# Production build
+# Production build (static SPA, written into ../api/infrastructure/webapp/dist)
 build:
     npm run build
 

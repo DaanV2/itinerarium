@@ -1,18 +1,24 @@
 # Deployment
 
+Itinerarium deploys as **one container running one binary**: the SvelteKit frontend is compiled to a static SPA and embedded into the Go server via `go:embed`, so the same process serves the web UI and the API on `:8080`.
+
 ## Quick Start
 
 ```bash
 docker compose up -d
 ```
 
-On first start a setup wizard creates the initial GM account. For headless deployments, the same bootstrap can be run from the command line instead of the web wizard:
+Open http://localhost:8080. On first start a setup wizard creates the initial GM account. For headless deployments, the same bootstrap can be run from the command line instead of the web wizard:
 
 ```bash
-docker compose exec api /app/itinerarium init --email gm@example.com --password <password>
+docker compose exec itinerarium /app/itinerarium init --email gm@example.com --password <password>
 ```
 
 Fails once any account already exists, same as the web wizard.
+
+## Without Docker: a single binary
+
+`just build` produces a self-contained executable at `api/itinerarium` (`.exe` on Windows): it builds the frontend into `api/infrastructure/webapp/dist`, then compiles the server with the `embedweb` build tag so the site is baked in. Copy the binary anywhere and run `itinerarium serve` — no Node, no cgo, no other files needed (the SQLite database and JWT keys are created next to it under `data/`). A build *without* the tag (plain `go build`, what dev and CI use) serves the API only.
 
 ## Configuration
 
@@ -31,7 +37,7 @@ Configuration is loaded in priority order: CLI flags → environment variables �
 | `server.token-ttl` | Access token lifetime | `15m` |
 | `server.catalog-path` | Optional JSON/YAML file seeding the currency & item catalog on startup (see [currency-configuration.md](currency-configuration.md)) | _(unset)_ |
 
-Environment variables are derived automatically from key names: `server.database-path` → `SERVER_DATABASE_PATH`. The frontend's port is not a config key — it's set directly on the `web` service in `docker-compose.yml` (`3000`).
+Environment variables are derived automatically from key names: `server.database-path` → `SERVER_DATABASE_PATH`. There is no separate frontend port — the embedded web UI is served on `server.address` alongside the API.
 
 ## Database backends
 

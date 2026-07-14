@@ -75,9 +75,6 @@ jobs:
   docker:
     name: Docker build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        component: [api, web]
     steps:
       - name: 📦 Checkout Repository
         uses: actions/checkout@v4
@@ -88,7 +85,7 @@ jobs:
       - name: 🛠️ Build
         uses: docker/build-push-action@v7
         with:
-          context: ./${{ matrix.component }}
+          context: .
           push: false
-          cache-from: type=gha,scope=${{ matrix.component }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,mode=max,scope=app
