@@ -28,6 +28,7 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("loading config: %w", err)
 		}
 
+		bindDatabaseFlags(cmd)
 		logging.Setup()
 
 		return nil
