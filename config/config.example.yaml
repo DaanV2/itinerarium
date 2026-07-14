@@ -1,35 +1,48 @@
 # Itinerarium configuration. Copy to config/config.yaml (or pass any path via
 # --config). Priority: flags → env vars → this file → built-in defaults.
 #
-# Every key maps to an env var: server.database-path → SERVER_DATABASE_PATH.
+# Every key doubles as flag and env var: database.path → --database.path →
+# DATABASE_PATH.
 
 server:
-  # Address the API listens on (flag: --address, env: SERVER_ADDRESS)
+  # Address the API listens on (flag: --server.address, env: SERVER_ADDRESS)
   address: ":8080"
+
+database:
   # Database backend: sqlite (default), memory, postgres, or mysql
-  # (flag: --database-type, env: SERVER_DATABASE_TYPE)
-  database-type: "sqlite"
-  # SQLite database file (flag: --database-path, env: SERVER_DATABASE_PATH)
-  database-path: "data/itinerarium.db"
+  # (flag: --database.type, env: DATABASE_TYPE)
+  type: "sqlite"
+  # SQLite database file (flag: --database.path, env: DATABASE_PATH)
+  path: "data/itinerarium.db"
   # Connection string for postgres/mysql (required for those backends). For
-  # sqlite it overrides database-path when set.
-  # (flag: --database-dsn, env: SERVER_DATABASE_DSN)
+  # sqlite it overrides path when set.
+  # (flag: --database.dsn, env: DATABASE_DSN)
   # postgres example:
-  #   database-type: "postgres"
-  #   database-dsn: "host=localhost user=itinerarium password=secret dbname=itinerarium port=5432 sslmode=disable"
+  #   type: "postgres"
+  #   dsn: "host=localhost user=itinerarium password=secret dbname=itinerarium port=5432 sslmode=disable"
   # mysql example:
-  #   database-type: "mysql"
-  #   database-dsn: "itinerarium:secret@tcp(localhost:3306)/itinerarium?charset=utf8mb4&parseTime=True&loc=Local"
+  #   type: "mysql"
+  #   dsn: "itinerarium:secret@tcp(localhost:3306)/itinerarium?charset=utf8mb4&parseTime=True&loc=Local"
   # Connection-pool tuning (mostly relevant for postgres/mysql)
-  # database-max-idle-conns: 2
-  # database-max-open-conns: 0        # 0 = unlimited
-  # database-conn-max-lifetime: "1h"
+  # max-idle-conns: 2
+  # max-open-conns: 0        # 0 = unlimited
+  # conn-max-lifetime: "1h"
+
+auth:
   # Directory holding the RS512 JWT signing key pair, auto-generated on first
-  # start (flag: --keys-path, env: SERVER_KEYS_PATH)
+  # start (flag: --auth.keys-path, env: AUTH_KEYS_PATH)
   # keys-path: "data/keys"
-  # Access token lifetime (flag: --token-ttl, env: SERVER_TOKEN_TTL)
+  # Access token lifetime (flag: --auth.token-ttl, env: AUTH_TOKEN_TTL)
   # token-ttl: "15m"
+
+catalog:
   # Optional JSON/YAML file seeding the currency and item catalog on startup.
   # It upserts on every start, so editing the file and restarting is safe. See
-  # config/catalog.example.yaml (flag: --catalog-path, env: SERVER_CATALOG_PATH)
-  # catalog-path: "config/catalog.example.yaml"
+  # config/catalog.example.yaml (flag: --catalog.path, env: CATALOG_PATH)
+  # path: "config/catalog.example.yaml"
+
+log:
+  # Log level: debug, info, warn, error, fatal (flag: --log.level, env: LOG_LEVEL)
+  # level: "info"
+  # Log format: text, json, logfmt (flag: --log.format, env: LOG_FORMAT)
+  # format: "text"

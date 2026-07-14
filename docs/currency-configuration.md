@@ -11,15 +11,15 @@ read [currency.md](currency.md) first.
 
 ## Seeding from a file
 
-Point the API at a catalog file with the `catalog-path` setting. Like every
+Point the API at a catalog file with the `catalog.path` setting. Like every
 setting it can come from a flag, an environment variable, or the YAML config
 (priority: flags → env → config file → defaults):
 
 | Source | Value |
 |--------|-------|
-| Flag | `--catalog-path config/catalog.example.yaml` |
-| Environment variable | `SERVER_CATALOG_PATH=config/catalog.example.yaml` |
-| `config/config.yaml` | `server.catalog-path: "config/catalog.example.yaml"` |
+| Flag | `--catalog.path config/catalog.example.yaml` |
+| Environment variable | `CATALOG_PATH=config/catalog.example.yaml` |
+| `config/config.yaml` | `catalog.path: "config/catalog.example.yaml"` |
 
 When set, the file is loaded during startup, after migrations. Leaving it unset
 skips seeding entirely — the catalog is then managed purely through the API. The

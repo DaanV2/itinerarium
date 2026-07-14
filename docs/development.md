@@ -63,6 +63,6 @@ All recipes live in the root `justfile` (`just` lists them).
 | All CI checks | `just verify` |
 | Format everything | `just fmt` |
 | Full stack | `just up` |
-| API config | flags → env (`SERVER_ADDRESS`, `SERVER_DATABASE_PATH`) → `--config file.yaml` → defaults; example in `config/config.example.yaml` |
+| API config | flags → env (`SERVER_ADDRESS`, `DATABASE_PATH`) → `--config file.yaml` → defaults; example in `config/config.example.yaml` |
 
 The SQLite driver is pure Go (`glebarez/sqlite`) — no cgo, no gcc needed, works on any machine. Don't replace it.

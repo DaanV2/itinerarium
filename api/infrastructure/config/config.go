@@ -1,10 +1,20 @@
-// Package config wraps a Viper singleton. Resolution priority, highest first:
-// command-line flags → environment variables → YAML config file → defaults.
+// Package config implements flag-backed configuration sets (mechanus
+// convention). The component that consumes a setting declares it as a typed
+// flag on a named [Config] set at package init; commands opt in with
+// [Config.AddToSet]; values resolve through Viper with priority: command-line
+// flags → environment variables → YAML config file → flag defaults.
 //
-// Every component reads its settings through a named [Context]:
+//	var (
+//		ServerConfigSet = config.New("server")
+//		AddressFlag     = ServerConfigSet.String("server.address", ":8080", "listen address")
+//	)
 //
-//	cfg := config.GetContext("server")
-//	addr := cfg.String("address", ":8080") // flag --address, env SERVER_ADDRESS, yaml server.address
+//	addr := AddressFlag.Value()
+//
+// The flag name doubles as every other key: flag --server.address, env var
+// SERVER_ADDRESS, and nested YAML key server.address. Because every flag
+// lives in one global registry, two commands adding the same set share the
+// same flag instances — no duplicate definitions, no re-binding.
 //
 // If no explicit file is passed to [Load], a config.yaml is searched for in
 // the directories returned by [ConfigPaths].
@@ -12,167 +22,143 @@ package config
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
-	"strings"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
-var (
-	v        = newViper()
-	contexts sync.Map // component name → *Context
-)
-
-func newViper() *viper.Viper {
-	nv := viper.New()
-	// "server.database-path" → env var SERVER_DATABASE_PATH
-	nv.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
-	nv.AutomaticEnv()
-
-	return nv
+// Config is a named set of flags that belong to one component. Declare flags
+// on it at package init, hand them to commands with AddToSet, and validate
+// the resolved values with Validate.
+type Config struct {
+	name       string
+	mu         sync.RWMutex
+	data       map[string]BaseFlag
+	validateFn func(*Config) error
 }
 
-// Load reads a YAML config file into the singleton. With an explicit path,
-// a missing or invalid file is an error. With an empty path, config.yaml is
-// searched for across [ConfigPaths]; not finding one is not an error (flags,
-// env vars, and defaults still apply).
-func Load(file string) error {
-	if file != "" {
-		v.SetConfigFile(file)
+// AddToSet registers every flag in this set on a command's flag set.
+func (c *Config) AddToSet(set *pflag.FlagSet) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 
-		return v.ReadInConfig()
+	for _, f := range c.data {
+		f.AddToSet(set)
 	}
-
-	v.SetConfigName("config")
-	v.SetConfigType("yaml")
-	for _, p := range ConfigPaths() {
-		v.AddConfigPath(p)
-	}
-
-	if err := v.ReadInConfig(); err != nil {
-		var notFound viper.ConfigFileNotFoundError
-		if errors.As(err, &notFound) {
-			return nil
-		}
-
-		return err
-	}
-
-	return nil
 }
 
-// ConfigPaths returns, in search order, the directories checked for a
-// config.yaml when Load is called with an empty path.
-func ConfigPaths() []string {
-	paths := []string{".config"}
+// Name returns the component name this set was created with.
+func (c *Config) Name() string { return c.name }
 
-	if dir, err := os.UserConfigDir(); err == nil {
-		paths = append(paths, filepath.Join(dir, "itinerarium"))
+// Load looks up a declared flag by name.
+func (c *Config) Load(name string) (BaseFlag, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	f, ok := c.data[name]
+	if !ok {
+		return nil, errors.New("couldn't find flag " + name + " in config set " + c.name)
 	}
 
-	if home, err := os.UserHomeDir(); err == nil {
-		paths = append(paths, filepath.Join(home, ".itinerarium"))
-	}
-
-	return paths
+	return f, nil
 }
 
-// Save writes the fully resolved configuration (defaults, env vars, and
-// flags already applied) as YAML to the first entry in [ConfigPaths].
-func Save() error {
-	return SaveAs(filepath.Join(ConfigPaths()[0], "config.yaml"))
-}
-
-// SaveAs writes the fully resolved configuration as YAML to an explicit path,
-// creating its parent directory if necessary.
-func SaveAs(file string) error {
-	if err := os.MkdirAll(filepath.Dir(file), 0o750); err != nil {
-		return err
-	}
-
-	return v.WriteConfigAs(file)
-}
-
-// BindFlags binds every flag in the set under the component's namespace, so
-// flag --database-path on component "server" becomes key "server.database-path".
-// Call it from the command's init() after defining the flags.
-func BindFlags(component string, fs *pflag.FlagSet) error {
-	var err error
-	fs.VisitAll(func(f *pflag.Flag) {
-		if e := v.BindPFlag(component+"."+f.Name, f); e != nil && err == nil {
-			err = e
-		}
-	})
-
-	return err
-}
-
-// MustBindFlags is BindFlags for init() paths where a bind error is a bug.
-func MustBindFlags(component string, fs *pflag.FlagSet) {
-	if err := BindFlags(component, fs); err != nil {
+// MustLoad is Load for lookups where a missing flag is a bug.
+func (c *Config) MustLoad(name string) BaseFlag {
+	f, err := c.Load(name)
+	if err != nil {
 		panic(err)
 	}
+
+	return f
 }
 
-// BindFlag binds a single flag under the component's namespace, so flag
-// --database-type on component "server" becomes key "server.database-type".
-func BindFlag(component string, f *pflag.Flag) error {
-	return v.BindPFlag(component+"."+f.Name, f)
+func (c *Config) store(name string, f BaseFlag) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.data[name] = f
 }
 
-// MustBindFlag is BindFlag for init() paths where a bind error is a bug.
-func MustBindFlag(component string, f *pflag.Flag) {
-	if err := BindFlag(component, f); err != nil {
-		panic(err)
+// Bool declares a bool flag on this set.
+func (c *Config) Bool(name string, def bool, usage string) Flag[bool] {
+	f := Bool(name, def, usage)
+	c.store(name, f)
+
+	return f
+}
+
+// GetBool resolves a bool flag declared on this set.
+func (c *Config) GetBool(name string) bool {
+	return getValue[bool](c, name)
+}
+
+// String declares a string flag on this set.
+func (c *Config) String(name, def, usage string) Flag[string] {
+	f := String(name, def, usage)
+	c.store(name, f)
+
+	return f
+}
+
+// GetString resolves a string flag declared on this set.
+func (c *Config) GetString(name string) string {
+	return getValue[string](c, name)
+}
+
+// Int declares an int flag on this set.
+func (c *Config) Int(name string, def int, usage string) Flag[int] {
+	f := Int(name, def, usage)
+	c.store(name, f)
+
+	return f
+}
+
+// GetInt resolves an int flag declared on this set.
+func (c *Config) GetInt(name string) int {
+	return getValue[int](c, name)
+}
+
+// Duration declares a duration flag on this set.
+func (c *Config) Duration(name string, def time.Duration, usage string) Flag[time.Duration] {
+	f := Duration(name, def, usage)
+	c.store(name, f)
+
+	return f
+}
+
+// GetDuration resolves a duration flag declared on this set.
+func (c *Config) GetDuration(name string) time.Duration {
+	return getValue[time.Duration](c, name)
+}
+
+// WithValidate couples fn as the validator for this set (see Validate).
+// A nil fn means the set is always valid.
+func (c *Config) WithValidate(fn func(*Config) error) *Config {
+	c.validateFn = fn
+
+	return c
+}
+
+// Validate checks the resolved values of this set with the function given to
+// WithValidate.
+func (c *Config) Validate() error {
+	if c.validateFn == nil {
+		return nil
 	}
+
+	return c.validateFn(c)
 }
 
-// Context is a component-scoped view on the config singleton.
-type Context struct {
-	component string
+func getValue[T any](c *Config, name string) T {
+	f := c.MustLoad(name)
+
+	v, ok := f.(Flag[T])
+	if !ok {
+		panic(fmt.Sprintf("flag %s in config set %s is not a %T but a %s", name, c.name, *new(T), f.Type()))
+	}
+
+	return v.Value()
 }
-
-// GetContext returns the config context for a component, creating it on first
-// use. Contexts are cached in a sync.Map and safe for concurrent use.
-func GetContext(component string) *Context {
-	c, _ := contexts.LoadOrStore(component, &Context{component: component})
-
-	return c.(*Context)
-}
-
-func (c *Context) key(k string) string { return c.component + "." + k }
-
-// String resolves a string setting, falling back to def.
-func (c *Context) String(key, def string) string {
-	v.SetDefault(c.key(key), def)
-
-	return v.GetString(c.key(key))
-}
-
-// Int resolves an integer setting, falling back to def.
-func (c *Context) Int(key string, def int) int {
-	v.SetDefault(c.key(key), def)
-
-	return v.GetInt(c.key(key))
-}
-
-// Bool resolves a boolean setting, falling back to def.
-func (c *Context) Bool(key string, def bool) bool {
-	v.SetDefault(c.key(key), def)
-
-	return v.GetBool(c.key(key))
-}
-
-// Duration resolves a duration setting, falling back to def.
-func (c *Context) Duration(key string, def time.Duration) time.Duration {
-	v.SetDefault(c.key(key), def)
-
-	return v.GetDuration(c.key(key))
-}
-
-// Slice- or struct-valued settings: add typed getters here as needed,
-// following the same SetDefault-then-Get shape.

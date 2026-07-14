@@ -13,7 +13,6 @@ import (
 // run it, inspect it, or extend it. Shutdown drives the graceful-shutdown
 // lifecycle over everything that holds resources.
 type ServerComponents struct {
-	Config       *ServerConfig
 	DB           *persistence.Database
 	Repositories *Repositories
 	Services     *Services
@@ -22,24 +21,20 @@ type ServerComponents struct {
 
 // BuildServer wires every component into a ready-to-run server: database and
 // migrations, authentication, repositories, application services, the router,
-// and the HTTP server. It optionally seeds the currency/item catalog when a
+// and the HTTP server. Each component reads its own config set (flags → env →
+// YAML → defaults). It optionally seeds the currency/item catalog when a
 // catalog file is configured.
 func BuildServer(ctx context.Context) (*ServerComponents, error) {
-	cfg, err := LoadServerConfig()
-	if err != nil {
-		return nil, err
-	}
-
 	logger := log.Default()
 
-	db, err := SetupDatabase(cfg)
+	db, err := SetupDatabase()
 	if err != nil {
 		return nil, err
 	}
 
 	repos := NewRepositories(db)
 
-	tokens, err := SetupAuthentication(cfg, repos.RevokedTokens)
+	tokens, err := SetupAuthentication(repos.RevokedTokens)
 	if err != nil {
 		return nil, err
 	}
@@ -50,17 +45,16 @@ func BuildServer(ctx context.Context) (*ServerComponents, error) {
 		return nil, err
 	}
 
-	if err := seedCatalog(ctx, cfg, services, logger); err != nil {
+	if err := seedCatalog(ctx, services, logger); err != nil {
 		return nil, err
 	}
 
 	server := servers.New(
-		servers.WithAddr(cfg.Address.StringAddr()),
+		servers.WithAddr(servers.AddressFlag.Value()),
 		servers.WithHandler(CreateRouter(services, logger)),
 	)
 
 	return &ServerComponents{
-		Config:       cfg,
 		DB:           db,
 		Repositories: repos,
 		Services:     services,
@@ -74,18 +68,20 @@ func (c *ServerComponents) Shutdown(ctx context.Context) error {
 	return lifecycle.ShutdownAll(ctx, c.Server, c.DB)
 }
 
-// seedCatalog loads the configured currency/item catalog file, if any.
-func seedCatalog(ctx context.Context, cfg *ServerConfig, services *Services, logger *log.Logger) error {
-	if cfg.CatalogPath == "" {
+// seedCatalog loads the currency/item catalog file configured by
+// catalog.path, if any.
+func seedCatalog(ctx context.Context, services *Services, logger *log.Logger) error {
+	path := CatalogPathFlag.Value()
+	if path == "" {
 		return nil
 	}
 
-	curCount, itemCount, err := services.Catalog.LoadFile(ctx, cfg.CatalogPath)
+	curCount, itemCount, err := services.Catalog.LoadFile(ctx, path)
 	if err != nil {
 		return err
 	}
 
-	logger.Info("catalog seeded", "path", cfg.CatalogPath, "currencies", curCount, "items", itemCount)
+	logger.Info("catalog seeded", "path", path, "currencies", curCount, "items", itemCount)
 
 	return nil
 }
