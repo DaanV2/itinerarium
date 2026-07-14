@@ -7,7 +7,7 @@ COPY . .
 RUN CGO_ENABLED=0 go build -o /itinerarium .
 
 # Runtime stage
-FROM alpine:3.22
+FROM alpine:3.24
 RUN adduser -D -H itinerarium
 WORKDIR /app
 COPY --from=build /itinerarium /app/itinerarium
