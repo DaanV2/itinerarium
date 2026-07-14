@@ -4,17 +4,18 @@
 
 ```
 itinerarium/
-├── api/          # Go API server (GORM + SQLite)
-├── web/          # SvelteKit frontend
+├── api/          # Go API server (GORM + SQLite), serves the embedded web UI in production
+├── web/          # SvelteKit frontend (static SPA, embedded into the Go binary)
 ├── config/       # YAML/env configuration
+├── Dockerfile    # single image: web build → embedded in the Go binary
 └── docker-compose.yml
 ```
 
-| Layer      | Technology             |
-| ---------- | ---------------------- |
-| API        | Go, GORM, SQLite       |
-| Frontend   | SvelteKit + TypeScript |
-| Deployment | Docker Compose         |
+| Layer      | Technology                                                                 |
+| ---------- | -------------------------------------------------------------------------- |
+| API        | Go, GORM, SQLite                                                            |
+| Frontend   | SvelteKit + TypeScript (adapter-static SPA)                                 |
+| Deployment | One binary / one Docker image — the SPA is embedded via `go:embed` (`embedweb` build tag) |
 
 ## Core Concept: Game Day
 

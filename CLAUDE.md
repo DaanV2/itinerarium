@@ -20,8 +20,8 @@ Full docs live in `docs/`: [features](docs/features.md), [architecture](docs/arc
 | Layer | Technology |
 |-------|-----------|
 | API | Go, GORM. Backends: SQLite (default) via `glebarez/sqlite`, PostgreSQL, MySQL — all pure Go, no cgo |
-| Frontend | SvelteKit + TypeScript |
-| Deployment | Docker Compose |
+| Frontend | SvelteKit + TypeScript (adapter-static SPA, embedded in the Go binary) |
+| Deployment | One binary / one Docker image — `just build` embeds the web build via `go:embed` behind the `embedweb` build tag; Docker Compose runs that single container |
 | CLI | Cobra |
 | Config | Viper (flags → env vars → YAML → defaults) |
 | Auth | RS512 JWT with JTI revocation, keys auto-generated on first start |
@@ -42,12 +42,14 @@ api/
 │   │   ├── repositories/   # One file per entity
 │   │   └── migrations.go
 │   ├── servers/            # http.Server wrapper
-│   └── transport/          # Routers, middleware, CORS
+│   ├── transport/          # Routers, middleware, CORS
+│   └── webapp/             # embedded web build (dist/ gitignored, baked in with -tags embedweb)
 ├── main.go
 └── go.mod
 
-web/                        # SvelteKit + TypeScript
+web/                        # SvelteKit + TypeScript (builds into api/infrastructure/webapp/dist)
 config/                     # YAML config files per environment
+Dockerfile                  # single image: web build → Go binary with embedded UI
 docker-compose.yml
 ```
 
@@ -60,7 +62,8 @@ just api          # run the API on :8080
 just web          # run the frontend on :5173 (/api proxied to :8080)
 just fmt          # format everything
 just verify       # every check CI runs — run this before finishing any feature
-just up           # full stack via Docker Compose (API :8080, web :3000)
+just build        # one self-contained binary (API + embedded web UI) at api/itinerarium
+just up           # full stack via Docker Compose (single container, everything on :8080)
 ```
 
 Raw equivalents (what CI runs): from `api/` — `go build ./... && go vet ./... && golangci-lint run ./... && go test ./...` (CI adds `-race`, Linux-only); from `web/` — `npm run lint && npm run check && npm run test && npm run build`. The web package manager is **npm**.

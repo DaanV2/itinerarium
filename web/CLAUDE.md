@@ -12,7 +12,7 @@ npm run check           # svelte-check (type checking)
 npm run lint            # prettier + eslint
 npm run format          # auto-format
 npm run test            # vitest, single run
-npm run build           # production build (adapter-node)
+npm run build           # production build: static SPA written to ../api/infrastructure/webapp/dist for go:embed
 ```
 
 Package manager is **npm** (plain `package-lock.json`, `npm ci` in CI/Docker) — don't introduce pnpm/yarn/bun.
@@ -61,7 +61,8 @@ src/
 
 ## Talking to the API
 
-- Always call the API with **relative paths** (`/api/...`). In dev, Vite proxies them to `:8080`; in production a reverse proxy does.
+- Always call the API with **relative paths** (`/api/...`). In dev, Vite proxies them to `:8080`; in production the Go binary serves the SPA and the API from the same origin, so they just work.
+- The production build is a **static SPA** (`adapter-static`, `ssr = false` in `src/routes/+layout.ts`) embedded into the Go server. There is no Node at runtime — never add `+page.server.ts`, `+server.ts`, or `hooks.server.ts`; everything must work with client-side `load` functions.
 - Load data in `+page.ts` `load` functions using the provided `fetch` (works server- and client-side):
 
 ```ts

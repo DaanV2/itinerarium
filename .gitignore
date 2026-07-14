@@ -10,6 +10,9 @@ api/itinerarium
 api/itinerarium.exe
 api/coverage.out
 
+# Web build output, embedded into the Go binary (see web/vite.config.ts)
+api/infrastructure/webapp/dist/
+
 # Editors / OS
 .idea/
 *.swp

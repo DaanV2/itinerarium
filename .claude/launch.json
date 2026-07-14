@@ -16,11 +16,11 @@
       "port": 5173
     },
     {
-      "name": "web-prod",
-      "runtimeExecutable": "node",
-      "runtimeArgs": ["build"],
-      "cwd": "web",
-      "port": 3000
+      "name": "app",
+      "runtimeExecutable": "./itinerarium.exe",
+      "runtimeArgs": ["serve", "--address", ":8090"],
+      "cwd": "api",
+      "port": 8090
     }
   ]
 }

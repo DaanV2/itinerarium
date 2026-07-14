@@ -62,7 +62,7 @@ web-check:
 web-test:
     cd web && npm run test
 
-# Production build
+# Production build (static SPA, written into api/infrastructure/webapp/dist)
 web-build:
     cd web && npm run build
 
@@ -70,6 +70,12 @@ web-build:
 web-verify: web-lint web-check web-test web-build
 
 # --- Whole project ---
+
+bin_name := if os() == "windows" { "itinerarium.exe" } else { "itinerarium" }
+
+# Build one self-contained binary (API + embedded web UI) at api/itinerarium
+build: web-build
+    cd api && go build -tags embedweb -o {{bin_name}} .
 
 # Format everything
 fmt: api-fmt web-fmt
@@ -80,6 +86,6 @@ test: api-test web-test
 # Run every check CI runs — do this before finishing any feature
 verify: api-verify web-verify
 
-# Full stack via Docker Compose (API :8080, web :3000)
+# Full stack via Docker Compose (single container, everything on :8080)
 up:
     docker compose up --build
