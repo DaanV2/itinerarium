@@ -58,8 +58,8 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [ ] Path-collision warning within a repository (rename or continue) *(API warns with 409 `path_collision`; editor dialog pending)*
 - [x] Concurrent-edit warning before overwriting *(API warns with 409 `concurrent_edit` on stale `version`; editor offers reload or overwrite)*
 - [x] Player edit on an all-GM-only document creates a new player-visible section
-- [ ] Editor shows reveal settings ("Revealed at game day X to …")
-- [ ] Editor warning banner when editing an already-revealed document
+- [x] Editor shows reveal settings ("Revealed at game day X to …")
+- [x] Editor warning banner when editing an already-revealed document
 - [x] Journals: per-character entries stamped with game day, readable by owner + GM only
 - [ ] Journal page → document conversion (copy into character repository)
 - [ ] Location description documents (same visibility/game-day rules)

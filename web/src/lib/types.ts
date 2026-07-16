@@ -175,6 +175,16 @@ export interface Document extends DocumentSummary {
 	sections: DocumentSection[];
 }
 
+/** A GM-only direct share of a document to one character, independent of the
+ * document's own repository access — revealed to that character once their
+ * `current_game_day` reaches `shared_on_game_day`. */
+export interface DocumentShare {
+	id: string;
+	document_id: string;
+	character_id: string;
+	shared_on_game_day: number;
+}
+
 /** One level of a repository's folder tree. Folders with no documents the
  * caller may see are omitted entirely, at every level. */
 export interface FolderTreeNode {
