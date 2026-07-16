@@ -1,4 +1,4 @@
-import type { Document, DocumentSection } from '$lib/types';
+import type { Document, DocumentSection, DocumentShare } from '$lib/types';
 
 async function errorBody(res: Response): Promise<{ error?: string; code?: string } | null> {
 	const body: unknown = await res.json().catch(() => null);
@@ -91,4 +91,21 @@ export async function updateDocument(
 	}
 
 	return (await res.json()) as Document;
+}
+
+/** Lists the direct character shares on a document. GM only. */
+export async function listDocumentShares(
+	id: string,
+	token: string,
+	fetchFn: typeof fetch = fetch
+): Promise<DocumentShare[]> {
+	const res = await fetchFn(`/api/documents/${id}/shares`, {
+		headers: { Authorization: `Bearer ${token}` }
+	});
+
+	if (!res.ok) {
+		throw new Error(await errorMessage(res, `failed to list document shares: ${res.status}`));
+	}
+
+	return (await res.json()) as DocumentShare[];
 }

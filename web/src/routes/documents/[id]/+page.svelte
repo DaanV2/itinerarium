@@ -2,16 +2,36 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { getDocument, updateDocument, DocumentConflictError } from '$lib/api/documents';
+	import {
+		getDocument,
+		updateDocument,
+		listDocumentShares,
+		DocumentConflictError
+	} from '$lib/api/documents';
+	import { getRepository } from '$lib/api/repositories';
+	import { listCharacters } from '$lib/api/characters';
+	import { listGroups } from '$lib/api/groups';
 	import { getAccessToken, isGM } from '$lib/auth-token';
+	import { describeAudience } from '$lib/document-reveal';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import ConcurrentEditDialog from '$lib/components/ConcurrentEditDialog.svelte';
-	import type { Document, DocumentSection } from '$lib/types';
+	import type {
+		Character,
+		Document,
+		DocumentSection,
+		DocumentShare,
+		Group,
+		Repository
+	} from '$lib/types';
 
 	const documentId = page.params.id ?? '';
 	const gm = isGM();
 
 	let doc = $state<Document | null>(null);
+	let repository = $state<Repository | null>(null);
+	let characters = $state<Character[]>([]);
+	let groups = $state<Group[]>([]);
+	let shares = $state<DocumentShare[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let saving = $state(false);
@@ -20,14 +40,27 @@
 	let editTitle = $state('');
 	let editPath = $state('');
 	let editTags = $state('');
+	let editSharedOnGameDay = $state(0);
 	let editSections = $state<DocumentSection[]>([]);
 	let editVersion = $state(0);
 	let showConflict = $state(false);
 
-	async function loadDocument() {
+	let audience = $derived(repository ? describeAudience(repository, characters, groups) : '');
+	let sharedCharacterNames = $derived(
+		shares.map((s) => characters.find((c) => c.id === s.character_id)?.name ?? 'a character')
+	);
+
+	async function loadAll() {
 		loading = true;
+		const token = getAccessToken();
 		try {
-			doc = await getDocument(documentId, getAccessToken());
+			doc = await getDocument(documentId, token);
+			[repository, characters, groups, shares] = await Promise.all([
+				getRepository(doc.repository_id, token),
+				listCharacters(token),
+				listGroups(token),
+				gm ? listDocumentShares(documentId, token) : Promise.resolve([])
+			]);
 			error = '';
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load document.';
@@ -36,11 +69,14 @@
 		}
 	}
 
+	onMount(loadAll);
+
 	function startEditing() {
 		if (!doc) return;
 		editTitle = doc.title;
 		editPath = doc.path;
 		editTags = doc.tags.join(', ');
+		editSharedOnGameDay = doc.shared_on_game_day;
 		editSections = doc.sections.map((s) => ({ ...s }));
 		editVersion = doc.version;
 		editing = true;
@@ -50,10 +86,19 @@
 		editing = false;
 	}
 
+	function addSection() {
+		editSections = [...editSections, { id: '', content: '', gm_only: false }];
+	}
+
+	function removeSection(index: number) {
+		editSections = editSections.filter((_, i) => i !== index);
+	}
+
 	async function save(force: boolean) {
 		if (!doc) return;
 		saving = true;
 		try {
+			const token = getAccessToken();
 			doc = await updateDocument(
 				documentId,
 				{
@@ -63,16 +108,17 @@
 						.split(',')
 						.map((t) => t.trim())
 						.filter(Boolean),
-					sharedOnGameDay: doc.shared_on_game_day,
+					sharedOnGameDay: editSharedOnGameDay,
 					sections: editSections,
 					expectedVersion: editVersion,
 					force
 				},
-				getAccessToken()
+				token
 			);
 			editing = false;
 			showConflict = false;
 			error = '';
+			if (gm) shares = await listDocumentShares(documentId, token);
 		} catch (err) {
 			if (err instanceof DocumentConflictError && err.code === 'concurrent_edit') {
 				showConflict = true;
@@ -86,11 +132,9 @@
 
 	async function reloadAfterConflict() {
 		showConflict = false;
-		await loadDocument();
+		await loadAll();
 		startEditing();
 	}
-
-	onMount(loadDocument);
 </script>
 
 <main class="main-page">
@@ -115,15 +159,33 @@
 			Tags (comma-separated)
 			<input type="text" bind:value={editTags} />
 		</label>
+		{#if gm}
+			<label>
+				Revealed at game day
+				<input type="number" min="0" bind:value={editSharedOnGameDay} />
+			</label>
+		{/if}
 
 		<div class="sections">
-			{#each editSections as section, i (section.id)}
+			{#each editSections as section, i (section.id || `new-${i}`)}
 				<section class="doc-section" class:gm-only={section.gm_only}>
 					<p class="section-banner">{section.gm_only ? 'GM only' : 'Visible to players'}</p>
-					<textarea bind:value={editSections[i].content} rows="4"></textarea>
+					<textarea class="section-content" bind:value={editSections[i].content} rows="4"
+					></textarea>
+					<div class="section-actions">
+						{#if gm}
+							<label class="gm-only-toggle">
+								<input type="checkbox" bind:checked={editSections[i].gm_only} />
+								GM only
+							</label>
+						{/if}
+						<button type="button" onclick={() => removeSection(i)}>Remove section</button>
+					</div>
 				</section>
 			{/each}
 		</div>
+
+		<button type="button" onclick={addSection}>Add section</button>
 
 		<div class="edit-actions">
 			<button type="button" onclick={cancelEditing} disabled={saving}>Cancel</button>
@@ -140,12 +202,23 @@
 		/>
 	{:else}
 		<h1>{doc.title}</h1>
-		<p class="meta">
-			{doc.path} · shared on game day {doc.shared_on_game_day}
-			{#if gm}
-				· {doc.revealed ? 'revealed' : 'not yet revealed'}
+		<p class="meta">{doc.path}</p>
+
+		<p class="reveal-banner">
+			Revealed at game day {doc.shared_on_game_day} to {audience}.
+			{#if gm && sharedCharacterNames.length > 0}
+				Also directly shared with {sharedCharacterNames.join(', ')}.
 			{/if}
 		</p>
+
+		{#if doc.revealed}
+			<p class="revealed-warning" role="alert">
+				This document is already revealed — any changes you save are visible immediately to everyone
+				who can currently see it. There is no versioning; consider a new document or a GM-only
+				section for future reveals instead.
+			</p>
+		{/if}
+
 		{#if doc.tags.length > 0}
 			<p class="tags">
 				{#each doc.tags as tag (tag)}
@@ -186,6 +259,24 @@
 		font-size: 0.8rem;
 	}
 
+	.reveal-banner {
+		background-color: rgba(59, 130, 246, 0.1);
+		border: 1px solid rgba(59, 130, 246, 0.4);
+		border-radius: 5px;
+		padding: 0.6rem 0.9rem;
+		font-size: 0.875rem;
+		margin-top: 0.5rem;
+	}
+
+	.revealed-warning {
+		background-color: rgba(234, 179, 8, 0.12);
+		border: 1px solid rgba(234, 179, 8, 0.5);
+		border-radius: 5px;
+		padding: 0.6rem 0.9rem;
+		font-size: 0.875rem;
+		margin-top: 0.5rem;
+	}
+
 	.sections {
 		display: flex;
 		flex-direction: column;
@@ -221,8 +312,27 @@
 
 	.section-content {
 		margin: 0;
+		width: 100%;
+		box-sizing: border-box;
+		border: none;
 		padding: 0.75rem;
+		font: inherit;
 		white-space: pre-wrap;
+		resize: vertical;
+	}
+
+	.section-actions {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.5rem 0.75rem;
+		border-top: 1px solid rgba(128, 128, 128, 0.2);
+	}
+
+	.gm-only-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
 	}
 
 	label {
@@ -231,14 +341,6 @@
 		gap: 0.25rem;
 		margin-top: 0.75rem;
 		font-size: 0.875rem;
-	}
-
-	textarea {
-		width: 100%;
-		border: none;
-		font: inherit;
-		padding: 0.75rem;
-		resize: vertical;
 	}
 
 	.edit-actions {
