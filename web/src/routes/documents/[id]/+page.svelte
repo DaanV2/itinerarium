@@ -2,10 +2,11 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
-	import { getDocument } from '$lib/api/documents';
+	import { getDocument, updateDocument, DocumentConflictError } from '$lib/api/documents';
 	import { getAccessToken, isGM } from '$lib/auth-token';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
-	import type { Document } from '$lib/types';
+	import ConcurrentEditDialog from '$lib/components/ConcurrentEditDialog.svelte';
+	import type { Document, DocumentSection } from '$lib/types';
 
 	const documentId = page.params.id ?? '';
 	const gm = isGM();
@@ -13,6 +14,15 @@
 	let doc = $state<Document | null>(null);
 	let loading = $state(true);
 	let error = $state('');
+	let saving = $state(false);
+
+	let editing = $state(false);
+	let editTitle = $state('');
+	let editPath = $state('');
+	let editTags = $state('');
+	let editSections = $state<DocumentSection[]>([]);
+	let editVersion = $state(0);
+	let showConflict = $state(false);
 
 	async function loadDocument() {
 		loading = true;
@@ -24,6 +34,60 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	function startEditing() {
+		if (!doc) return;
+		editTitle = doc.title;
+		editPath = doc.path;
+		editTags = doc.tags.join(', ');
+		editSections = doc.sections.map((s) => ({ ...s }));
+		editVersion = doc.version;
+		editing = true;
+	}
+
+	function cancelEditing() {
+		editing = false;
+	}
+
+	async function save(force: boolean) {
+		if (!doc) return;
+		saving = true;
+		try {
+			doc = await updateDocument(
+				documentId,
+				{
+					title: editTitle,
+					path: editPath,
+					tags: editTags
+						.split(',')
+						.map((t) => t.trim())
+						.filter(Boolean),
+					sharedOnGameDay: doc.shared_on_game_day,
+					sections: editSections,
+					expectedVersion: editVersion,
+					force
+				},
+				getAccessToken()
+			);
+			editing = false;
+			showConflict = false;
+			error = '';
+		} catch (err) {
+			if (err instanceof DocumentConflictError && err.code === 'concurrent_edit') {
+				showConflict = true;
+			} else {
+				error = err instanceof Error ? err.message : 'Failed to save document.';
+			}
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function reloadAfterConflict() {
+		showConflict = false;
+		await loadDocument();
+		startEditing();
 	}
 
 	onMount(loadDocument);
@@ -38,6 +102,42 @@
 		<p>Loading…</p>
 	{:else if !doc}
 		<p>Document not found.</p>
+	{:else if editing}
+		<label>
+			Title
+			<input type="text" bind:value={editTitle} />
+		</label>
+		<label>
+			Path
+			<input type="text" bind:value={editPath} />
+		</label>
+		<label>
+			Tags (comma-separated)
+			<input type="text" bind:value={editTags} />
+		</label>
+
+		<div class="sections">
+			{#each editSections as section, i (section.id)}
+				<section class="doc-section" class:gm-only={section.gm_only}>
+					<p class="section-banner">{section.gm_only ? 'GM only' : 'Visible to players'}</p>
+					<textarea bind:value={editSections[i].content} rows="4"></textarea>
+				</section>
+			{/each}
+		</div>
+
+		<div class="edit-actions">
+			<button type="button" onclick={cancelEditing} disabled={saving}>Cancel</button>
+			<button type="button" onclick={() => save(false)} disabled={saving}>
+				{saving ? 'Saving…' : 'Save'}
+			</button>
+		</div>
+
+		<ConcurrentEditDialog
+			open={showConflict}
+			onCancel={() => (showConflict = false)}
+			onReload={reloadAfterConflict}
+			onOverwrite={() => save(true)}
+		/>
 	{:else}
 		<h1>{doc.title}</h1>
 		<p class="meta">
@@ -62,6 +162,8 @@
 				</section>
 			{/each}
 		</div>
+
+		<button type="button" onclick={startEditing}>Edit</button>
 	{/if}
 </main>
 
@@ -121,5 +223,27 @@
 		margin: 0;
 		padding: 0.75rem;
 		white-space: pre-wrap;
+	}
+
+	label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin-top: 0.75rem;
+		font-size: 0.875rem;
+	}
+
+	textarea {
+		width: 100%;
+		border: none;
+		font: inherit;
+		padding: 0.75rem;
+		resize: vertical;
+	}
+
+	.edit-actions {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 1rem;
 	}
 </style>
