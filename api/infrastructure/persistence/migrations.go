@@ -20,6 +20,7 @@ func allModels() []any {
 		&models.Repository{},
 		&models.Document{},
 		&models.DocumentSection{},
+		&models.DocumentShare{},
 		&models.JournalEntry{},
 		&models.Session{},
 	}

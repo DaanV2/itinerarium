@@ -260,6 +260,105 @@ func ShareDocumentHandler(svc *application.DocumentService) http.Handler {
 	})
 }
 
+type shareDocumentWithCharacterRequest struct {
+	CharacterID     string `json:"character_id"`
+	SharedOnGameDay int    `json:"shared_on_game_day"`
+}
+
+type documentShareResponse struct {
+	ID              string `json:"id"`
+	DocumentID      string `json:"document_id"`
+	CharacterID     string `json:"character_id"`
+	SharedOnGameDay int    `json:"shared_on_game_day"`
+}
+
+func toDocumentShareResponse(s *models.DocumentShare) documentShareResponse {
+	return documentShareResponse{
+		ID: s.ID, DocumentID: s.DocumentID, CharacterID: s.CharacterID, SharedOnGameDay: s.SharedOnGameDay,
+	}
+}
+
+// ShareDocumentWithCharacterHandler lets a GM directly share the document
+// named by {id} with one character on a game day. Must be wrapped in
+// RequireAuth.
+func ShareDocumentWithCharacterHandler(svc *application.DocumentService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req shareDocumentWithCharacterRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.CharacterID == "" {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+
+			return
+		}
+
+		share, err := svc.ShareWithCharacter(
+			r.Context(), requesterFrom(r), r.PathValue("id"), req.CharacterID, req.SharedOnGameDay,
+		)
+		if err != nil {
+			writeDocumentServiceError(w, err)
+
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, toDocumentShareResponse(share))
+	})
+}
+
+// ListDocumentSharesHandler lets a GM list the direct shares on a document.
+// Must be wrapped in RequireAuth.
+func ListDocumentSharesHandler(svc *application.DocumentService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		shares, err := svc.ListShares(r.Context(), requesterFrom(r), r.PathValue("id"))
+		if err != nil {
+			writeDocumentServiceError(w, err)
+
+			return
+		}
+
+		responses := make([]documentShareResponse, len(shares))
+		for i := range shares {
+			responses[i] = toDocumentShareResponse(&shares[i])
+		}
+
+		writeJSON(w, http.StatusOK, responses)
+	})
+}
+
+// RevokeDocumentShareHandler lets a GM remove one direct share from a
+// document. Must be wrapped in RequireAuth.
+func RevokeDocumentShareHandler(svc *application.DocumentService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		err := svc.RevokeShare(r.Context(), requesterFrom(r), r.PathValue("id"), r.PathValue("shareId"))
+		if err != nil {
+			writeDocumentServiceError(w, err)
+
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// ListSharedDocumentsHandler returns the documents directly shared with any
+// of the caller's characters whose game day has been reached. Must be
+// wrapped in RequireAuth.
+func ListSharedDocumentsHandler(svc *application.DocumentService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		views, err := svc.ListSharedWithMe(r.Context(), requesterFrom(r))
+		if err != nil {
+			writeDocumentServiceError(w, err)
+
+			return
+		}
+
+		responses := make([]documentResponse, len(views))
+		for i := range views {
+			responses[i] = toDocumentResponse(&views[i])
+		}
+
+		writeJSON(w, http.StatusOK, responses)
+	})
+}
+
 // writeDocumentServiceError maps DocumentService errors onto HTTP. The two
 // editor warnings ride on 409 with a machine-readable code so the client can
 // offer "rename or continue" / "overwrite anyway".
@@ -271,6 +370,8 @@ func writeDocumentServiceError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "path_collision"})
 	case errors.Is(err, application.ErrConcurrentEdit):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "concurrent_edit"})
+	case errors.Is(err, application.ErrAlreadyShared):
+		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, application.ErrInvalidDocument):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, application.ErrForbidden):

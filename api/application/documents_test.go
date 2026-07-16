@@ -35,7 +35,9 @@ func newDocumentTestEnv(t *testing.T) documentTestEnv {
 	charSvc := application.NewCharacterService(characterRepo, repositories.NewUsers(db), knowledgeRepo)
 	groupSvc := application.NewGroupService(groupRepo, charSvc, knowledgeRepo)
 	repoSvc := application.NewRepositoryService(knowledgeRepo, groupRepo, characterRepo)
-	docSvc := application.NewDocumentService(repositories.NewDocuments(db), repoSvc, characterRepo, groupRepo)
+	docSvc := application.NewDocumentService(
+		repositories.NewDocuments(db), repoSvc, characterRepo, groupRepo, repositories.NewDocumentShares(db),
+	)
 
 	if err := repoSvc.EnsureSystemRepositories(t.Context()); err != nil {
 		t.Fatalf("EnsureSystemRepositories: %v", err)
@@ -925,3 +927,158 @@ func TestDocumentService_ShareToGroup_PathCollision_WarnsThenAllows(t *testing.T
 }
 
 func intPtr(v int) *int { return &v }
+
+func TestDocumentService_DirectShare_GatesByCharacterGameDay(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+
+	owner, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	if err != nil {
+		t.Fatalf("Create owner character: %v", err)
+	}
+
+	other := fakeRequester{id: "other-1", gm: false}
+	recipient, err := env.characters.Create(ctx, other, "", "Beren")
+	if err != nil {
+		t.Fatalf("Create recipient character: %v", err)
+	}
+
+	charRepo := env.findRepository(t, models.RepositoryTypeCharacter, owner.ID)
+	doc := mustCreateDocument(t, env, playerRequester, charRepo.ID, &application.CreateDocumentInput{
+		Path:     "notes/heirloom",
+		Sections: []application.DocumentSectionInput{{Content: "The ring is cursed."}},
+	})
+
+	// The recipient's own character repository grants nothing here.
+	if _, err := env.docs.Get(ctx, other, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("pre-share Get = %v, want ErrNotFound", err)
+	}
+
+	share, err := env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, recipient.ID, 3)
+	if err != nil {
+		t.Fatalf("ShareWithCharacter: %v", err)
+	}
+
+	// Shared, but the character's game day hasn't reached the share's yet.
+	if _, err := env.docs.Get(ctx, other, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("pre-day Get = %v, want ErrNotFound", err)
+	}
+
+	env.setGameDay(t, recipient.ID, 3)
+
+	view, err := env.docs.Get(ctx, other, doc.Document.ID)
+	if err != nil {
+		t.Fatalf("post-day Get: %v", err)
+	}
+	if len(view.Document.Sections) != 1 || view.Document.Sections[0].Content != "The ring is cursed." {
+		t.Fatalf("Sections = %+v, want the shared content", view.Document.Sections)
+	}
+
+	// A second share attempt for the same pair is rejected.
+	if _, err := env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, recipient.ID, 3); !errors.Is(
+		err, application.ErrAlreadyShared,
+	) {
+		t.Fatalf("duplicate ShareWithCharacter = %v, want ErrAlreadyShared", err)
+	}
+
+	// Revoking removes access again.
+	if err := env.docs.RevokeShare(ctx, gmRequester, doc.Document.ID, share.ID); err != nil {
+		t.Fatalf("RevokeShare: %v", err)
+	}
+	if _, err := env.docs.Get(ctx, other, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("post-revoke Get = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDocumentService_DirectShare_GMOnlySectionsStrippedForRecipient(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
+
+	recipient := fakeRequester{id: "recipient-1", gm: false}
+	character, err := env.characters.Create(ctx, recipient, "", "Beren")
+	if err != nil {
+		t.Fatalf("Create character: %v", err)
+	}
+
+	doc := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{
+		Path:            "npcs/duke",
+		SharedOnGameDay: intPtr(100), // Far past the recipient's game day: repo path stays gated.
+		Sections: []application.DocumentSectionInput{
+			{Content: "The duke rules the city."},
+			{Content: "He is secretly a vampire.", GMOnly: true},
+		},
+	})
+
+	if _, err := env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, character.ID, 0); err != nil {
+		t.Fatalf("ShareWithCharacter: %v", err)
+	}
+
+	view, err := env.docs.Get(ctx, recipient, doc.Document.ID)
+	if err != nil {
+		t.Fatalf("Get via share: %v", err)
+	}
+	if len(view.Document.Sections) != 1 || view.Document.Sections[0].GMOnly {
+		t.Fatalf("Sections = %+v, want only the non-GM section", view.Document.Sections)
+	}
+}
+
+func TestDocumentService_ShareWithCharacter_ForbiddenForPlayers(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
+
+	character, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	if err != nil {
+		t.Fatalf("Create character: %v", err)
+	}
+
+	doc := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{Path: "lore/creation"})
+
+	if _, err := env.docs.ShareWithCharacter(
+		ctx, playerRequester, doc.Document.ID, character.ID, 0,
+	); !errors.Is(err, application.ErrForbidden) {
+		t.Fatalf("player ShareWithCharacter = %v, want ErrForbidden", err)
+	}
+}
+
+func TestDocumentService_ListSharedWithMe(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+
+	owner, err := env.characters.Create(ctx, gmRequester, "", "Aria")
+	if err != nil {
+		t.Fatalf("Create owner character: %v", err)
+	}
+
+	recipient := fakeRequester{id: "recipient-1", gm: false}
+	character, err := env.characters.Create(ctx, recipient, "", "Beren")
+	if err != nil {
+		t.Fatalf("Create recipient character: %v", err)
+	}
+
+	charRepo := env.findRepository(t, models.RepositoryTypeCharacter, owner.ID)
+	doc := mustCreateDocument(t, env, gmRequester, charRepo.ID, &application.CreateDocumentInput{
+		Path: "notes/heirloom",
+	})
+
+	views, err := env.docs.ListSharedWithMe(ctx, recipient)
+	if err != nil {
+		t.Fatalf("ListSharedWithMe (none yet): %v", err)
+	}
+	if len(views) != 0 {
+		t.Fatalf("views = %+v, want none before sharing", views)
+	}
+
+	if _, err := env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, character.ID, 0); err != nil {
+		t.Fatalf("ShareWithCharacter: %v", err)
+	}
+
+	views, err = env.docs.ListSharedWithMe(ctx, recipient)
+	if err != nil {
+		t.Fatalf("ListSharedWithMe: %v", err)
+	}
+	if len(views) != 1 || views[0].Document.ID != doc.Document.ID {
+		t.Fatalf("views = %+v, want [%s]", views, doc.Document.ID)
+	}
+}

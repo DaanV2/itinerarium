@@ -92,6 +92,7 @@ Location inventories apply the same access-control check: if a character lacks a
 - **Warnings, not blocks** (both `409` with a machine-readable `code`): creating/moving onto an occupied path returns `path_collision` unless `allow_collision` is set; saving with a stale `expected_version` returns `concurrent_edit` unless `force` is set. `version` is an integer that increments on every save — editors echo it back.
 - **Reveal state for the editor**: document responses carry `revealed` — whether any character with repository access has reached `shared_on_game_day` — so the editor can warn that edits to an already-revealed document are immediately visible (documents are not versioned).
 - **Frontmatter**: `POST … /documents` accepts raw markdown whose leading `---` YAML block sets `title`, `tags`, and `game_day` (explicit request fields win). This is the same Obsidian-compatible format the M6 vault import will use.
+- **Direct shares** (`DocumentShare`) let a GM hand one specific character a document independently of the document's `Repository` access rule — e.g. revealing a note from another character's private repository. A share carries its own `character_id` and `shared_on_game_day`; it is checked as a fallback only when the repository/game-day path doesn't already grant access, so it can only add reach, never take it away. GM-only sections are still stripped for the recipient exactly as on any other read. GM only to create, list, or revoke; `GET /api/documents/shared` lets a player list what's been shared with any of their characters.
 
 ### Item movement (M2)
 
@@ -152,6 +153,9 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `GET /api/documents/{id}` | per document rule | Read one document; GM-only sections are stripped server-side for players (404 without access) |
 | `PATCH /api/documents/{id}` | anyone who sees the document | Replace metadata + the caller's visible sections (players can never touch GM-only sections or the reveal day) |
 | `POST /api/documents/{id}/share` | access to source (owner+GM) and target group repository | Move a document from a character repository into a group repository at a chosen `shared_on_game_day` |
+| `GET /api/documents/shared` | any authenticated | List documents directly shared with any of the caller's characters whose game day has been reached |
+| `GET\|POST /api/documents/{id}/shares` | GM | List / add a direct share of a document to one character, revealed at a chosen game day |
+| `DELETE /api/documents/{id}/shares/{shareId}` | GM | Revoke a direct share |
 | `GET\|POST /api/characters/{id}/journal` | owner + GM | List / add a character's journal entries. New entries are stamped with the character's current `current_game_day` |
 | `GET\|PATCH /api/characters/{id}/journal/{entryId}` | owner + GM | Read / edit a journal entry's content (404 without access; game day never changes after creation) |
 | `GET\|POST /api/sessions` | GM | List / create sessions |

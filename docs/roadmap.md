@@ -52,7 +52,7 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] GM-only sections, stripped server-side for players
 - [ ] Section-boundary banners in the reader (GM/player sections clearly marked)
 - [x] Game-day gating: document visible when `current_game_day >= shared_on_game_day`
-- [ ] Direct document shares to specific characters on a game day
+- [x] Direct document shares to specific characters on a game day
 - [x] Sharing from a character repository to a group repository on a game day
 - [x] Open editing: anyone who can see a document can edit it
 - [ ] Path-collision warning within a repository (rename or continue) *(API warns with 409 `path_collision`; editor dialog pending)*
