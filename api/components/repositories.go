@@ -21,6 +21,7 @@ type Repositories struct {
 	RevokedTokens         *repositories.RevokedTokens
 	KnowledgeRepositories *repositories.KnowledgeRepositories
 	Documents             *repositories.Documents
+	DocumentShares        *repositories.DocumentShares
 	JournalEntries        *repositories.JournalEntries
 }
 
@@ -41,6 +42,7 @@ func NewRepositories(db *persistence.Database) *Repositories {
 		RevokedTokens:         repositories.NewRevokedTokens(db),
 		KnowledgeRepositories: repositories.NewKnowledgeRepositories(db),
 		Documents:             repositories.NewDocuments(db),
+		DocumentShares:        repositories.NewDocumentShares(db),
 		JournalEntries:        repositories.NewJournalEntries(db),
 	}
 }

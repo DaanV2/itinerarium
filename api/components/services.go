@@ -59,7 +59,7 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 		Sessions:     application.NewSessionService(repos.Sessions, characters),
 		Repositories: repositoryService,
 		Documents: application.NewDocumentService(
-			repos.Documents, repositoryService, repos.Characters, repos.Groups,
+			repos.Documents, repositoryService, repos.Characters, repos.Groups, repos.DocumentShares,
 		),
 		Journals: application.NewJournalEntryService(repos.JournalEntries, repos.Characters),
 	}

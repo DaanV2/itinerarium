@@ -27,6 +27,10 @@ var ErrConcurrentEdit = errors.New("the document changed since it was loaded")
 // markdown and structured sections in one request.
 var ErrInvalidDocument = errors.New("invalid document")
 
+// ErrAlreadyShared is returned when a document is already directly shared
+// with the given character.
+var ErrAlreadyShared = errors.New("document already shared with this character")
+
 // DocumentSectionInput is one section in a create/update payload. ID is empty
 // for new sections and references an existing section otherwise.
 type DocumentSectionInput struct {
@@ -91,6 +95,7 @@ type DocumentService struct {
 	repositories *RepositoryService
 	characters   *repositories.Characters
 	groups       *repositories.Groups
+	shares       *repositories.DocumentShares
 }
 
 // NewDocumentService builds a DocumentService.
@@ -99,8 +104,11 @@ func NewDocumentService(
 	repos *RepositoryService,
 	characters *repositories.Characters,
 	groups *repositories.Groups,
+	shares *repositories.DocumentShares,
 ) *DocumentService {
-	return &DocumentService{documents: documents, repositories: repos, characters: characters, groups: groups}
+	return &DocumentService{
+		documents: documents, repositories: repos, characters: characters, groups: groups, shares: shares,
+	}
 }
 
 // ListByRepository returns the documents in a repository that the requester
@@ -359,7 +367,9 @@ func (s *DocumentService) ShareToGroup(
 }
 
 // getAccessible loads a document and enforces every read rule: repository
-// access and, for players, the game-day gate. Anything out of reach reads as
+// access and, for players, the game-day gate — or, failing that, a direct
+// share to one of the requester's characters that has reached its own game
+// day (core domain rule 1, roadmap M3). Anything out of reach reads as
 // ErrNotFound so existence never leaks.
 func (s *DocumentService) getAccessible(
 	ctx context.Context, requester Requester, id string,
@@ -375,20 +385,202 @@ func (s *DocumentService) getAccessible(
 
 	repo, err := s.repositories.Get(ctx, requester, doc.RepositoryID)
 	if err != nil {
+		if requester.IsGM() || !errors.Is(err, ErrNotFound) {
+			return nil, nil, err
+		}
+
+		return s.getViaDirectShare(ctx, requester, doc)
+	}
+
+	if requester.IsGM() {
+		return doc, repo, nil
+	}
+
+	day, ok, err := s.effectiveGameDay(ctx, requester, repo)
+	if err != nil {
+		return nil, nil, err
+	}
+	if ok && doc.SharedOnGameDay <= day {
+		return doc, repo, nil
+	}
+
+	return s.getViaDirectShare(ctx, requester, doc)
+}
+
+// getViaDirectShare checks whether any of the requester's characters holds a
+// direct share on doc that has reached its own SharedOnGameDay — the
+// fallback path when the document's repository doesn't (yet) grant access.
+func (s *DocumentService) getViaDirectShare(
+	ctx context.Context, requester Requester, doc *models.Document,
+) (*models.Document, *models.Repository, error) {
+	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	if err != nil {
+		return nil, nil, fmt.Errorf("listing requester characters: %w", err)
+	}
+
+	characterIDs := make([]string, len(characters))
+	dayByCharacter := make(map[string]int, len(characters))
+	for i := range characters {
+		characterIDs[i] = characters[i].ID
+		dayByCharacter[characters[i].ID] = characters[i].CurrentGameDay
+	}
+
+	shares, err := s.shares.ListForCharacters(ctx, doc.ID, characterIDs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("checking direct shares: %w", err)
+	}
+
+	reached := false
+	for i := range shares {
+		if dayByCharacter[shares[i].CharacterID] >= shares[i].SharedOnGameDay {
+			reached = true
+
+			break
+		}
+	}
+	if !reached {
+		return nil, nil, ErrNotFound
+	}
+
+	repo, err := s.repositories.GetUnchecked(ctx, doc.RepositoryID)
+	if err != nil {
 		return nil, nil, err
 	}
 
+	return doc, repo, nil
+}
+
+// ShareWithCharacter directly shares a document with one character, revealed
+// to them once their current_game_day reaches sharedOnGameDay — independent
+// of the document's own repository access. GM only.
+func (s *DocumentService) ShareWithCharacter(
+	ctx context.Context, requester Requester, documentID, characterID string, sharedOnGameDay int,
+) (*models.DocumentShare, error) {
 	if !requester.IsGM() {
-		day, ok, err := s.effectiveGameDay(ctx, requester, repo)
-		if err != nil {
-			return nil, nil, err
-		}
-		if !ok || doc.SharedOnGameDay > day {
-			return nil, nil, ErrNotFound
-		}
+		return nil, ErrForbidden
 	}
 
-	return doc, repo, nil
+	if _, err := s.documents.GetByID(ctx, documentID); err != nil {
+		return nil, notFoundOr(err, "loading document")
+	}
+	if _, err := s.characters.GetByID(ctx, characterID); err != nil {
+		return nil, notFoundOr(err, "loading character")
+	}
+
+	exists, err := s.shares.Exists(ctx, documentID, characterID)
+	if err != nil {
+		return nil, fmt.Errorf("checking existing share: %w", err)
+	}
+	if exists {
+		return nil, ErrAlreadyShared
+	}
+
+	share := &models.DocumentShare{DocumentID: documentID, CharacterID: characterID, SharedOnGameDay: sharedOnGameDay}
+	if err := s.shares.Create(ctx, share); err != nil {
+		return nil, fmt.Errorf("sharing document: %w", err)
+	}
+
+	return share, nil
+}
+
+// ListShares returns every direct share on a document. GM only — players
+// never see the share list.
+func (s *DocumentService) ListShares(
+	ctx context.Context, requester Requester, documentID string,
+) ([]models.DocumentShare, error) {
+	if !requester.IsGM() {
+		return nil, ErrForbidden
+	}
+
+	if _, err := s.documents.GetByID(ctx, documentID); err != nil {
+		return nil, notFoundOr(err, "loading document")
+	}
+
+	shares, err := s.shares.ListByDocument(ctx, documentID)
+	if err != nil {
+		return nil, fmt.Errorf("listing shares: %w", err)
+	}
+
+	return shares, nil
+}
+
+// RevokeShare removes one direct share from a document. GM only.
+func (s *DocumentService) RevokeShare(ctx context.Context, requester Requester, documentID, shareID string) error {
+	if !requester.IsGM() {
+		return ErrForbidden
+	}
+
+	share, err := s.shares.GetByID(ctx, shareID)
+	if err != nil {
+		return notFoundOr(err, "loading share")
+	}
+	if share.DocumentID != documentID {
+		return ErrNotFound
+	}
+
+	if err := s.shares.Delete(ctx, share); err != nil {
+		return fmt.Errorf("revoking share: %w", err)
+	}
+
+	return nil
+}
+
+// ListSharedWithMe returns the documents directly shared with any of the
+// requester's characters whose game day has been reached, with sections
+// stripped to what the requester may see.
+func (s *DocumentService) ListSharedWithMe(ctx context.Context, requester Requester) ([]DocumentView, error) {
+	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	if err != nil {
+		return nil, fmt.Errorf("listing requester characters: %w", err)
+	}
+
+	characterIDs := make([]string, len(characters))
+	dayByCharacter := make(map[string]int, len(characters))
+	for i := range characters {
+		characterIDs[i] = characters[i].ID
+		dayByCharacter[characters[i].ID] = characters[i].CurrentGameDay
+	}
+
+	shares, err := s.shares.ListByCharacters(ctx, characterIDs)
+	if err != nil {
+		return nil, fmt.Errorf("listing shares: %w", err)
+	}
+
+	seen := make(map[string]struct{}, len(shares))
+	views := make([]DocumentView, 0, len(shares))
+	for i := range shares {
+		share := &shares[i]
+		if dayByCharacter[share.CharacterID] < share.SharedOnGameDay {
+			continue
+		}
+		if _, dup := seen[share.DocumentID]; dup {
+			continue
+		}
+		seen[share.DocumentID] = struct{}{}
+
+		doc, err := s.documents.GetByID(ctx, share.DocumentID)
+		if err != nil {
+			if errors.Is(err, repositories.ErrNotFound) {
+				continue
+			}
+
+			return nil, fmt.Errorf("loading shared document: %w", err)
+		}
+
+		repo, err := s.repositories.GetUnchecked(ctx, doc.RepositoryID)
+		if err != nil {
+			return nil, err
+		}
+
+		view, err := s.view(ctx, requester, repo, doc)
+		if err != nil {
+			return nil, err
+		}
+
+		views = append(views, *view)
+	}
+
+	return views, nil
 }
 
 // applyMetadata writes the update's metadata onto the document, enforcing

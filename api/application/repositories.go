@@ -70,6 +70,18 @@ func (s *RepositoryService) Get(ctx context.Context, requester Requester, id str
 	return repo, nil
 }
 
+// GetUnchecked loads a repository by ID without enforcing the visibility
+// rule. Used by DocumentService once access to a document has already been
+// established through a direct share, rather than the repository's own rule.
+func (s *RepositoryService) GetUnchecked(ctx context.Context, id string) (*models.Repository, error) {
+	repo, err := s.repos.GetByID(ctx, id)
+	if err != nil {
+		return nil, notFoundOr(err, "loading repository")
+	}
+
+	return repo, nil
+}
+
 // List returns every repository for a GM, and the general/template
 // singletons plus the requester's own character and group repositories for a
 // player.
