@@ -55,6 +55,8 @@ Documents are not versioned: game day gates visibility of the document, not its 
 
 Sharing a document from a character's private repository means moving it to another repository (or direct-sharing it) with a `shared_on_game_day`, at which point normal rules apply.
 
+**Sharing to a group** (`POST /api/documents/{id}/share`) moves a document out of a character repository into a group's repository: the caller needs ordinary document access to the source (owner + GM) and must also be able to see the target group repository (a player only through one of their characters' membership, a GM always) — either check failing reads as `404`. The source must be a `character` repository and the target a `group` repository, or the request is rejected. A path already occupied at the target warns with `409 path_collision` unless `allow_collision` is set, exactly like create/move. The document keeps its content and version counter (bumped by one) but is now gated by the target group's membership and the given `shared_on_game_day` — the source character repository no longer lists it.
+
 Journal-to-document conversion is a **copy**: the new document lands in the character's own repository; the original journal entry is unchanged.
 
 Any character who can see a document can edit it. Two collision warnings exist:
@@ -149,6 +151,7 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `POST /api/repositories/{id}/documents` | anyone who sees the repository | Create a document (structured `sections`, or raw `markdown` with optional YAML frontmatter) |
 | `GET /api/documents/{id}` | per document rule | Read one document; GM-only sections are stripped server-side for players (404 without access) |
 | `PATCH /api/documents/{id}` | anyone who sees the document | Replace metadata + the caller's visible sections (players can never touch GM-only sections or the reveal day) |
+| `POST /api/documents/{id}/share` | access to source (owner+GM) and target group repository | Move a document from a character repository into a group repository at a chosen `shared_on_game_day` |
 | `GET\|POST /api/characters/{id}/journal` | owner + GM | List / add a character's journal entries. New entries are stamped with the character's current `current_game_day` |
 | `GET\|PATCH /api/characters/{id}/journal/{entryId}` | owner + GM | Read / edit a journal entry's content (404 without access; game day never changes after creation) |
 | `GET\|POST /api/sessions` | GM | List / create sessions |

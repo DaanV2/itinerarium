@@ -185,5 +185,6 @@ func documentsRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
 		transport.WithHandle("GET /{id}", transport.GetDocumentHandler(services.Documents)),
 		transport.WithHandle("PATCH /{id}", transport.UpdateDocumentHandler(services.Documents)),
+		transport.WithHandle("POST /{id}/share", transport.ShareDocumentHandler(services.Documents)),
 	)
 }

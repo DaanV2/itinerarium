@@ -36,6 +36,12 @@ type updateDocumentRequest struct {
 	AllowCollision  bool                     `json:"allow_collision"`
 }
 
+type shareDocumentRequest struct {
+	TargetRepositoryID string `json:"target_repository_id"`
+	SharedOnGameDay    int    `json:"shared_on_game_day"`
+	AllowCollision     bool   `json:"allow_collision"`
+}
+
 type documentListItemResponse struct {
 	ID              string   `json:"id"`
 	RepositoryID    string   `json:"repository_id"`
@@ -216,6 +222,33 @@ func UpdateDocumentHandler(svc *application.DocumentService) http.Handler {
 			ExpectedVersion: req.ExpectedVersion,
 			Force:           req.Force,
 			AllowCollision:  req.AllowCollision,
+		})
+		if err != nil {
+			writeDocumentServiceError(w, err)
+
+			return
+		}
+
+		writeJSON(w, http.StatusOK, toDocumentResponse(view))
+	})
+}
+
+// ShareDocumentHandler moves the document named by {id} out of its character
+// repository into a target group repository at a chosen game day. Must be
+// wrapped in RequireAuth.
+func ShareDocumentHandler(svc *application.DocumentService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req shareDocumentRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid request body")
+
+			return
+		}
+
+		view, err := svc.ShareToGroup(r.Context(), requesterFrom(r), r.PathValue("id"), &application.ShareDocumentInput{
+			TargetRepositoryID: req.TargetRepositoryID,
+			SharedOnGameDay:    req.SharedOnGameDay,
+			AllowCollision:     req.AllowCollision,
 		})
 		if err != nil {
 			writeDocumentServiceError(w, err)

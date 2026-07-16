@@ -687,4 +687,241 @@ func TestDocumentService_FolderTree_HidesFoldersWithNoAccessibleDocuments(t *tes
 	}
 }
 
+func TestDocumentService_ShareToGroup_MovesDocumentAndAppliesGroupRules(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+
+	character, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	if err != nil {
+		t.Fatalf("Create character: %v", err)
+	}
+
+	group, err := env.groups.Create(ctx, gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
+	if err != nil {
+		t.Fatalf("Create group: %v", err)
+	}
+	if err := env.groups.Join(ctx, gmRequester, group.ID, character.ID); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+
+	charRepo := env.findRepository(t, models.RepositoryTypeCharacter, character.ID)
+	groupRepo := env.findRepository(t, models.RepositoryTypeGroup, group.ID)
+
+	doc := mustCreateDocument(t, env, playerRequester, charRepo.ID, &application.CreateDocumentInput{
+		Path:     "notes/suspicions",
+		Sections: []application.DocumentSectionInput{{Content: "I do not trust the duke."}},
+	})
+
+	shared, err := env.docs.ShareToGroup(ctx, playerRequester, doc.Document.ID, &application.ShareDocumentInput{
+		TargetRepositoryID: groupRepo.ID,
+		SharedOnGameDay:    3,
+	})
+	if err != nil {
+		t.Fatalf("ShareToGroup: %v", err)
+	}
+	if shared.Document.RepositoryID != groupRepo.ID {
+		t.Fatalf("RepositoryID = %q, want group repository %q", shared.Document.RepositoryID, groupRepo.ID)
+	}
+	if shared.Document.SharedOnGameDay != 3 {
+		t.Fatalf("SharedOnGameDay = %d, want 3", shared.Document.SharedOnGameDay)
+	}
+
+	// It's no longer in the character repository, and it now follows the
+	// group's game-day gate: the owner's own character hasn't reached day 3
+	// yet, so it isn't visible until it does.
+	listed, err := env.docs.ListByRepository(ctx, playerRequester, charRepo.ID)
+	if err != nil {
+		t.Fatalf("ListByRepository (character repo): %v", err)
+	}
+	if len(listed) != 0 {
+		t.Fatalf("character repository still lists %d documents, want 0", len(listed))
+	}
+	if _, err := env.docs.Get(ctx, playerRequester, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("owner Get before reaching day 3 = %v, want ErrNotFound", err)
+	}
+	env.setGameDay(t, character.ID, 3)
+	if _, err := env.docs.Get(ctx, playerRequester, doc.Document.ID); err != nil {
+		t.Fatalf("owner Get at day 3 = %v, want success", err)
+	}
+
+	// Game-day gating now applies via the group: a fellow member below day 3
+	// sees nothing yet.
+	otherRequester := fakeRequester{id: "other-1", gm: false}
+	other, err := env.characters.Create(ctx, otherRequester, "", "Beren")
+	if err != nil {
+		t.Fatalf("Create other character: %v", err)
+	}
+	if err := env.groups.Join(ctx, gmRequester, group.ID, other.ID); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+
+	if _, err := env.docs.Get(ctx, otherRequester, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("other member Get before day 3 = %v, want ErrNotFound", err)
+	}
+
+	env.setGameDay(t, other.ID, 3)
+
+	if _, err := env.docs.Get(ctx, otherRequester, doc.Document.ID); err != nil {
+		t.Fatalf("other member Get at day 3 = %v, want success", err)
+	}
+}
+
+func TestDocumentService_ShareToGroup_NonMemberCannotShareIntoGroup(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+
+	character, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	if err != nil {
+		t.Fatalf("Create character: %v", err)
+	}
+
+	group, err := env.groups.Create(ctx, gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
+	if err != nil {
+		t.Fatalf("Create group: %v", err)
+	}
+	// Note: character never joins the group.
+
+	charRepo := env.findRepository(t, models.RepositoryTypeCharacter, character.ID)
+	groupRepo := env.findRepository(t, models.RepositoryTypeGroup, group.ID)
+
+	doc := mustCreateDocument(t, env, playerRequester, charRepo.ID, &application.CreateDocumentInput{
+		Path: "notes/suspicions",
+	})
+
+	_, err = env.docs.ShareToGroup(ctx, playerRequester, doc.Document.ID, &application.ShareDocumentInput{
+		TargetRepositoryID: groupRepo.ID,
+		SharedOnGameDay:    1,
+	})
+	if !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("ShareToGroup(non-member) = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDocumentService_ShareToGroup_OtherPlayerCannotShareSomeoneElsesDocument(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+
+	character, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	if err != nil {
+		t.Fatalf("Create character: %v", err)
+	}
+
+	other := fakeRequester{id: "other-1", gm: false}
+	if _, err := env.characters.Create(ctx, other, "", "Beren"); err != nil {
+		t.Fatalf("Create other character: %v", err)
+	}
+
+	group, err := env.groups.Create(ctx, gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
+	if err != nil {
+		t.Fatalf("Create group: %v", err)
+	}
+
+	charRepo := env.findRepository(t, models.RepositoryTypeCharacter, character.ID)
+	groupRepo := env.findRepository(t, models.RepositoryTypeGroup, group.ID)
+
+	doc := mustCreateDocument(t, env, playerRequester, charRepo.ID, &application.CreateDocumentInput{
+		Path: "notes/suspicions",
+	})
+
+	_, err = env.docs.ShareToGroup(ctx, other, doc.Document.ID, &application.ShareDocumentInput{
+		TargetRepositoryID: groupRepo.ID,
+		SharedOnGameDay:    1,
+	})
+	if !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("ShareToGroup(other player) = %v, want ErrNotFound", err)
+	}
+}
+
+func TestDocumentService_ShareToGroup_OnlyFromCharacterRepository(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
+
+	group, err := env.groups.Create(ctx, gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
+	if err != nil {
+		t.Fatalf("Create group: %v", err)
+	}
+	groupRepo := env.findRepository(t, models.RepositoryTypeGroup, group.ID)
+
+	doc := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{Path: "lore/creation"})
+
+	_, err = env.docs.ShareToGroup(ctx, gmRequester, doc.Document.ID, &application.ShareDocumentInput{
+		TargetRepositoryID: groupRepo.ID,
+		SharedOnGameDay:    1,
+	})
+	if !errors.Is(err, application.ErrInvalidDocument) {
+		t.Fatalf("ShareToGroup(from general repo) = %v, want ErrInvalidDocument", err)
+	}
+}
+
+func TestDocumentService_ShareToGroup_TargetMustBeGroupRepository(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
+
+	character, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	if err != nil {
+		t.Fatalf("Create character: %v", err)
+	}
+	charRepo := env.findRepository(t, models.RepositoryTypeCharacter, character.ID)
+
+	doc := mustCreateDocument(t, env, playerRequester, charRepo.ID, &application.CreateDocumentInput{
+		Path: "notes/suspicions",
+	})
+
+	_, err = env.docs.ShareToGroup(ctx, playerRequester, doc.Document.ID, &application.ShareDocumentInput{
+		TargetRepositoryID: general.ID,
+		SharedOnGameDay:    1,
+	})
+	if !errors.Is(err, application.ErrInvalidDocument) {
+		t.Fatalf("ShareToGroup(target general repo) = %v, want ErrInvalidDocument", err)
+	}
+}
+
+func TestDocumentService_ShareToGroup_PathCollision_WarnsThenAllows(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+
+	character, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	if err != nil {
+		t.Fatalf("Create character: %v", err)
+	}
+
+	group, err := env.groups.Create(ctx, gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
+	if err != nil {
+		t.Fatalf("Create group: %v", err)
+	}
+	if err := env.groups.Join(ctx, gmRequester, group.ID, character.ID); err != nil {
+		t.Fatalf("Join: %v", err)
+	}
+
+	charRepo := env.findRepository(t, models.RepositoryTypeCharacter, character.ID)
+	groupRepo := env.findRepository(t, models.RepositoryTypeGroup, group.ID)
+
+	mustCreateDocument(t, env, gmRequester, groupRepo.ID, &application.CreateDocumentInput{Path: "notes/suspicions"})
+	doc := mustCreateDocument(t, env, playerRequester, charRepo.ID, &application.CreateDocumentInput{
+		Path: "notes/suspicions",
+	})
+
+	_, err = env.docs.ShareToGroup(ctx, playerRequester, doc.Document.ID, &application.ShareDocumentInput{
+		TargetRepositoryID: groupRepo.ID,
+		SharedOnGameDay:    1,
+	})
+	if !errors.Is(err, application.ErrPathCollision) {
+		t.Fatalf("ShareToGroup(colliding path) = %v, want ErrPathCollision", err)
+	}
+
+	shared, err := env.docs.ShareToGroup(ctx, playerRequester, doc.Document.ID, &application.ShareDocumentInput{
+		TargetRepositoryID: groupRepo.ID,
+		SharedOnGameDay:    1,
+		AllowCollision:     true,
+	})
+	if err != nil {
+		t.Fatalf("ShareToGroup(AllowCollision) = %v, want success", err)
+	}
+	if shared.Document.RepositoryID != groupRepo.ID {
+		t.Fatalf("RepositoryID = %q, want group repository %q", shared.Document.RepositoryID, groupRepo.ID)
+	}
+}
+
 func intPtr(v int) *int { return &v }
