@@ -63,6 +63,15 @@ type UpdateDocumentInput struct {
 	AllowCollision  bool
 }
 
+// ShareDocumentInput carries a share-to-group request: move a document
+// currently in a character's private repository into a group repository,
+// revealed to members from SharedOnGameDay onward.
+type ShareDocumentInput struct {
+	TargetRepositoryID string
+	SharedOnGameDay    int
+	AllowCollision     bool
+}
+
 // DocumentView pairs a document (sections already stripped to what the
 // requester may see) with whether it counts as revealed — i.e. at least one
 // character with repository access has reached its SharedOnGameDay. The
@@ -290,6 +299,63 @@ func (s *DocumentService) Update(
 	}
 
 	return s.view(ctx, requester, repo, doc)
+}
+
+// ShareToGroup moves a document out of a character's private repository into
+// a group's repository at a chosen SharedOnGameDay (core domain rule 5's
+// counterpart for groups: sharing is a move, not a copy — the document
+// leaves the character repository for good and normal group-repository
+// rules apply from then on). Only documents currently in a character
+// repository can be shared this way. The caller needs the usual document
+// access to the source (owner + GM, enforced by getAccessible) and needs to
+// be able to see the target group repository too (a player only via one of
+// their characters' membership; a GM always); either check failing reads as
+// ErrNotFound so membership never leaks. A path already occupied in the
+// target repository warns with ErrPathCollision unless AllowCollision is
+// set.
+func (s *DocumentService) ShareToGroup(
+	ctx context.Context, requester Requester, id string, input *ShareDocumentInput,
+) (*DocumentView, error) {
+	doc, repo, err := s.getAccessible(ctx, requester, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if repo.Type != models.RepositoryTypeCharacter {
+		return nil, fmt.Errorf("%w: only a document in a character repository can be shared to a group", ErrInvalidDocument)
+	}
+
+	target, err := s.repositories.Get(ctx, requester, input.TargetRepositoryID)
+	if err != nil {
+		return nil, err
+	}
+	if target.Type != models.RepositoryTypeGroup {
+		return nil, fmt.Errorf("%w: documents can only be shared to a group repository", ErrInvalidDocument)
+	}
+
+	if !input.AllowCollision {
+		exists, err := s.documents.ExistsAtPath(ctx, target.ID, doc.Path, doc.ID)
+		if err != nil {
+			return nil, fmt.Errorf("checking path collision: %w", err)
+		}
+		if exists {
+			return nil, ErrPathCollision
+		}
+	}
+
+	doc.RepositoryID = target.ID
+	doc.SharedOnGameDay = input.SharedOnGameDay
+	doc.Version++
+	if err := s.documents.Update(ctx, doc, doc.Sections); err != nil {
+		return nil, fmt.Errorf("sharing document: %w", err)
+	}
+
+	doc, err = s.documents.GetByID(ctx, doc.ID)
+	if err != nil {
+		return nil, fmt.Errorf("reloading document: %w", err)
+	}
+
+	return s.view(ctx, requester, target, doc)
 }
 
 // getAccessible loads a document and enforces every read rule: repository
