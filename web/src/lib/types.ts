@@ -132,3 +132,54 @@ export interface JournalEntry {
 	game_day: number;
 	content: string;
 }
+
+/** `general`/`template` are singletons visible to everyone; `group`/
+ * `character` follow the membership/ownership of the entity they belong to. */
+export type RepositoryType = 'general' | 'template' | 'group' | 'character';
+
+/** A named vault of documents. Provisioned automatically — never created
+ * directly by a caller. */
+export interface Repository {
+	id: string;
+	type: RepositoryType;
+	group_id?: string;
+	character_id?: string;
+}
+
+/** One block of a document's content. `gm_only` sections are stripped
+ * server-side before a player response is built — a player payload never
+ * contains one, not even as a placeholder. */
+export interface DocumentSection {
+	id: string;
+	content: string;
+	gm_only: boolean;
+}
+
+/** A document's metadata, as returned in lists and folder trees (no
+ * sections). */
+export interface DocumentSummary {
+	id: string;
+	repository_id: string;
+	path: string;
+	title: string;
+	tags: string[];
+	shared_on_game_day: number;
+}
+
+/** A full document. `revealed` is whether any character with repository
+ * access has reached `shared_on_game_day` — documents are not versioned, so
+ * an already-revealed document's edits are immediately visible. */
+export interface Document extends DocumentSummary {
+	version: number;
+	revealed: boolean;
+	sections: DocumentSection[];
+}
+
+/** One level of a repository's folder tree. Folders with no documents the
+ * caller may see are omitted entirely, at every level. */
+export interface FolderTreeNode {
+	name: string;
+	path: string;
+	folders: FolderTreeNode[];
+	documents: DocumentSummary[];
+}

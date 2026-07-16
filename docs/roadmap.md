@@ -50,7 +50,7 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] Folders hidden when they contain no accessible documents
 - [x] Markdown documents with YAML frontmatter (`title`, `tags`, `repository`, `game_day`)
 - [x] GM-only sections, stripped server-side for players
-- [ ] Section-boundary banners in the reader (GM/player sections clearly marked)
+- [x] Section-boundary banners in the reader (GM/player sections clearly marked)
 - [x] Game-day gating: document visible when `current_game_day >= shared_on_game_day`
 - [x] Direct document shares to specific characters on a game day
 - [x] Sharing from a character repository to a group repository on a game day

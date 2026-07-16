@@ -35,6 +35,12 @@
 				>Locations</a
 			>
 		</li>
+		<li>
+			<a
+				href={resolve('/repositories')}
+				aria-current={isActive('/repositories') ? 'page' : undefined}>Repositories</a
+			>
+		</li>
 		{#if isgm}
 			<li>
 				<a
