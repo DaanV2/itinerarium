@@ -20,6 +20,7 @@ type Services struct {
 	Repositories *application.RepositoryService
 	Documents    *application.DocumentService
 	Journals     *application.JournalEntryService
+	Activity     *application.ActivityService
 }
 
 // NewServices wires the application services over the repositories and token
@@ -62,5 +63,12 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 			repos.Documents, repositoryService, repos.Characters, repos.Groups, repos.DocumentShares,
 		),
 		Journals: application.NewJournalEntryService(repos.JournalEntries, repos.Characters),
+		Activity: application.NewActivityService(
+			repos.ActivityEntries,
+			characters,
+			repos.Groups,
+			repos.LocationAccesses,
+			repos.KnowledgeRepositories,
+		),
 	}
 }

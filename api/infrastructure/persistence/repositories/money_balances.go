@@ -66,9 +66,11 @@ func (r *MoneyBalances) GetByOwnerAndCurrency(
 	return &balance, nil
 }
 
-// Set upserts the owner's balance in one currency to an absolute amount.
+// Set upserts the owner's balance in one currency to an absolute amount,
+// recording any given activity entries in the same transaction.
 func (r *MoneyBalances) Set(
 	ctx context.Context, owner models.InventoryOwner, currencyID string, amount int64,
+	entries ...*models.ActivityEntry,
 ) (*models.MoneyBalance, error) {
 	balance, err := r.GetByOwnerAndCurrency(ctx, owner, currencyID)
 	if err != nil {
@@ -82,16 +84,19 @@ func (r *MoneyBalances) Set(
 			CurrencyID:  currencyID,
 			Amount:      amount,
 		}
-		if createErr := r.db.DB().WithContext(ctx).Create(balance).Error; createErr != nil {
-			return nil, createErr
-		}
-
-		return balance, nil
+	} else {
+		balance.Amount = amount
 	}
 
-	balance.Amount = amount
-	if saveErr := r.db.DB().WithContext(ctx).Save(balance).Error; saveErr != nil {
-		return nil, saveErr
+	err = r.db.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if saveErr := tx.Save(balance).Error; saveErr != nil {
+			return saveErr
+		}
+
+		return createEntries(tx, entries)
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return balance, nil

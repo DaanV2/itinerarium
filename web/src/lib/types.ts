@@ -185,6 +185,50 @@ export interface DocumentShare {
 	shared_on_game_day: number;
 }
 
+/** What happened to the entity an activity entry describes. */
+export type ActivityAction =
+	'joined' | 'left' | 'added' | 'updated' | 'removed' | 'destroyed' | 'stolen';
+
+/** One explicit recipient of an announced entry (GM view only). */
+export interface ActivityTarget {
+	character_id?: string;
+	group_id?: string;
+}
+
+/** One event in the campaign activity log. A character's feed only ever
+ * contains entries they may see: game-day gated, entity-access gated (or
+ * announced to them), and with `actor` already stripped server-side on
+ * announced entries for players — if `actor` is present, it may be shown. */
+export interface ActivityEntry {
+	id: string;
+	game_day: number;
+	action: ActivityAction;
+	entity_type?: string;
+	entity_id?: string;
+	entity_name: string;
+	actor?: string;
+	character_id?: string;
+	scope_type?: string;
+	scope_id?: string;
+	announced: boolean;
+	announced_public?: boolean;
+	targets?: ActivityTarget[];
+	created_at: string;
+}
+
+/** A GM announcement: pushed to specific characters, groups, or everyone,
+ * surfacing at `game_day` regardless of entity access. */
+export interface AnnouncementInput {
+	game_day: number;
+	action: ActivityAction;
+	entity_type?: string;
+	entity_name: string;
+	actor?: string;
+	public?: boolean;
+	character_ids?: string[];
+	group_ids?: string[];
+}
+
 /** One level of a repository's folder tree. Folders with no documents the
  * caller may see are omitted entirely, at every level. */
 export interface FolderTreeNode {

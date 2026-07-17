@@ -8,6 +8,7 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/google/uuid"
 )
 
 // ErrInvalidQuantity is returned when an inventory quantity is below 1, or a
@@ -179,7 +180,14 @@ func (s *InventoryService) AddItem(
 		Quantity:         quantity,
 		Description:      description,
 	}
-	if err := s.items.Create(ctx, item); err != nil {
+	// Pre-assign the ID so the activity entry can reference the new line.
+	item.ID = uuid.NewString()
+
+	entries, err := s.inventoryEntry(ctx, requester, owner, models.ActivityActionAdded, "item", item.ID, item.Name)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.items.Create(ctx, item, entries...); err != nil {
 		return nil, fmt.Errorf("adding inventory item: %w", err)
 	}
 
@@ -214,7 +222,11 @@ func (s *InventoryService) UpdateItem(
 		item.Description = *description
 	}
 
-	if err := s.items.Update(ctx, item); err != nil {
+	entries, err := s.inventoryEntry(ctx, requester, owner, models.ActivityActionUpdated, "item", item.ID, item.Name)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.items.Update(ctx, item, entries...); err != nil {
 		return nil, fmt.Errorf("updating inventory item: %w", err)
 	}
 
@@ -230,7 +242,11 @@ func (s *InventoryService) RemoveItem(
 		return err
 	}
 
-	if err := s.items.Delete(ctx, item); err != nil {
+	entries, err := s.inventoryEntry(ctx, requester, owner, models.ActivityActionRemoved, "item", item.ID, item.Name)
+	if err != nil {
+		return err
+	}
+	if err := s.items.Delete(ctx, item, entries...); err != nil {
 		return fmt.Errorf("removing inventory item: %w", err)
 	}
 
@@ -269,7 +285,23 @@ func (s *InventoryService) MoveItem(
 		return nil, ErrInvalidQuantity
 	}
 
-	moved, err := s.items.Move(ctx, item, target, quantity)
+	// A move is a removal from the source scope and an addition to the target
+	// scope; either half is skipped when that end is a private character
+	// inventory. The added entry carries no entity ID — the receiving line may
+	// be a merge into an existing row or a fresh split, decided inside Move.
+	entries, err := s.inventoryEntry(
+		ctx, requester, item.InventoryOwner, models.ActivityActionRemoved, "item", item.ID, item.Name,
+	)
+	if err != nil {
+		return nil, err
+	}
+	addedEntries, err := s.inventoryEntry(ctx, requester, target, models.ActivityActionAdded, "item", "", item.Name)
+	if err != nil {
+		return nil, err
+	}
+	entries = append(entries, addedEntries...)
+
+	moved, err := s.items.Move(ctx, item, target, quantity, entries...)
 	if err != nil {
 		return nil, fmt.Errorf("moving inventory item: %w", err)
 	}
@@ -310,7 +342,8 @@ func (s *InventoryService) SetMoney(
 	if amount < 0 {
 		return nil, ErrInvalidAmount
 	}
-	if _, err := s.currencies.GetByID(ctx, currencyID); err != nil {
+	currency, err := s.currencies.GetByID(ctx, currencyID)
+	if err != nil {
 		if errors.Is(err, repositories.ErrNotFound) {
 			return nil, ErrUnknownCurrency
 		}
@@ -318,7 +351,12 @@ func (s *InventoryService) SetMoney(
 		return nil, fmt.Errorf("loading currency: %w", err)
 	}
 
-	balance, err := s.balances.Set(ctx, owner, currencyID, amount)
+	entries, err := s.inventoryEntry(ctx, requester, owner, models.ActivityActionUpdated, "money", currency.ID, currency.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	balance, err := s.balances.Set(ctx, owner, currencyID, amount, entries...)
 	if err != nil {
 		return nil, fmt.Errorf("setting money: %w", err)
 	}

@@ -19,4 +19,5 @@
 	<h1>Admin Control</h1>
 	<Card title="Users" text="Manage user accounts" href={resolve('/admin/users')} />
 	<Card title="Characters" text="Manage all characters" href={resolve('/admin/characters')} />
+	<Card title="Activity" text="Campaign log and announcements" href={resolve('/admin/activity')} />
 </main>

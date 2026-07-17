@@ -296,6 +296,69 @@ func (s *LocationService) checkAssignable(
 	return nil
 }
 
+// FrontierGameDay returns the highest current_game_day among the characters
+// that can see the location (through a direct grant or a granted group) — the
+// location's "present day". GM-made inventory changes are stamped with it so
+// they surface to everyone with access, while characters still catching up
+// see them once their own day arrives (M5 activity log).
+func (s *LocationService) FrontierGameDay(ctx context.Context, locationID string) (int, error) {
+	grants, err := s.accesses.ListByLocation(ctx, locationID)
+	if err != nil {
+		return 0, fmt.Errorf("listing grants: %w", err)
+	}
+
+	day := 0
+	for i := range grants {
+		grantDay, err := s.grantFrontier(ctx, &grants[i])
+		if err != nil {
+			return 0, err
+		}
+		if grantDay > day {
+			day = grantDay
+		}
+	}
+
+	return day, nil
+}
+
+// grantFrontier resolves the highest current_game_day reachable through one
+// grant. Dangling grants (deleted character or group) count as day 0.
+func (s *LocationService) grantFrontier(ctx context.Context, grant *models.LocationAccess) (int, error) {
+	if grant.CharacterID != nil {
+		character, err := s.characters.GetByID(ctx, *grant.CharacterID)
+		if err != nil {
+			if errors.Is(err, repositories.ErrNotFound) {
+				return 0, nil
+			}
+
+			return 0, fmt.Errorf("loading character: %w", err)
+		}
+
+		return character.CurrentGameDay, nil
+	}
+	if grant.GroupID == nil {
+		return 0, nil
+	}
+
+	group, err := s.groups.GetByID(ctx, *grant.GroupID)
+	if err != nil {
+		if errors.Is(err, repositories.ErrNotFound) {
+			return 0, nil
+		}
+
+		return 0, fmt.Errorf("loading group: %w", err)
+	}
+
+	day := 0
+	for i := range group.Members {
+		if group.Members[i].CurrentGameDay > day {
+			day = group.Members[i].CurrentGameDay
+		}
+	}
+
+	return day, nil
+}
+
 // AccessibleToCharacter reports whether one specific character may see the
 // location, directly or through one of its groups. Used when associating a
 // character with a location.

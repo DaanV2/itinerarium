@@ -105,6 +105,28 @@ func mustCreateDocument(
 	return view
 }
 
+func TestDocumentService_Delete_GMOnly(t *testing.T) {
+	env := newDocumentTestEnv(t)
+	ctx := t.Context()
+	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
+
+	view := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{
+		Path:     "lore/doomed",
+		Sections: []application.DocumentSectionInput{{Content: "Soon gone."}},
+	})
+
+	if err := env.docs.Delete(ctx, playerRequester, view.Document.ID); !errors.Is(err, application.ErrForbidden) {
+		t.Fatalf("Delete as player = %v, want ErrForbidden", err)
+	}
+
+	if err := env.docs.Delete(ctx, gmRequester, view.Document.ID); err != nil {
+		t.Fatalf("Delete as GM: %v", err)
+	}
+	if _, err := env.docs.Get(ctx, gmRequester, view.Document.ID); !errors.Is(err, application.ErrNotFound) {
+		t.Fatalf("Get after delete = %v, want ErrNotFound", err)
+	}
+}
+
 func TestDocumentService_CreateAndGet_TitleFallsBackToFileName(t *testing.T) {
 	env := newDocumentTestEnv(t)
 	ctx := t.Context()

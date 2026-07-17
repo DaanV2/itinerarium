@@ -22,6 +22,7 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithSubRoute("/items", itemsRouter(services)),
 		transport.WithSubRoute("/repositories", repositoriesRouter(services)),
 		transport.WithSubRoute("/documents", documentsRouter(services)),
+		transport.WithSubRoute("/activity", activityRouter(services)),
 		transport.WithHandle("POST /inventory/move", transport.MoveInventoryItemHandler(services.Inventory)),
 	)
 
@@ -65,9 +66,20 @@ func charactersRouter(services *Services) *transport.Router {
 		transport.WithHandle("PATCH /{id}", transport.UpdateCharacterHandler(services.Characters)),
 		transport.WithHandle("PUT /{id}/location", transport.SetCharacterLocationHandler(services.Locations)),
 		transport.WithHandle("DELETE /{id}/location", transport.ClearCharacterLocationHandler(services.Locations)),
+		transport.WithHandle("GET /{id}/activity", transport.GetCharacterActivityHandler(services.Activity)),
 		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, transport.CharacterOwner)),
 		transport.WithSubRoute("/{id}/money", moneyRouter(services, transport.CharacterOwner)),
 		transport.WithSubRoute("/{id}/journal", journalRouter(services)),
+	)
+}
+
+// activityRouter serves the GM-wide campaign log and announcements under
+// /api/activity. The per-character feed lives under
+// /api/characters/{id}/activity.
+func activityRouter(services *Services) *transport.Router {
+	return transport.NewRouter(
+		transport.WithHandle("GET /", transport.ListActivityHandler(services.Activity)),
+		transport.WithHandle("POST /announcements", transport.AnnounceActivityHandler(services.Activity)),
 	)
 }
 
@@ -186,6 +198,7 @@ func documentsRouter(services *Services) *transport.Router {
 		transport.WithHandle("GET /shared", transport.ListSharedDocumentsHandler(services.Documents)),
 		transport.WithHandle("GET /{id}", transport.GetDocumentHandler(services.Documents)),
 		transport.WithHandle("PATCH /{id}", transport.UpdateDocumentHandler(services.Documents)),
+		transport.WithHandle("DELETE /{id}", transport.DeleteDocumentHandler(services.Documents)),
 		transport.WithHandle("POST /{id}/share", transport.ShareDocumentHandler(services.Documents)),
 		transport.WithHandle("GET /{id}/shares", transport.ListDocumentSharesHandler(services.Documents)),
 		transport.WithHandle("POST /{id}/shares", transport.ShareDocumentWithCharacterHandler(services.Documents)),

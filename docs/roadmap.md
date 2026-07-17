@@ -70,7 +70,7 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] Sessions with character participants
 - [x] GM advances/rewinds game day for all session participants at once
 - [x] GM advances/rewinds game day per individual character (catch-up)
-- [ ] Visibility recalculates correctly after rewind (documents/entries disappear again) *(depends on M3 knowledge gating, not yet built)*
+- [x] Visibility recalculates correctly after rewind (documents/entries disappear again) *(gating is computed per request, so a rewind recalculates by construction; covered by rewind tests on both documents and activity entries)*
 
 ## Beta (M5–M6)
 
@@ -78,18 +78,18 @@ The beta phase ends — and the product is 1.0 — only when every box below is 
 
 ### M5 — Activity Log & Announcements
 
-- [ ] Append-only `ActivityEntry` model stamped with game day
-- [ ] Per-character activity feed, gated by `current_game_day` and entity access
-- [ ] GMs see all activity regardless of game day
-- [ ] Tracked: group membership (joined / left)
-- [ ] Tracked: group inventory (item added / quantity changed / removed)
-- [ ] Tracked: location inventory (same, only visible with location access)
-- [ ] Tracked: documents (added / updated / removed)
-- [ ] Tracked: group money (balance changed)
-- [ ] Actions include `destroyed` and `stolen`
-- [ ] Announcements: GM targets specific characters, a group, or public, surfacing at a chosen game day
-- [ ] Announced entries bypass entity access but never reveal entity content
-- [ ] `actor` field stripped server-side for players on announced entries
+- [x] Append-only `ActivityEntry` model stamped with game day
+- [x] Per-character activity feed, gated by `current_game_day` and entity access (`GET /api/characters/{id}/activity`)
+- [x] GMs see all activity regardless of game day (`GET /api/activity`)
+- [x] Tracked: group membership (joined / left)
+- [x] Tracked: group inventory (item added / quantity changed / removed)
+- [x] Tracked: location inventory (same, only visible with location access)
+- [x] Tracked: documents (added / updated / removed) *(removal required a removal path: `DELETE /api/documents/{id}`, GM only)*
+- [x] Tracked: group money (balance changed)
+- [x] Actions include `destroyed` and `stolen`
+- [x] Announcements: GM targets specific characters, a group, or public, surfacing at a chosen game day
+- [x] Announced entries bypass entity access but never reveal entity content
+- [x] `actor` field stripped server-side for players on announced entries
 
 ### M6 — Search & Obsidian Import
 

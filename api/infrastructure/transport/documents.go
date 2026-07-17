@@ -362,6 +362,20 @@ func ListSharedDocumentsHandler(svc *application.DocumentService) http.Handler {
 // writeDocumentServiceError maps DocumentService errors onto HTTP. The two
 // editor warnings ride on 409 with a machine-readable code so the client can
 // offer "rename or continue" / "overwrite anyway".
+// DeleteDocumentHandler removes a document and its sections. GM only; the
+// removal is recorded in the activity log. Must be wrapped in RequireAuth.
+func DeleteDocumentHandler(svc *application.DocumentService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := svc.Delete(r.Context(), requesterFrom(r), r.PathValue("id")); err != nil {
+			writeDocumentServiceError(w, err)
+
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
 func writeDocumentServiceError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, application.ErrNotFound):

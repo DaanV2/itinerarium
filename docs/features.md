@@ -91,7 +91,7 @@ Tracked events:
 | Knowledge / documents | Document added, document updated, document removed |
 | Group money | Balance changed |
 
-Each entry records: `game_day`, `action` (`added` / `updated` / `removed` / `destroyed` / `stolen`), the entity type and name, and who made the change (character name or GM).
+Each entry records: `game_day`, `action` (`added` / `updated` / `removed` / `destroyed` / `stolen`), the entity type and name, and who made the change (character name or GM). Document removal is a GM-only action (`DELETE /api/documents/{id}`) — open editing covers a document's content, not its existence.
 
 ### Announcements
 

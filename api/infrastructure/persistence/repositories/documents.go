@@ -18,9 +18,16 @@ func NewDocuments(db *persistence.Database) *Documents {
 	return &Documents{db: db}
 }
 
-// Create persists a new document together with its sections.
-func (r *Documents) Create(ctx context.Context, d *models.Document) error {
-	err := r.db.DB().WithContext(ctx).Create(d).Error
+// Create persists a new document together with its sections, recording any
+// given activity entries in the same transaction.
+func (r *Documents) Create(ctx context.Context, d *models.Document, entries ...*models.ActivityEntry) error {
+	err := r.db.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(d).Error; err != nil {
+			return err
+		}
+
+		return createEntries(tx, entries)
+	})
 	if err != nil {
 		return err
 	}
@@ -84,12 +91,14 @@ func (r *Documents) ExistsAtPath(
 }
 
 // Update persists the document's own fields and replaces its section rows
-// with the given final list, all in one transaction. Sections carrying an ID
-// are updated in place (so player edits keep GM-only rows untouched),
-// sections without an ID are inserted, and existing rows absent from the
-// list are deleted.
+// with the given final list, all in one transaction — recording any given
+// activity entries in that same transaction. Sections carrying an ID are
+// updated in place (so player edits keep GM-only rows untouched), sections
+// without an ID are inserted, and existing rows absent from the list are
+// deleted.
 func (r *Documents) Update(
 	ctx context.Context, d *models.Document, sections []models.DocumentSection,
+	entries ...*models.ActivityEntry,
 ) error {
 	return r.db.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Omit(clause.Associations).Save(d).Error; err != nil {
@@ -112,6 +121,25 @@ func (r *Documents) Update(
 			query = query.Where("id NOT IN ?", keep)
 		}
 
-		return query.Delete(&models.DocumentSection{}).Error
+		if err := query.Delete(&models.DocumentSection{}).Error; err != nil {
+			return err
+		}
+
+		return createEntries(tx, entries)
+	})
+}
+
+// Delete soft-deletes a document and its sections in one transaction,
+// recording any given activity entries in that same transaction.
+func (r *Documents) Delete(ctx context.Context, d *models.Document, entries ...*models.ActivityEntry) error {
+	return r.db.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("document_id = ?", d.ID).Delete(&models.DocumentSection{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Delete(d).Error; err != nil {
+			return err
+		}
+
+		return createEntries(tx, entries)
 	})
 }
