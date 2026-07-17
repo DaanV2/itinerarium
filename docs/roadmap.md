@@ -55,7 +55,7 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] Direct document shares to specific characters on a game day
 - [x] Sharing from a character repository to a group repository on a game day
 - [x] Open editing: anyone who can see a document can edit it
-- [ ] Path-collision warning within a repository (rename or continue) *(API warns with 409 `path_collision`; editor dialog pending)*
+- [x] Path-collision warning within a repository (rename or continue) *(API warns with 409 `path_collision` on create/move/share operations)*
 - [x] Concurrent-edit warning before overwriting *(API warns with 409 `concurrent_edit` on stale `version`; editor offers reload or overwrite)*
 - [x] Player edit on an all-GM-only document creates a new player-visible section
 - [x] Editor shows reveal settings ("Revealed at game day X to …")
