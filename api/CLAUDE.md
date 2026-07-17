@@ -136,6 +136,7 @@ Route patterns use Go 1.22+ `http.ServeMux` syntax: `"METHOD /path/{param}"`, re
 - Repositories/services: real in-memory DB via `persistence.New(persistence.WithInMemory())` + `db.Migrate()` — no mocks.
 - Handlers: `httptest.NewRecorder()` against a `transport.NewRouter(...)` (see `transport/router_test.go`).
 - **Every permission rule needs a negative test**: prove the wrong character gets `404`/empty — not just that the right one succeeds. A feature touching visibility is not done without these.
+- **Assertions**: use `github.com/stretchr/testify/assert` and `/require`, not raw `t.Fatal`/`t.Fatalf`/`t.Error`/`t.Errorf`. `require` for setup/preconditions and anything that would panic later if false (`require.NoError`, `require.ErrorIs`, `require.NotNil`); `assert` for value/state checks after that so a test reports every failure, not just the first (see `application/users_test.go` for the house style).
 
 ## Conventions
 
