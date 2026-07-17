@@ -13,6 +13,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/require"
 )
 
 type locationHTTPTestEnv struct {
@@ -26,17 +27,11 @@ func newLocationHTTPTestEnv(t *testing.T) locationHTTPTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err, "persistence.New")
+	require.NoError(t, db.Migrate(), "Migrate")
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore")
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
@@ -56,15 +51,11 @@ func newLocationHTTPTestEnv(t *testing.T) locationHTTPTestEnv {
 	gm := &models.User{Email: "gm@example.com", PasswordHash: "hash", Role: models.RoleGM}
 	player := &models.User{Email: "player@example.com", PasswordHash: "hash", Role: models.RolePlayer}
 	for _, u := range []*models.User{gm, player} {
-		if err := users.Create(ctx, u); err != nil {
-			t.Fatalf("Create user: %v", err)
-		}
+		require.NoError(t, users.Create(ctx, u), "Create user")
 	}
 
 	character := &models.Character{Name: "Aria", UserID: player.ID}
-	if err := characters.Create(ctx, character); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, characters.Create(ctx, character), "Create character")
 
 	router := transport.NewRouter(
 		transport.WithHandle("GET /api/locations", requireAuth(transport.ListLocationsHandler(locationSvc))),
@@ -97,9 +88,7 @@ func (e locationHTTPTestEnv) doJSON(
 
 	var body bytes.Buffer
 	if payload != nil {
-		if err := json.NewEncoder(&body).Encode(payload); err != nil {
-			t.Fatalf("encoding request: %v", err)
-		}
+		require.NoError(t, json.NewEncoder(&body).Encode(payload), "encoding request")
 	}
 
 	req := httptest.NewRequestWithContext(t.Context(), method, path, &body)
@@ -118,16 +107,12 @@ func (e locationHTTPTestEnv) createLocation(t *testing.T, name string) string {
 
 	rec := e.doJSON(t, http.MethodPost, "/api/locations", e.gmToken,
 		map[string]any{"name": name, "plane": "Material"})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create location: expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, rec.Code, "create location body: %s", rec.Body.String())
 
 	var created struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding location: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created), "decoding location")
 
 	return created.ID
 }
@@ -137,9 +122,7 @@ func TestLocations_CreateIsGMOnly(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/locations", env.playerToken,
 		map[string]any{"name": "The Tavern"})
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for player create, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusForbidden, rec.Code, "player create body: %s", rec.Body.String())
 }
 
 func TestLocations_HiddenWithoutGrant(t *testing.T) {
@@ -148,24 +131,17 @@ func TestLocations_HiddenWithoutGrant(t *testing.T) {
 
 	// Absent from the list…
 	listRec := env.doJSON(t, http.MethodGet, "/api/locations", env.playerToken, nil)
-	if listRec.Code != http.StatusOK {
-		t.Fatalf("list: expected 200, got %d: %s", listRec.Code, listRec.Body.String())
-	}
-	if body := listRec.Body.String(); body != "[]" && body != "null" {
-		t.Fatalf("list leaked locations to player without grants: %s", body)
-	}
+	require.Equal(t, http.StatusOK, listRec.Code, "list body: %s", listRec.Body.String())
+	require.Contains(t, []string{"[]", "null"}, listRec.Body.String(),
+		"list leaked locations to player without grants")
 
 	// …direct read is 404, not 403.
 	getRec := env.doJSON(t, http.MethodGet, "/api/locations/"+locationID, env.playerToken, nil)
-	if getRec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 without grant, got %d: %s", getRec.Code, getRec.Body.String())
-	}
+	require.Equal(t, http.StatusNotFound, getRec.Code, "get body: %s", getRec.Body.String())
 
 	// …and the access list is GM-only.
 	accessRec := env.doJSON(t, http.MethodGet, "/api/locations/"+locationID+"/access", env.playerToken, nil)
-	if accessRec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for player access list, got %d: %s", accessRec.Code, accessRec.Body.String())
-	}
+	require.Equal(t, http.StatusForbidden, accessRec.Code, "access list body: %s", accessRec.Body.String())
 }
 
 func TestLocations_GrantThenVisibleAndAssignable(t *testing.T) {
@@ -174,28 +150,18 @@ func TestLocations_GrantThenVisibleAndAssignable(t *testing.T) {
 
 	grantRec := env.doJSON(t, http.MethodPost, "/api/locations/"+locationID+"/access", env.gmToken,
 		map[string]any{"character_id": env.characterID})
-	if grantRec.Code != http.StatusCreated {
-		t.Fatalf("grant: expected 201, got %d: %s", grantRec.Code, grantRec.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, grantRec.Code, "grant body: %s", grantRec.Body.String())
 
 	getRec := env.doJSON(t, http.MethodGet, "/api/locations/"+locationID, env.playerToken, nil)
-	if getRec.Code != http.StatusOK {
-		t.Fatalf("get with grant: expected 200, got %d: %s", getRec.Code, getRec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, getRec.Code, "get with grant body: %s", getRec.Body.String())
 
 	assignRec := env.doJSON(t, http.MethodPut, "/api/characters/"+env.characterID+"/location",
 		env.playerToken, map[string]any{"location_id": locationID})
-	if assignRec.Code != http.StatusOK {
-		t.Fatalf("assign: expected 200, got %d: %s", assignRec.Code, assignRec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, assignRec.Code, "assign body: %s", assignRec.Body.String())
 
 	var character struct {
 		LocationID string `json:"location_id"`
 	}
-	if err := json.Unmarshal(assignRec.Body.Bytes(), &character); err != nil {
-		t.Fatalf("decoding character: %v", err)
-	}
-	if character.LocationID != locationID {
-		t.Fatalf("location_id = %q, want %q", character.LocationID, locationID)
-	}
+	require.NoError(t, json.Unmarshal(assignRec.Body.Bytes(), &character), "decoding character")
+	require.Equal(t, locationID, character.LocationID)
 }

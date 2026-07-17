@@ -2,12 +2,12 @@ package authentication_test
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeRevocationStore is an in-memory authentication.RevocationStore for
@@ -41,9 +41,7 @@ func newTestTokenService(t *testing.T, opts ...authentication.TokenOption) *auth
 	t.Helper()
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore")
 
 	return authentication.NewTokenService(keys, newFakeRevocationStore(), opts...)
 }
@@ -52,52 +50,35 @@ func TestTokenService_IssueAndParse(t *testing.T) {
 	svc := newTestTokenService(t)
 
 	token, err := svc.Issue("user-1")
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
+	require.NoError(t, err, "Issue")
 
 	claims, err := svc.Parse(t.Context(), token)
-	if err != nil {
-		t.Fatalf("Parse: %v", err)
-	}
+	require.NoError(t, err, "Parse")
 
-	if claims.Subject != "user-1" {
-		t.Fatalf("subject = %q, want user-1", claims.Subject)
-	}
-	if claims.ID == "" {
-		t.Fatal("expected a non-empty JTI")
-	}
+	require.Equal(t, "user-1", claims.Subject)
+	require.NotEmpty(t, claims.ID, "expected a non-empty JTI")
 }
 
 func TestTokenService_Parse_RejectsExpired(t *testing.T) {
 	svc := newTestTokenService(t, authentication.WithTTL(-time.Minute))
 
 	token, err := svc.Issue("user-1")
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
+	require.NoError(t, err, "Issue")
 
-	if _, err := svc.Parse(t.Context(), token); err == nil {
-		t.Fatal("expected an expired token to be rejected")
-	}
+	_, err = svc.Parse(t.Context(), token)
+	require.Error(t, err, "expected an expired token to be rejected")
 }
 
 func TestTokenService_Parse_RejectsRevoked(t *testing.T) {
 	svc := newTestTokenService(t)
 
 	token, err := svc.Issue("user-1")
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
+	require.NoError(t, err, "Issue")
 
-	if err := svc.Revoke(t.Context(), token); err != nil {
-		t.Fatalf("Revoke: %v", err)
-	}
+	require.NoError(t, svc.Revoke(t.Context(), token), "Revoke")
 
 	_, err = svc.Parse(t.Context(), token)
-	if !errors.Is(err, authentication.ErrRevoked) {
-		t.Fatalf("Parse after revoke: got %v, want ErrRevoked", err)
-	}
+	require.ErrorIs(t, err, authentication.ErrRevoked, "Parse after revoke")
 }
 
 func TestTokenService_Parse_RejectsForgedSignature(t *testing.T) {
@@ -105,11 +86,8 @@ func TestTokenService_Parse_RejectsForgedSignature(t *testing.T) {
 	other := newTestTokenService(t)
 
 	token, err := other.Issue("user-1")
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
+	require.NoError(t, err, "Issue")
 
-	if _, err := svc.Parse(t.Context(), token); err == nil {
-		t.Fatal("expected a token signed by a different key pair to be rejected")
-	}
+	_, err = svc.Parse(t.Context(), token)
+	require.Error(t, err, "expected a token signed by a different key pair to be rejected")
 }

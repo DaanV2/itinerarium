@@ -8,6 +8,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/require"
 )
 
 type activityTestEnv struct {
@@ -28,12 +29,8 @@ func newActivityTestEnv(t *testing.T) activityTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err, "New persistence")
+	require.NoError(t, db.Migrate())
 
 	knowledgeRepo := repositories.NewKnowledgeRepositories(db)
 	characterRepo := repositories.NewCharacters(db)
@@ -59,9 +56,8 @@ func newActivityTestEnv(t *testing.T) activityTestEnv {
 		repositories.NewActivityEntries(db), charSvc, groupRepo, accessRepo, knowledgeRepo,
 	)
 
-	if err := repoSvc.EnsureSystemRepositories(t.Context()); err != nil {
-		t.Fatalf("EnsureSystemRepositories: %v", err)
-	}
+	err = repoSvc.EnsureSystemRepositories(t.Context())
+	require.NoError(t, err, "EnsureSystemRepositories")
 
 	return activityTestEnv{
 		activity:   activitySvc,
@@ -79,13 +75,11 @@ func (e activityTestEnv) newCharacter(t *testing.T, owner application.Requester,
 	t.Helper()
 
 	character, err := e.characters.Create(t.Context(), owner, "", name)
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err, "set game day")
+
 	if day != 0 {
-		if _, err := e.characters.Update(t.Context(), gmRequester, character.ID, nil, &day); err != nil {
-			t.Fatalf("set game day: %v", err)
-		}
+		_, err := e.characters.Update(t.Context(), gmRequester, character.ID, nil, &day)
+		require.NoError(t, err, "set game day")
 
 		character.CurrentGameDay = day
 	}
@@ -96,9 +90,8 @@ func (e activityTestEnv) newCharacter(t *testing.T, owner application.Requester,
 func (e activityTestEnv) setGameDay(t *testing.T, characterID string, day int) {
 	t.Helper()
 
-	if _, err := e.characters.Update(t.Context(), gmRequester, characterID, nil, &day); err != nil {
-		t.Fatalf("set game day: %v", err)
-	}
+	_, err := e.characters.Update(t.Context(), gmRequester, characterID, nil, &day)
+	require.NoError(t, err, "set game day")
 }
 
 func (e activityTestEnv) feed(
@@ -107,9 +100,7 @@ func (e activityTestEnv) feed(
 	t.Helper()
 
 	entries, err := e.activity.Feed(t.Context(), requester, characterID)
-	if err != nil {
-		t.Fatalf("Feed: %v", err)
-	}
+	require.NoError(t, err, "Feed")
 
 	return entries
 }
@@ -131,11 +122,11 @@ func findEntry(entries []models.ActivityEntry, action models.ActivityAction, nam
 func TestActivityService_Feed_ForeignCharacterHidden(t *testing.T) {
 	env := newActivityTestEnv(t)
 	character := env.newCharacter(t, playerRequester, "Aria", 0)
-
 	outsider := fakeRequester{id: "outsider-1", gm: false}
-	if _, err := env.activity.Feed(t.Context(), outsider, character.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Feed for foreign character = %v, want ErrNotFound", err)
-	}
+
+	_, err := env.activity.Feed(t.Context(), outsider, character.ID)
+
+	require.ErrorIs(t, err, application.ErrNotFound, "GM can see any character feed")
 }
 
 func TestActivityService_Feed_GroupScopeGatedByMembershipAndGameDay(t *testing.T) {
@@ -147,14 +138,12 @@ func TestActivityService_Feed_GroupScopeGatedByMembershipAndGameDay(t *testing.T
 	outsider := env.newCharacter(t, otherRequester, "Beren", 10)
 
 	group := createGroup(t, env.groups, "Thieves Guild")
-	if err := env.groups.Join(ctx, playerRequester, group.ID, member.ID); err != nil {
-		t.Fatalf("Join: %v", err)
-	}
+	err := env.groups.Join(ctx, playerRequester, group.ID, member.ID)
+	require.NoError(t, err)
 
 	// GM stamps at the group's present day — member's day 5.
-	if _, err := env.inventory.AddItem(ctx, gmRequester, groupOwner(group.ID), "Lockpicks", nil, 3, ""); err != nil {
-		t.Fatalf("AddItem: %v", err)
-	}
+	_, err = env.inventory.AddItem(ctx, gmRequester, groupOwner(group.ID), "Lockpicks", nil, 3, "")
+	require.NoError(t, err)
 
 	memberFeed := env.feed(t, playerRequester, member.ID)
 	if findEntry(memberFeed, models.ActivityActionAdded, "Lockpicks") == nil {
@@ -220,9 +209,7 @@ func TestActivityService_Feed_LocationScopeRequiresAccess(t *testing.T) {
 	denied := env.newCharacter(t, otherRequester, "Beren", 5)
 
 	location, err := env.locations.Create(ctx, gmRequester, "The Vault", "", "")
-	if err != nil {
-		t.Fatalf("Create location: %v", err)
-	}
+	require.NoError(t, err)
 	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &granted.ID, nil); err != nil {
 		t.Fatalf("GrantAccess: %v", err)
 	}
@@ -260,9 +247,7 @@ func TestActivityService_Feed_DocumentEventsSurfaceAtRevealDay(t *testing.T) {
 
 	character := env.newCharacter(t, playerRequester, "Aria", 3)
 	general, err := env.repos.List(ctx, gmRequester)
-	if err != nil {
-		t.Fatalf("List repositories: %v", err)
-	}
+	require.NoError(t, err)
 
 	var generalID string
 	for i := range general {
@@ -298,14 +283,12 @@ func TestActivityService_Feed_GroupMoneyChangeTracked(t *testing.T) {
 
 	member := env.newCharacter(t, playerRequester, "Aria", 5)
 	group := createGroup(t, env.groups, "Merchant House")
-	if err := env.groups.Join(ctx, playerRequester, group.ID, member.ID); err != nil {
-		t.Fatalf("Join: %v", err)
-	}
+	err := env.groups.Join(ctx, playerRequester, group.ID, member.ID)
+	require.NoError(t, err)
 
 	currency := &models.Currency{Code: "gp", Name: "Gold", Ratio: 100}
-	if err := env.currencies.Create(ctx, currency); err != nil {
-		t.Fatalf("Create currency: %v", err)
-	}
+	err = env.currencies.Create(ctx, currency)
+	require.NoError(t, err)
 
 	if _, err := env.inventory.SetMoney(ctx, gmRequester, groupOwner(group.ID), currency.ID, 250); err != nil {
 		t.Fatalf("SetMoney: %v", err)
@@ -392,9 +375,8 @@ func TestActivityService_Announce_GroupTargetFollowsMembership(t *testing.T) {
 
 	member := env.newCharacter(t, playerRequester, "Aria", 5)
 	group := createGroup(t, env.groups, "Order of the Gauntlet")
-	if err := env.groups.Join(ctx, playerRequester, group.ID, member.ID); err != nil {
-		t.Fatalf("Join: %v", err)
-	}
+	err := env.groups.Join(ctx, playerRequester, group.ID, member.ID)
+	require.NoError(t, err)
 
 	if _, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
 		GameDay:    5,
@@ -450,9 +432,8 @@ func TestActivityService_ListAll_GMOnlySeesEverything(t *testing.T) {
 
 	member := env.newCharacter(t, playerRequester, "Aria", 99)
 	group := createGroup(t, env.groups, "Night Watch")
-	if err := env.groups.Join(ctx, playerRequester, group.ID, member.ID); err != nil {
-		t.Fatalf("Join: %v", err)
-	}
+	err := env.groups.Join(ctx, playerRequester, group.ID, member.ID)
+	require.NoError(t, err)
 	if _, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
 		GameDay: 500, Action: models.ActivityActionDestroyed, EntityName: "The Beacon",
 		CharacterIDs: []string{member.ID},
@@ -461,9 +442,7 @@ func TestActivityService_ListAll_GMOnlySeesEverything(t *testing.T) {
 	}
 
 	entries, err := env.activity.ListAll(ctx, gmRequester)
-	if err != nil {
-		t.Fatalf("ListAll: %v", err)
-	}
+	require.NoError(t, err)
 	if len(entries) != 2 {
 		t.Fatalf("ListAll returned %d entries, want 2 (join + announcement)", len(entries))
 	}

@@ -7,6 +7,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestAuthServiceWithPassword(t *testing.T, email, password string) *application.AuthService {
@@ -14,21 +15,16 @@ func newTestAuthServiceWithPassword(t *testing.T, email, password string) *appli
 
 	users := newTestUsersRepo(t)
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err)
 
 	tokens := authentication.NewTokenService(keys, noopRevocationStore{})
 
 	hash, err := authentication.HashPassword(password)
-	if err != nil {
-		t.Fatalf("HashPassword: %v", err)
-	}
+	require.NoError(t, err)
 
 	user := &models.User{Email: email, PasswordHash: hash, Role: models.RolePlayer}
-	if err := users.Create(t.Context(), user); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
+	err = users.Create(t.Context(), user)
+	require.NoError(t, err)
 
 	return application.NewAuthService(tokens, users)
 }
@@ -38,16 +34,13 @@ func newTestAuthService(t *testing.T) (*application.AuthService, *authentication
 
 	users := newTestUsersRepo(t)
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err)
 
 	tokens := authentication.NewTokenService(keys, noopRevocationStore{})
 
 	user := &models.User{Email: "gm@example.com", PasswordHash: "hash", Role: models.RoleGM}
-	if err := users.Create(t.Context(), user); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
+	err = users.Create(t.Context(), user)
+	require.NoError(t, err)
 
 	return application.NewAuthService(tokens, users), tokens, user.ID
 }
@@ -57,14 +50,10 @@ func TestAuthService_Authenticate(t *testing.T) {
 	ctx := t.Context()
 
 	token, err := tokens.Issue(userID)
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
+	require.NoError(t, err)
 
 	requester, err := auth.Authenticate(ctx, token)
-	if err != nil {
-		t.Fatalf("Authenticate: %v", err)
-	}
+	require.NoError(t, err)
 	if requester.UserID() != userID {
 		t.Fatalf("UserID = %q, want %q", requester.UserID(), userID)
 	}
@@ -86,9 +75,7 @@ func TestAuthService_Authenticate_RejectsUnknownSubject(t *testing.T) {
 	auth, tokens, _ := newTestAuthService(t)
 
 	token, err := tokens.Issue("does-not-exist")
-	if err != nil {
-		t.Fatalf("Issue: %v", err)
-	}
+	require.NoError(t, err)
 
 	_, err = auth.Authenticate(t.Context(), token)
 	if !errors.Is(err, application.ErrUnauthenticated) {
@@ -100,9 +87,7 @@ func TestAuthService_Login(t *testing.T) {
 	auth := newTestAuthServiceWithPassword(t, "player@example.com", "hunter22hunter")
 
 	user, token, err := auth.Login(t.Context(), "player@example.com", "hunter22hunter")
-	if err != nil {
-		t.Fatalf("Login: %v", err)
-	}
+	require.NoError(t, err)
 	if user.Email != "player@example.com" {
 		t.Fatalf("Email = %q, want player@example.com", user.Email)
 	}

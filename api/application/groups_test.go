@@ -8,6 +8,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestGroupEnv(t *testing.T) (
@@ -16,12 +17,9 @@ func newTestGroupEnv(t *testing.T) (
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err)
+	err = db.Migrate()
+	require.NoError(t, err)
 
 	knowledgeRepo := repositories.NewKnowledgeRepositories(db)
 	charSvc := application.NewCharacterService(repositories.NewCharacters(db), repositories.NewUsers(db), knowledgeRepo)
@@ -34,9 +32,7 @@ func createGroup(t *testing.T, svc *application.GroupService, name string) *mode
 	t.Helper()
 
 	group, err := svc.Create(t.Context(), gmRequester, name, models.GroupTypeOrganization, "")
-	if err != nil {
-		t.Fatalf("Create group: %v", err)
-	}
+	require.NoError(t, err)
 
 	return group
 }
@@ -78,9 +74,7 @@ func TestGroupService_TypesShareMechanics(t *testing.T) {
 	}
 
 	groups, err := svc.List(ctx, playerRequester)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	require.NoError(t, err)
 	if len(groups) != 3 {
 		t.Fatalf("List returned %d groups, want 3", len(groups))
 	}
@@ -109,26 +103,20 @@ func TestGroupService_JoinAndLeave_RecordsGameDayStampedEvents(t *testing.T) {
 		t.Fatalf("set game day: %v", err)
 	}
 
-	if err := svc.Join(ctx, playerRequester, group.ID, character.ID); err != nil {
-		t.Fatalf("Join: %v", err)
-	}
+	err := svc.Join(ctx, playerRequester, group.ID, character.ID)
+	require.NoError(t, err)
 
 	loaded, err := svc.Get(ctx, playerRequester, group.ID)
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
+	require.NoError(t, err)
 	if len(loaded.Members) != 1 || loaded.Members[0].ID != character.ID {
 		t.Fatalf("Members = %v, want [%s]", loaded.Members, character.ID)
 	}
 
-	if err := svc.Leave(ctx, playerRequester, group.ID, character.ID); err != nil {
-		t.Fatalf("Leave: %v", err)
-	}
+	err = svc.Leave(ctx, playerRequester, group.ID, character.ID)
+	require.NoError(t, err)
 
 	entries, err := activity.ListByEntity(ctx, "group", group.ID)
-	if err != nil {
-		t.Fatalf("ListByEntity: %v", err)
-	}
+	require.NoError(t, err)
 	if len(entries) != 2 {
 		t.Fatalf("recorded %d entries, want 2 (join + leave)", len(entries))
 	}
@@ -166,9 +154,8 @@ func TestGroupService_Join_DuplicateRejected(t *testing.T) {
 	group := createGroup(t, svc, "Thieves Guild")
 	character := ownedCharacter(t, charSvc, "Aria")
 
-	if err := svc.Join(ctx, playerRequester, group.ID, character.ID); err != nil {
-		t.Fatalf("Join: %v", err)
-	}
+	err := svc.Join(ctx, playerRequester, group.ID, character.ID)
+	require.NoError(t, err)
 
 	if err := svc.Join(ctx, playerRequester, group.ID, character.ID); !errors.Is(err, application.ErrAlreadyMember) {
 		t.Fatalf("second Join = %v, want ErrAlreadyMember", err)
@@ -191,10 +178,8 @@ func TestGroupService_GMManagesAnyCharacter(t *testing.T) {
 	group := createGroup(t, svc, "Thieves Guild")
 	character := ownedCharacter(t, charSvc, "Aria")
 
-	if err := svc.Join(ctx, gmRequester, group.ID, character.ID); err != nil {
-		t.Fatalf("GM Join: %v", err)
-	}
-	if err := svc.Leave(ctx, gmRequester, group.ID, character.ID); err != nil {
-		t.Fatalf("GM Leave: %v", err)
-	}
+	err := svc.Join(ctx, gmRequester, group.ID, character.ID)
+	require.NoError(t, err)
+	err = svc.Leave(ctx, gmRequester, group.ID, character.ID)
+	require.NoError(t, err)
 }

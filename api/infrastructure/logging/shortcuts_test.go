@@ -2,11 +2,11 @@ package logging_test
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/logging"
 	"github.com/charmbracelet/log"
+	"github.com/stretchr/testify/require"
 )
 
 func TestWithAttachesKeyValues(t *testing.T) {
@@ -17,9 +17,7 @@ func TestWithAttachesKeyValues(t *testing.T) {
 
 	logging.With(ctx, "request_id", "abc").Info("handled")
 
-	if !strings.Contains(buf.String(), "request_id=abc") {
-		t.Fatalf("expected output to contain the attached key-value, got %q", buf.String())
-	}
+	require.Contains(t, buf.String(), "request_id=abc")
 }
 
 func TestLevelShortcutsUseContextLogger(t *testing.T) {
@@ -36,8 +34,6 @@ func TestLevelShortcutsUseContextLogger(t *testing.T) {
 
 	out := buf.String()
 	for _, want := range []string{"debug msg", "info msg", "warn msg", "error msg"} {
-		if !strings.Contains(out, want) {
-			t.Fatalf("expected output to contain %q, got %q", want, out)
-		}
+		require.Contains(t, out, want)
 	}
 }

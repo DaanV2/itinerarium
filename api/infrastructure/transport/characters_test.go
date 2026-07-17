@@ -13,6 +13,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/require"
 )
 
 type charactersTestEnv struct {
@@ -26,17 +27,12 @@ func newCharactersTestEnv(t *testing.T) charactersTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err)
+	err = db.Migrate()
+	require.NoError(t, err)
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err)
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
@@ -48,34 +44,25 @@ func newCharactersTestEnv(t *testing.T) charactersTestEnv {
 	ctx := t.Context()
 
 	gm := &models.User{Email: "gm@example.com", PasswordHash: "hash", Role: models.RoleGM}
-	if err := users.Create(ctx, gm); err != nil {
-		t.Fatalf("Create gm: %v", err)
-	}
+	err = users.Create(ctx, gm)
+	require.NoError(t, err)
 
 	player := &models.User{Email: "player@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, player); err != nil {
-		t.Fatalf("Create player: %v", err)
-	}
+	err = users.Create(ctx, player)
+	require.NoError(t, err)
 
 	other := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, other); err != nil {
-		t.Fatalf("Create other: %v", err)
-	}
+	err = users.Create(ctx, other)
+	require.NoError(t, err)
 
 	gmToken, err := tokens.Issue(gm.ID)
-	if err != nil {
-		t.Fatalf("Issue(gm): %v", err)
-	}
+	require.NoError(t, err)
 
 	playerToken, err := tokens.Issue(player.ID)
-	if err != nil {
-		t.Fatalf("Issue(player): %v", err)
-	}
+	require.NoError(t, err)
 
 	otherToken, err := tokens.Issue(other.ID)
-	if err != nil {
-		t.Fatalf("Issue(other): %v", err)
-	}
+	require.NoError(t, err)
 
 	router := transport.NewRouter(
 		transport.WithHandle("GET /api/characters", requireAuth(transport.ListCharactersHandler(characterSvc))),
@@ -114,27 +101,22 @@ func TestCreateCharacter_RequiresAuth(t *testing.T) {
 	env := newCharactersTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodPost, "/api/characters", "", map[string]string{"name": "Aria"})
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 with no token, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusUnauthorized)
 }
 
 func TestCreateCharacter_ForSelf(t *testing.T) {
 	env := newCharactersTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodPost, "/api/characters", env.playerToken, map[string]string{"name": "Aria"})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusCreated)
 
 	var created struct {
 		ID             string `json:"id"`
 		Name           string `json:"name"`
 		CurrentGameDay int    `json:"current_game_day"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &created)
+	require.NoError(t, err)
 	if created.Name != "Aria" {
 		t.Fatalf("Name = %q, want Aria", created.Name)
 	}
@@ -159,9 +141,8 @@ func TestCreateCharacter_AllowsMultiplePerUser(t *testing.T) {
 	listRec := env.doJSON(t, http.MethodGet, "/api/characters", env.playerToken, nil)
 
 	var list []struct{ Name string }
-	if err := json.Unmarshal(listRec.Body.Bytes(), &list); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	err := json.Unmarshal(listRec.Body.Bytes(), &list)
+	require.NoError(t, err)
 	if len(list) != 2 {
 		t.Fatalf("expected 2 characters, got %d", len(list))
 	}
@@ -176,9 +157,8 @@ func TestListCharacters_PlayerSeesOnlyOwn(t *testing.T) {
 	rec := env.doJSON(t, http.MethodGet, "/api/characters", env.playerToken, nil)
 
 	var list []struct{ Name string }
-	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &list)
+	require.NoError(t, err)
 	if len(list) != 1 {
 		t.Fatalf("expected 1 character, got %d", len(list))
 	}
@@ -190,14 +170,11 @@ func TestGetCharacter_HidesOtherOwnersCharacter(t *testing.T) {
 	createRec := env.doJSON(t, http.MethodPost, "/api/characters", env.otherToken, map[string]string{"name": "Beren"})
 
 	var created struct{ ID string }
-	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	err := json.Unmarshal(createRec.Body.Bytes(), &created)
+	require.NoError(t, err)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+created.ID, env.playerToken, nil)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusNotFound)
 }
 
 func TestUpdateCharacter_PlayerCannotSetGameDay(t *testing.T) {
@@ -206,15 +183,12 @@ func TestUpdateCharacter_PlayerCannotSetGameDay(t *testing.T) {
 	createRec := env.doJSON(t, http.MethodPost, "/api/characters", env.playerToken, map[string]string{"name": "Aria"})
 
 	var created struct{ ID string }
-	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	err := json.Unmarshal(createRec.Body.Bytes(), &created)
+	require.NoError(t, err)
 
 	rec := env.doJSON(t, http.MethodPatch, "/api/characters/"+created.ID, env.playerToken,
 		map[string]int{"current_game_day": 5})
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusForbidden)
 }
 
 func TestUpdateCharacter_GMCanSetGameDay(t *testing.T) {
@@ -223,22 +197,18 @@ func TestUpdateCharacter_GMCanSetGameDay(t *testing.T) {
 	createRec := env.doJSON(t, http.MethodPost, "/api/characters", env.playerToken, map[string]string{"name": "Aria"})
 
 	var created struct{ ID string }
-	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	err := json.Unmarshal(createRec.Body.Bytes(), &created)
+	require.NoError(t, err)
 
 	rec := env.doJSON(t, http.MethodPatch, "/api/characters/"+created.ID, env.gmToken,
 		map[string]int{"current_game_day": 5})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusOK)
 
 	var updated struct {
 		CurrentGameDay int `json:"current_game_day"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	err = json.Unmarshal(rec.Body.Bytes(), &updated)
+	require.NoError(t, err)
 	if updated.CurrentGameDay != 5 {
 		t.Fatalf("CurrentGameDay = %d, want 5", updated.CurrentGameDay)
 	}

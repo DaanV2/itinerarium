@@ -13,6 +13,8 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type groupTestEnv struct {
@@ -27,17 +29,11 @@ func newGroupTestEnv(t *testing.T) groupTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err, "persistence.New")
+	require.NoError(t, db.Migrate(), "Migrate")
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore")
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
@@ -53,15 +49,11 @@ func newGroupTestEnv(t *testing.T) groupTestEnv {
 	player := &models.User{Email: "player@example.com", PasswordHash: "hash", Role: models.RolePlayer}
 	other := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
 	for _, u := range []*models.User{gm, player, other} {
-		if err := users.Create(ctx, u); err != nil {
-			t.Fatalf("Create user: %v", err)
-		}
+		require.NoError(t, users.Create(ctx, u), "Create user")
 	}
 
 	character := &models.Character{Name: "Aria", UserID: player.ID}
-	if err := characters.Create(ctx, character); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, characters.Create(ctx, character), "Create character")
 
 	router := transport.NewRouter(
 		transport.WithHandle("GET /api/groups", requireAuth(transport.ListGroupsHandler(groupSvc))),
@@ -88,9 +80,7 @@ func (e groupTestEnv) doJSON(t *testing.T, method, path, token string, payload a
 
 	var body bytes.Buffer
 	if payload != nil {
-		if err := json.NewEncoder(&body).Encode(payload); err != nil {
-			t.Fatalf("encoding request: %v", err)
-		}
+		require.NoError(t, json.NewEncoder(&body).Encode(payload), "encoding request")
 	}
 
 	req := httptest.NewRequestWithContext(t.Context(), method, path, &body)
@@ -109,16 +99,12 @@ func (e groupTestEnv) createGroup(t *testing.T, name string) string {
 
 	rec := e.doJSON(t, http.MethodPost, "/api/groups", e.gmToken,
 		map[string]any{"name": name, "type": "organization"})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create group: expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, rec.Code, "create group body: %s", rec.Body.String())
 
 	var created struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding group: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created), "decoding group")
 
 	return created.ID
 }
@@ -127,9 +113,7 @@ func TestGroups_RequireAuth(t *testing.T) {
 	env := newGroupTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/groups", "", nil)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 with no token, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusUnauthorized, rec.Code, "body: %s", rec.Body.String())
 }
 
 func TestGroups_CreateIsGMOnly(t *testing.T) {
@@ -137,9 +121,7 @@ func TestGroups_CreateIsGMOnly(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/groups", env.playerToken,
 		map[string]any{"name": "Thieves Guild", "type": "organization"})
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for player create, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusForbidden, rec.Code, "player create body: %s", rec.Body.String())
 }
 
 func TestGroups_JoinAndLeaveOwnCharacter(t *testing.T) {
@@ -148,33 +130,24 @@ func TestGroups_JoinAndLeaveOwnCharacter(t *testing.T) {
 
 	joinRec := env.doJSON(t, http.MethodPost, "/api/groups/"+groupID+"/members", env.playerToken,
 		map[string]any{"character_id": env.characterID})
-	if joinRec.Code != http.StatusNoContent {
-		t.Fatalf("join: expected 204, got %d: %s", joinRec.Code, joinRec.Body.String())
-	}
+	require.Equal(t, http.StatusNoContent, joinRec.Code, "join body: %s", joinRec.Body.String())
 
 	getRec := env.doJSON(t, http.MethodGet, "/api/groups/"+groupID, env.playerToken, nil)
-	if getRec.Code != http.StatusOK {
-		t.Fatalf("get: expected 200, got %d: %s", getRec.Code, getRec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, getRec.Code, "get body: %s", getRec.Body.String())
 
 	var group struct {
 		Members []struct {
 			ID string `json:"id"`
 		} `json:"members"`
 	}
-	if err := json.Unmarshal(getRec.Body.Bytes(), &group); err != nil {
-		t.Fatalf("decoding group: %v", err)
-	}
-	if len(group.Members) != 1 || group.Members[0].ID != env.characterID {
-		t.Fatalf("members = %v, want [%s]", group.Members, env.characterID)
-	}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &group), "decoding group")
+	require.Len(t, group.Members, 1)
+	require.Equal(t, env.characterID, group.Members[0].ID)
 
 	leaveRec := env.doJSON(
 		t, http.MethodDelete, "/api/groups/"+groupID+"/members/"+env.characterID, env.playerToken, nil,
 	)
-	if leaveRec.Code != http.StatusNoContent {
-		t.Fatalf("leave: expected 204, got %d: %s", leaveRec.Code, leaveRec.Body.String())
-	}
+	require.Equal(t, http.StatusNoContent, leaveRec.Code, "leave body: %s", leaveRec.Body.String())
 }
 
 func TestGroups_JoinWithForeignCharacterIs404(t *testing.T) {
@@ -185,9 +158,7 @@ func TestGroups_JoinWithForeignCharacterIs404(t *testing.T) {
 	// character exists would be a leak (hidden means invisible).
 	rec := env.doJSON(t, http.MethodPost, "/api/groups/"+groupID+"/members", env.otherToken,
 		map[string]any{"character_id": env.characterID})
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for foreign character, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusNotFound, rec.Code, "foreign character body: %s", rec.Body.String())
 }
 
 func TestGroups_MemberResponseExposesOnlyIdentity(t *testing.T) {
@@ -196,29 +167,20 @@ func TestGroups_MemberResponseExposesOnlyIdentity(t *testing.T) {
 
 	joinRec := env.doJSON(t, http.MethodPost, "/api/groups/"+groupID+"/members", env.playerToken,
 		map[string]any{"character_id": env.characterID})
-	if joinRec.Code != http.StatusNoContent {
-		t.Fatalf("join: expected 204, got %d: %s", joinRec.Code, joinRec.Body.String())
-	}
+	require.Equal(t, http.StatusNoContent, joinRec.Code, "join body: %s", joinRec.Body.String())
 
 	// Other players can see who is in a group, but not the members' game days
 	// or owning accounts.
 	getRec := env.doJSON(t, http.MethodGet, "/api/groups/"+groupID, env.otherToken, nil)
-	if getRec.Code != http.StatusOK {
-		t.Fatalf("get: expected 200, got %d: %s", getRec.Code, getRec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, getRec.Code, "get body: %s", getRec.Body.String())
 
 	var group struct {
 		Members []map[string]any `json:"members"`
 	}
-	if err := json.Unmarshal(getRec.Body.Bytes(), &group); err != nil {
-		t.Fatalf("decoding group: %v", err)
-	}
-	if len(group.Members) != 1 {
-		t.Fatalf("members = %v, want exactly one", group.Members)
-	}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &group), "decoding group")
+	require.Len(t, group.Members, 1)
+
 	for _, forbidden := range []string{"current_game_day", "user_id"} {
-		if _, ok := group.Members[0][forbidden]; ok {
-			t.Errorf("member response leaks %q: %v", forbidden, group.Members[0])
-		}
+		assert.NotContains(t, group.Members[0], forbidden, "member response leaks %q", forbidden)
 	}
 }

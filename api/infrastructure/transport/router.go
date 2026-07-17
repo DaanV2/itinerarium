@@ -125,8 +125,8 @@ func rebase(prefix, pattern string) string {
 // splitPattern separates an optional leading method from the path of a
 // ServeMux pattern ("GET /foo" → "GET", "/foo"; "/foo" → "", "/foo").
 func splitPattern(pattern string) (method, path string) {
-	if i := strings.IndexByte(pattern, ' '); i >= 0 {
-		return pattern[:i], pattern[i+1:]
+	if before, after, ok := strings.Cut(pattern, " "); ok {
+		return before, after
 	}
 
 	return "", pattern

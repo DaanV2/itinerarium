@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/servers"
+	"github.com/stretchr/testify/require"
 )
 
 func TestOptionsApply(t *testing.T) {
@@ -12,15 +13,7 @@ func TestOptionsApply(t *testing.T) {
 		servers.WithAddr(":9999"),
 		servers.WithHandler(http.NewServeMux()),
 	)
-	if s.Addr() != ":9999" {
-		t.Fatalf("expected :9999, got %s", s.Addr())
-	}
-
-	if servers.HandlerOf(s) == nil {
-		t.Fatal("expected handler to be set")
-	}
-
-	if servers.ReadHeaderTimeoutOf(s).Seconds() != 10 {
-		t.Fatalf("expected 10s read-header timeout, got %s", servers.ReadHeaderTimeoutOf(s))
-	}
+	require.Equal(t, ":9999", s.Addr())
+	require.NotNil(t, servers.HandlerOf(s))
+	require.InDelta(t, 10, servers.ReadHeaderTimeoutOf(s).Seconds(), 0)
 }

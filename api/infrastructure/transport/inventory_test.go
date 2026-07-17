@@ -13,6 +13,8 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type inventoryTestEnv struct {
@@ -27,17 +29,12 @@ func newInventoryTestEnv(t *testing.T) inventoryTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err)
+	err = db.Migrate()
+	require.NoError(t, err)
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err)
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
@@ -62,15 +59,12 @@ func newInventoryTestEnv(t *testing.T) inventoryTestEnv {
 	player := &models.User{Email: "player@example.com", PasswordHash: "hash", Role: models.RolePlayer}
 	other := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
 	for _, u := range []*models.User{gm, player, other} {
-		if err := users.Create(ctx, u); err != nil {
-			t.Fatalf("Create user: %v", err)
-		}
+		require.NoError(t, users.Create(ctx, u))
 	}
 
 	character := &models.Character{Name: "Aria", UserID: player.ID}
-	if err := characters.Create(ctx, character); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	err = characters.Create(ctx, character)
+	require.NoError(t, err)
 
 	router := transport.NewRouter(
 		transport.WithHandle("GET /api/currencies", requireAuth(transport.ListCurrenciesHandler(catalogSvc))),
@@ -114,9 +108,7 @@ func issueToken(t *testing.T, tokens *authentication.TokenService, userID string
 	t.Helper()
 
 	token, err := tokens.Issue(userID)
-	if err != nil {
-		t.Fatalf("Issue(%s): %v", userID, err)
-	}
+	require.NoError(t, err)
 
 	return token
 }
@@ -126,9 +118,8 @@ func (e inventoryTestEnv) doJSON(t *testing.T, method, path, token string, paylo
 
 	var body bytes.Buffer
 	if payload != nil {
-		if err := json.NewEncoder(&body).Encode(payload); err != nil {
-			t.Fatalf("encoding request: %v", err)
-		}
+		err := json.NewEncoder(&body).Encode(payload)
+		require.NoError(t, err, "encoding request payload")
 	}
 
 	req := httptest.NewRequestWithContext(t.Context(), method, path, &body)
@@ -146,9 +137,7 @@ func TestInventory_RequiresAuth(t *testing.T) {
 	env := newInventoryTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/inventory", "", nil)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 with no token, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusUnauthorized)
 }
 
 func TestInventory_AddAndListItem(t *testing.T) {
@@ -169,9 +158,8 @@ func TestInventory_AddAndListItem(t *testing.T) {
 		Name     string `json:"name"`
 		Quantity int    `json:"quantity"`
 	}
-	if err := json.Unmarshal(listRec.Body.Bytes(), &items); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	err := json.Unmarshal(listRec.Body.Bytes(), &items)
+	require.NoError(t, err)
 	if len(items) != 1 || items[0].Name != "Torch" || items[0].Quantity != 3 {
 		t.Fatalf("items = %+v, want one Torch x3", items)
 	}
@@ -181,9 +169,7 @@ func TestInventory_OtherPlayerGets404(t *testing.T) {
 	env := newInventoryTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/inventory", env.otherToken, nil)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for another player, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusNotFound)
 }
 
 func TestInventory_AddItemForOtherPlayerGets404(t *testing.T) {
@@ -191,9 +177,7 @@ func TestInventory_AddItemForOtherPlayerGets404(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/characters/"+env.characterID+"/inventory", env.otherToken,
 		map[string]any{"name": "Torch", "quantity": 1})
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for another player, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusNotFound)
 }
 
 func TestMoney_SetAndList(t *testing.T) {
@@ -208,9 +192,8 @@ func TestMoney_SetAndList(t *testing.T) {
 	var currency struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(currencyRec.Body.Bytes(), &currency); err != nil {
-		t.Fatalf("decoding currency: %v", err)
-	}
+	err := json.Unmarshal(currencyRec.Body.Bytes(), &currency)
+	require.NoError(t, err)
 
 	setRec := env.doJSON(t, http.MethodPut,
 		"/api/characters/"+env.characterID+"/money/"+currency.ID, env.playerToken,
@@ -224,9 +207,8 @@ func TestMoney_SetAndList(t *testing.T) {
 	var balances []struct {
 		Amount int64 `json:"amount"`
 	}
-	if err := json.Unmarshal(listRec.Body.Bytes(), &balances); err != nil {
-		t.Fatalf("decoding balances: %v", err)
-	}
+	err = json.Unmarshal(listRec.Body.Bytes(), &balances)
+	require.NoError(t, err)
 	if len(balances) != 1 || balances[0].Amount != 42 {
 		t.Fatalf("balances = %+v, want one balance of 42", balances)
 	}
@@ -237,9 +219,7 @@ func TestCurrency_PlayerCannotCreate(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/currencies", env.playerToken,
 		map[string]any{"code": "gp", "name": "Gold", "ratio": 100})
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for player creating currency, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusForbidden)
 }
 
 func seedGoldSilverCopper(t *testing.T, env inventoryTestEnv) {
@@ -251,9 +231,7 @@ func seedGoldSilverCopper(t *testing.T, env inventoryTestEnv) {
 		{"code": "gp", "name": "Gold", "ratio": 100},
 	} {
 		rec := env.doJSON(t, http.MethodPost, "/api/currencies", env.gmToken, c)
-		if rec.Code != http.StatusCreated {
-			t.Fatalf("seeding currency %v: %d %s", c, rec.Code, rec.Body.String())
-		}
+		require.Equal(t, rec.Code, http.StatusCreated)
 	}
 }
 
@@ -263,21 +241,19 @@ func TestCurrency_Convert_PlayerCanUse(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/currencies/convert", env.playerToken,
 		map[string]any{"amounts": []map[string]any{{"currency": "gp", "amount": 5}}, "to": "sp"})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Convert expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusOK)
 
 	var body struct {
 		Whole     int64 `json:"whole"`
 		Remainder int64 `json:"remainder"`
 		BaseValue int64 `json:"base_value"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
-	if body.Whole != 50 || body.Remainder != 0 || body.BaseValue != 500 {
-		t.Fatalf("Convert body = %+v, want whole 50 remainder 0 base 500", body)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &body)
+	require.NoError(t, err)
+
+	assert.EqualValues(t, 50, body.Whole, "Convert body whole = %d, want 50", body.Whole)
+	assert.EqualValues(t, 0, body.Remainder, "Convert body remainder = %d, want 0", body.Remainder)
+	assert.EqualValues(t, 500, body.BaseValue, "Convert body base_value = %d, want 500", body.BaseValue)
 }
 
 func TestCurrency_Convert_UnknownCurrencyIs404(t *testing.T) {
@@ -286,20 +262,17 @@ func TestCurrency_Convert_UnknownCurrencyIs404(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/currencies/convert", env.playerToken,
 		map[string]any{"amounts": []map[string]any{{"currency": "nope", "amount": 5}}, "to": "sp"})
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for unknown currency, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusNotFound)
+
 }
 
 func TestCurrency_Simplify_BreaksIntoDenominations(t *testing.T) {
 	env := newInventoryTestEnv(t)
 	seedGoldSilverCopper(t, env)
 
-	rec := env.doJSON(t, http.MethodPost, "/api/currencies/simplify", env.playerToken,
-		map[string]any{"amounts": []map[string]any{{"currency": "cp", "amount": 1234}}})
-	if rec.Code != http.StatusOK {
-		t.Fatalf("Simplify expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
+	org := map[string]any{"amounts": []map[string]any{{"currency": "cp", "amount": 1234}}}
+	rec := env.doJSON(t, http.MethodPost, "/api/currencies/simplify", env.playerToken, org)
+	require.EqualValues(t, rec.Code, http.StatusOK, "Simplify expected 200, got %d: %s", rec.Code, rec.Body.String())
 
 	var breakdown []struct {
 		Currency struct {
@@ -307,17 +280,14 @@ func TestCurrency_Simplify_BreaksIntoDenominations(t *testing.T) {
 		} `json:"currency"`
 		Amount int64 `json:"amount"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &breakdown); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &breakdown)
+	require.NoError(t, err)
 
 	want := map[string]int64{"gp": 12, "sp": 3, "cp": 4}
-	if len(breakdown) != len(want) {
-		t.Fatalf("Simplify returned %d entries, want %d: %+v", len(breakdown), len(want), breakdown)
-	}
+
+	require.Equal(t, len(want), len(breakdown), "Simplify returned %d entries, want %d: %+v", len(breakdown), len(want), breakdown)
+
 	for _, entry := range breakdown {
-		if entry.Amount != want[entry.Currency.Code] {
-			t.Fatalf("Simplify %s = %d, want %d", entry.Currency.Code, entry.Amount, want[entry.Currency.Code])
-		}
+		require.Contains(t, want, entry.Currency.Code, "Simplify returned unexpected currency %s", entry.Currency.Code)
 	}
 }

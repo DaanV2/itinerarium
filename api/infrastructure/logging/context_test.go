@@ -2,17 +2,15 @@ package logging_test
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/logging"
 	"github.com/charmbracelet/log"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFromFallsBackToDefault(t *testing.T) {
-	if logging.From(t.Context()) != log.Default() {
-		t.Fatal("expected From to fall back to the global default logger")
-	}
+	require.Same(t, log.Default(), logging.From(t.Context()), "From should fall back to the global default logger")
 }
 
 func TestFromReturnsStoredLogger(t *testing.T) {
@@ -21,17 +19,13 @@ func TestFromReturnsStoredLogger(t *testing.T) {
 	logger := log.New(&buf)
 	ctx := logging.Context(t.Context(), logger)
 
-	if logging.From(ctx) != logger {
-		t.Fatal("expected From to return the logger stored via Context")
-	}
+	require.Same(t, logger, logging.From(ctx), "From should return the logger stored via Context")
 }
 
 func TestContextWithNilLoggerIsNoop(t *testing.T) {
 	ctx := t.Context()
 
-	if logging.Context(ctx, nil) != ctx {
-		t.Fatal("expected Context with a nil logger to return ctx unchanged")
-	}
+	require.Equal(t, ctx, logging.Context(ctx, nil), "Context with a nil logger should return ctx unchanged")
 }
 
 func TestFromPrefixAttachesPrefix(t *testing.T) {
@@ -42,7 +36,5 @@ func TestFromPrefixAttachesPrefix(t *testing.T) {
 
 	logging.FromPrefix(ctx, "db").Info("opening")
 
-	if !strings.Contains(buf.String(), "db:") {
-		t.Fatalf("expected output to contain the prefix, got %q", buf.String())
-	}
+	require.Contains(t, buf.String(), "db:")
 }

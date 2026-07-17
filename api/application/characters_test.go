@@ -8,6 +8,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestCharactersEnv(t *testing.T) (*application.CharacterService, *repositories.Users) {
@@ -17,9 +18,8 @@ func newTestCharactersEnv(t *testing.T) (*application.CharacterService, *reposit
 	if err != nil {
 		t.Fatalf("persistence.New: %v", err)
 	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	err = db.Migrate()
+	require.NoError(t, err)
 
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
@@ -98,9 +98,8 @@ func TestCharacterService_Create_GMForExistingUser(t *testing.T) {
 	ctx := t.Context()
 
 	owner := &models.User{Email: "owner@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, owner); err != nil {
-		t.Fatalf("Create user: %v", err)
-	}
+	err := users.Create(ctx, owner)
+	require.NoError(t, err)
 
 	c, err := svc.Create(ctx, gmRequester, owner.ID, "Aria")
 	if err != nil {
@@ -116,9 +115,8 @@ func TestCharacterService_List_PlayerSeesOnlyOwn(t *testing.T) {
 	ctx := t.Context()
 
 	other := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, other); err != nil {
-		t.Fatalf("Create user: %v", err)
-	}
+	err := users.Create(ctx, other)
+	require.NoError(t, err)
 
 	if _, err := svc.Create(ctx, playerRequester, "", "Aria"); err != nil {
 		t.Fatalf("Create: %v", err)
@@ -141,9 +139,8 @@ func TestCharacterService_List_GMSeesAll(t *testing.T) {
 	ctx := t.Context()
 
 	other := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, other); err != nil {
-		t.Fatalf("Create user: %v", err)
-	}
+	err := users.Create(ctx, other)
+	require.NoError(t, err)
 
 	if _, err := svc.Create(ctx, playerRequester, "", "Aria"); err != nil {
 		t.Fatalf("Create: %v", err)
@@ -166,9 +163,8 @@ func TestCharacterService_Get_HidesOtherOwnersCharacter(t *testing.T) {
 	ctx := t.Context()
 
 	other := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, other); err != nil {
-		t.Fatalf("Create user: %v", err)
-	}
+	err := users.Create(ctx, other)
+	require.NoError(t, err)
 
 	c, err := svc.Create(ctx, gmRequester, other.ID, "Beren")
 	if err != nil {
@@ -288,9 +284,8 @@ func TestCharacterService_Update_OtherOwnersCharacterIsHidden(t *testing.T) {
 	ctx := t.Context()
 
 	other := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, other); err != nil {
-		t.Fatalf("Create user: %v", err)
-	}
+	err := users.Create(ctx, other)
+	require.NoError(t, err)
 
 	c, err := svc.Create(ctx, gmRequester, other.ID, "Beren")
 	if err != nil {

@@ -15,6 +15,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/require"
 )
 
 type documentsTransportEnv struct {
@@ -34,17 +35,12 @@ func newDocumentsTransportEnv(t *testing.T) documentsTransportEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err)
+	err = db.Migrate()
+	require.NoError(t, err)
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err)
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
@@ -63,41 +59,30 @@ func newDocumentsTransportEnv(t *testing.T) documentsTransportEnv {
 
 	ctx := t.Context()
 
-	if err := repoSvc.EnsureSystemRepositories(ctx); err != nil {
-		t.Fatalf("EnsureSystemRepositories: %v", err)
-	}
+	err = repoSvc.EnsureSystemRepositories(ctx)
+	require.NoError(t, err)
 
 	general, err := knowledgeRepos.EnsureGeneral(ctx)
-	if err != nil {
-		t.Fatalf("EnsureGeneral: %v", err)
-	}
+	require.NoError(t, err)
 
 	gm := &models.User{Email: "gm@example.com", PasswordHash: "hash", Role: models.RoleGM}
-	if err := users.Create(ctx, gm); err != nil {
-		t.Fatalf("Create gm: %v", err)
-	}
+	err = users.Create(ctx, gm)
+	require.NoError(t, err)
 
 	player := &models.User{Email: "player@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, player); err != nil {
-		t.Fatalf("Create player: %v", err)
-	}
+	err = users.Create(ctx, player)
+	require.NoError(t, err)
 
 	gmToken, err := tokens.Issue(gm.ID)
-	if err != nil {
-		t.Fatalf("Issue(gm): %v", err)
-	}
+	require.NoError(t, err)
 
 	playerToken, err := tokens.Issue(player.ID)
-	if err != nil {
-		t.Fatalf("Issue(player): %v", err)
-	}
+	require.NoError(t, err)
 
 	// The player needs a character: game-day gating resolves through it, and
 	// CharacterService.Create also provisions its private repository.
 	character, err := charSvc.Create(ctx, application.UserRequester{User: player}, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	router := transport.NewRouter(
 		transport.WithHandle(
@@ -142,9 +127,7 @@ func (e *documentsTransportEnv) findRepositoryID(t *testing.T, repoType models.R
 	t.Helper()
 
 	repos, err := e.repositories.List(t.Context(), e.gmRequester)
-	if err != nil {
-		t.Fatalf("List repositories: %v", err)
-	}
+	require.NoError(t, err)
 
 	for i := range repos {
 		r := &repos[i]
@@ -179,14 +162,11 @@ func (e *documentsTransportEnv) createOtherCharacterRepository(t *testing.T) str
 
 	ctx := t.Context()
 	other := &models.Character{Name: "Beren", UserID: "other-user"}
-	if err := e.characters.Create(ctx, other); err != nil {
-		t.Fatalf("Create other character: %v", err)
-	}
+	err := e.characters.Create(ctx, other)
+	require.NoError(t, err)
 
 	repo, err := e.knowledgeRepos.EnsureForCharacter(ctx, other.ID)
-	if err != nil {
-		t.Fatalf("EnsureForCharacter: %v", err)
-	}
+	require.NoError(t, err)
 
 	return repo.ID
 }
@@ -196,14 +176,11 @@ func (e *documentsTransportEnv) createDocumentIn(t *testing.T, repositoryID stri
 	t.Helper()
 
 	rec := e.do(t, http.MethodPost, "/api/repositories/"+repositoryID+"/documents", e.gmToken, body)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create document: status %d body %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusCreated)
 
 	var doc map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
-		t.Fatalf("decode create response: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &doc)
+	require.NoError(t, err)
 
 	return doc
 }
@@ -214,14 +191,11 @@ func (e *documentsTransportEnv) setCharacterGameDay(t *testing.T, day int) {
 
 	ctx := t.Context()
 	character, err := e.characters.GetByID(ctx, e.characterID)
-	if err != nil {
-		t.Fatalf("GetByID character: %v", err)
-	}
+	require.NoError(t, err)
 
 	character.CurrentGameDay = day
-	if err := e.characters.Update(ctx, character); err != nil {
-		t.Fatalf("Update character: %v", err)
-	}
+	err = e.characters.Update(ctx, character)
+	require.NoError(t, err)
 }
 
 func (e *documentsTransportEnv) do(t *testing.T, method, path, token string, body any) *httptest.ResponseRecorder {
@@ -249,14 +223,11 @@ func (e *documentsTransportEnv) createDocument(t *testing.T, body map[string]any
 	t.Helper()
 
 	rec := e.do(t, http.MethodPost, "/api/repositories/"+e.generalID+"/documents", e.gmToken, body)
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create document: status %d body %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusCreated)
 
 	var doc map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
-		t.Fatalf("decode create response: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &doc)
+	require.NoError(t, err)
 
 	return doc
 }
@@ -274,9 +245,7 @@ func TestDocumentRoutes_GMOnlyContentNeverReachesPlayers(t *testing.T) {
 
 	docID, _ := doc["id"].(string)
 	rec := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("player GET status = %d, want 200", rec.Code)
-	}
+	require.Equal(t, rec.Code, http.StatusOK)
 
 	// Grep the raw payload, not the parsed struct: nothing GM-only may be in
 	// the bytes a player receives.
@@ -296,9 +265,7 @@ func TestDocumentRoutes_GameDayGate_Returns404NotForbidden(t *testing.T) {
 
 	docID, _ := doc["id"].(string)
 	rec := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("gated GET status = %d, want 404 (never 403)", rec.Code)
-	}
+	require.Equal(t, rec.Code, http.StatusNotFound)
 
 	list := env.do(t, http.MethodGet, "/api/repositories/"+env.generalID+"/documents", env.playerToken, nil)
 	if list.Code != http.StatusOK {
@@ -319,18 +286,14 @@ func TestDocumentRoutes_FolderTree_HidesGatedFolder(t *testing.T) {
 	})
 
 	rec := env.do(t, http.MethodGet, "/api/repositories/"+env.generalID+"/documents/tree", env.playerToken, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("tree GET status = %d body %s", rec.Code, rec.Body.String())
-	}
-
+	require.Equal(t, rec.Code, http.StatusOK)
 	var tree struct {
 		Folders []struct {
 			Name string `json:"name"`
 		} `json:"folders"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &tree); err != nil {
-		t.Fatalf("decode tree: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &tree)
+	require.NoError(t, err)
 
 	if len(tree.Folders) != 1 || tree.Folders[0].Name != "lore" {
 		t.Fatalf("folders = %+v, want [lore] — the unrevealed secrets folder must not leak", tree.Folders)
@@ -344,9 +307,7 @@ func TestDocumentRoutes_PathCollision_409WithCode(t *testing.T) {
 
 	rec := env.do(t, http.MethodPost, "/api/repositories/"+env.generalID+"/documents", env.gmToken,
 		map[string]any{"path": "lore/creation"})
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("colliding create status = %d, want 409", rec.Code)
-	}
+	require.Equal(t, rec.Code, http.StatusConflict)
 	if !strings.Contains(rec.Body.String(), `"code":"path_collision"`) {
 		t.Fatalf("collision body missing code: %s", rec.Body.String())
 	}
@@ -395,25 +356,20 @@ func TestDocumentRoutes_ShareToGroup(t *testing.T) {
 	ctx := t.Context()
 
 	group, err := env.groups.Create(ctx, env.gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
-	if err != nil {
-		t.Fatalf("Create group: %v", err)
-	}
-	if err := env.groups.Join(ctx, env.gmRequester, group.ID, env.characterID); err != nil {
-		t.Fatalf("Join: %v", err)
-	}
+	require.NoError(t, err)
+	err = env.groups.Join(ctx, env.gmRequester, group.ID, env.characterID)
+	require.NoError(t, err)
 
 	charRepoID := env.findRepositoryID(t, models.RepositoryTypeCharacter, env.characterID)
 	groupRepoID := env.findRepositoryID(t, models.RepositoryTypeGroup, group.ID)
 
 	rec := env.do(t, http.MethodPost, "/api/repositories/"+charRepoID+"/documents", env.playerToken,
 		map[string]any{"path": "notes/suspicions"})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create character document: status %d body %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusCreated)
+
 	var doc map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
-		t.Fatalf("decode create response: %v", err)
-	}
+	err = json.Unmarshal(rec.Body.Bytes(), &doc)
+	require.NoError(t, err)
 	docID, _ := doc["id"].(string)
 
 	share := env.do(t, http.MethodPost, "/api/documents/"+docID+"/share", env.playerToken,
@@ -423,9 +379,8 @@ func TestDocumentRoutes_ShareToGroup(t *testing.T) {
 	}
 
 	var shared map[string]any
-	if err := json.Unmarshal(share.Body.Bytes(), &shared); err != nil {
-		t.Fatalf("decode share response: %v", err)
-	}
+	err = json.Unmarshal(share.Body.Bytes(), &shared)
+	require.NoError(t, err)
 	if shared["repository_id"] != groupRepoID {
 		t.Fatalf("repository_id = %v, want %q", shared["repository_id"], groupRepoID)
 	}
@@ -445,9 +400,7 @@ func TestDocumentRoutes_ShareToGroup_NonMemberGets404(t *testing.T) {
 	ctx := t.Context()
 
 	group, err := env.groups.Create(ctx, env.gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
-	if err != nil {
-		t.Fatalf("Create group: %v", err)
-	}
+	require.NoError(t, err)
 	// Note: the character never joins the group.
 
 	charRepoID := env.findRepositoryID(t, models.RepositoryTypeCharacter, env.characterID)
@@ -455,20 +408,16 @@ func TestDocumentRoutes_ShareToGroup_NonMemberGets404(t *testing.T) {
 
 	rec := env.do(t, http.MethodPost, "/api/repositories/"+charRepoID+"/documents", env.playerToken,
 		map[string]any{"path": "notes/suspicions"})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create character document: status %d body %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusCreated)
+
 	var doc map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
-		t.Fatalf("decode create response: %v", err)
-	}
+	err = json.Unmarshal(rec.Body.Bytes(), &doc)
+	require.NoError(t, err)
 	docID, _ := doc["id"].(string)
 
 	share := env.do(t, http.MethodPost, "/api/documents/"+docID+"/share", env.playerToken,
 		map[string]any{"target_repository_id": groupRepoID, "shared_on_game_day": 2})
-	if share.Code != http.StatusNotFound {
-		t.Fatalf("share status = %d, want 404 (never 403)", share.Code)
-	}
+	require.Equal(t, share.Code, http.StatusNotFound)
 }
 
 func TestDocumentRoutes_DirectShare_GatesByCharacterGameDay(t *testing.T) {
@@ -503,9 +452,8 @@ func TestDocumentRoutes_DirectShare_GatesByCharacterGameDay(t *testing.T) {
 
 	// Game day reached: visible, and GM-only sections still stripped.
 	rec := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("post-day GET status = %d body %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusOK)
+
 	if !strings.Contains(rec.Body.String(), "cursed") {
 		t.Fatalf("shared document content missing: %s", rec.Body.String())
 	}
@@ -517,9 +465,8 @@ func TestDocumentRoutes_DirectShare_GatesByCharacterGameDay(t *testing.T) {
 	}
 
 	var shares []map[string]any
-	if err := json.Unmarshal(list.Body.Bytes(), &shares); err != nil {
-		t.Fatalf("decode shares: %v", err)
-	}
+	err := json.Unmarshal(list.Body.Bytes(), &shares)
+	require.NoError(t, err)
 	if len(shares) != 1 {
 		t.Fatalf("shares = %+v, want 1", shares)
 	}
@@ -561,14 +508,11 @@ func TestDocumentRoutes_ListSharedWithMe(t *testing.T) {
 	}
 
 	rec := env.do(t, http.MethodGet, "/api/documents/shared", env.playerToken, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("shared-with-me status = %d body %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, rec.Code, http.StatusOK)
 
 	var docs []map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &docs); err != nil {
-		t.Fatalf("decode shared docs: %v", err)
-	}
+	err := json.Unmarshal(rec.Body.Bytes(), &docs)
+	require.NoError(t, err)
 	if len(docs) != 1 || docs[0]["id"] != docID {
 		t.Fatalf("shared docs = %+v, want [%s]", docs, docID)
 	}

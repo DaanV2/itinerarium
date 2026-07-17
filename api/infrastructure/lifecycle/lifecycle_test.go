@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/lifecycle"
+	"github.com/stretchr/testify/require"
 )
 
 type recorder struct {
@@ -37,9 +38,7 @@ func TestShutdownAllRunsPhasesInOrder(t *testing.T) {
 	b := &recorder{calls: &calls, name: "b", err: errors.New("b failed")}
 
 	err := lifecycle.ShutdownAll(context.Background(), a, b)
-	if err == nil || !errors.Is(err, b.err) {
-		t.Fatalf("expected b's error to be joined, got %v", err)
-	}
+	require.ErrorIs(t, err, b.err, "b's error should be joined")
 
 	want := []string{
 		"a.before", "b.before",
@@ -47,19 +46,9 @@ func TestShutdownAllRunsPhasesInOrder(t *testing.T) {
 		"a.after", "b.after",
 		"a.cleanup", "b.cleanup",
 	}
-	if len(calls) != len(want) {
-		t.Fatalf("expected %d calls, got %v", len(want), calls)
-	}
-
-	for i, w := range want {
-		if calls[i] != w {
-			t.Fatalf("call %d: expected %q, got %q (all: %v)", i, w, calls[i], calls)
-		}
-	}
+	require.Equal(t, want, calls)
 }
 
 func TestShutdownAllIgnoresPlainComponents(t *testing.T) {
-	if err := lifecycle.ShutdownAll(context.Background(), struct{}{}, nil); err != nil {
-		t.Fatalf("expected nil error, got %v", err)
-	}
+	require.NoError(t, lifecycle.ShutdownAll(context.Background(), struct{}{}, nil))
 }

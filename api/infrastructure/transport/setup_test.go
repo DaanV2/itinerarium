@@ -12,23 +12,18 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/require"
 )
 
 func newSetupRouter(t *testing.T) *transport.Router {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err, "persistence.New")
+	require.NoError(t, db.Migrate(), "Migrate")
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore")
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	svc := application.NewSetupService(repositories.NewUsers(db), tokens)
@@ -45,57 +40,41 @@ func TestSetupStatus_NeedsSetupInitially(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/setup", http.NoBody))
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
 
 	var body struct {
 		NeedsSetup bool `json:"needs_setup"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
-	if !body.NeedsSetup {
-		t.Fatal("expected needs_setup=true on a fresh installation")
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body), "decoding body")
+	require.True(t, body.NeedsSetup, "expected needs_setup=true on a fresh installation")
 }
 
 func TestCreateInitialGM_SucceedsOnce(t *testing.T) {
 	router := newSetupRouter(t)
 
 	body, err := json.Marshal(map[string]string{"email": "gm@example.com", "password": "hunter22hunter"})
-	if err != nil {
-		t.Fatalf("marshalling request: %v", err)
-	}
+	require.NoError(t, err, "marshalling request")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/setup", bytes.NewReader(body))
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body.String())
 
 	var created struct {
 		ID          string `json:"id"`
 		Email       string `json:"email"`
 		AccessToken string `json:"access_token"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
-	if created.AccessToken == "" {
-		t.Fatal("expected a non-empty access token")
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created), "decoding body")
+	require.NotEmpty(t, created.AccessToken, "expected a non-empty access token")
 }
 
 func TestCreateInitialGM_RefusesSecondCall(t *testing.T) {
 	router := newSetupRouter(t)
 
 	body, err := json.Marshal(map[string]string{"email": "gm@example.com", "password": "hunter22hunter"})
-	if err != nil {
-		t.Fatalf("marshalling request: %v", err)
-	}
+	require.NoError(t, err, "marshalling request")
 
 	first := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/setup", bytes.NewReader(body))
 	router.ServeHTTP(httptest.NewRecorder(), first)
@@ -104,24 +83,18 @@ func TestCreateInitialGM_RefusesSecondCall(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, second)
 
-	if rec.Code != http.StatusConflict {
-		t.Fatalf("expected 409 on the second call, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusConflict, rec.Code, "second call body: %s", rec.Body.String())
 }
 
 func TestCreateInitialGM_RejectsInvalidInput(t *testing.T) {
 	router := newSetupRouter(t)
 
 	body, err := json.Marshal(map[string]string{"email": "not-an-email", "password": "short"})
-	if err != nil {
-		t.Fatalf("marshalling request: %v", err)
-	}
+	require.NoError(t, err, "marshalling request")
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/setup", bytes.NewReader(body))
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusBadRequest, rec.Code, "body: %s", rec.Body.String())
 }

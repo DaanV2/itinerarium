@@ -8,6 +8,8 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // fakeRequester is a minimal application.Requester for service tests that
@@ -30,12 +32,9 @@ func newTestUsersRepo(t *testing.T) *repositories.Users {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err)
+	err = db.Migrate()
+	require.NoError(t, err)
 
 	return repositories.NewUsers(db)
 }
@@ -45,9 +44,7 @@ func TestUserService_CreateAccount_RequiresGM(t *testing.T) {
 	ctx := t.Context()
 
 	_, _, err := svc.CreateAccount(ctx, playerRequester, "new@example.com", models.RolePlayer)
-	if !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("CreateAccount(player) = %v, want ErrForbidden", err)
-	}
+	require.ErrorIs(t, err, application.ErrForbidden)
 }
 
 func TestUserService_CreateAccount(t *testing.T) {
@@ -55,29 +52,20 @@ func TestUserService_CreateAccount(t *testing.T) {
 	ctx := t.Context()
 
 	user, password, err := svc.CreateAccount(ctx, gmRequester, "player@example.com", models.RolePlayer)
-	if err != nil {
-		t.Fatalf("CreateAccount: %v", err)
-	}
-	if user.Role != models.RolePlayer {
-		t.Fatalf("Role = %q, want player", user.Role)
-	}
-	if len(password) < 8 {
-		t.Fatalf("temporary password %q is shorter than the minimum length", password)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, user.Role, models.RolePlayer, "Role = %q, want player", user.Role)
+	assert.Greater(t, len(password), 8, "temporary password length = %d, want > 8", len(password))
 }
 
 func TestUserService_CreateAccount_RejectsDuplicateEmail(t *testing.T) {
 	svc := application.NewUserService(newTestUsersRepo(t))
 	ctx := t.Context()
 
-	if _, _, err := svc.CreateAccount(ctx, gmRequester, "dup@example.com", models.RolePlayer); err != nil {
-		t.Fatalf("CreateAccount (first): %v", err)
-	}
+	_, _, err := svc.CreateAccount(ctx, gmRequester, "dup@example.com", models.RolePlayer)
+	require.NoError(t, err)
 
-	_, _, err := svc.CreateAccount(ctx, gmRequester, "dup@example.com", models.RoleGM)
-	if !errors.Is(err, application.ErrEmailTaken) {
-		t.Fatalf("CreateAccount (duplicate) = %v, want ErrEmailTaken", err)
-	}
+	_, _, err = svc.CreateAccount(ctx, gmRequester, "dup@example.com", models.RoleGM)
+	require.ErrorIs(t, err, application.ErrEmailTaken)
 }
 
 func TestUserService_CreateAccount_ValidatesInput(t *testing.T) {
@@ -123,9 +111,7 @@ func TestUserService_ListAccounts(t *testing.T) {
 	}
 
 	users, err := svc.ListAccounts(ctx, gmRequester)
-	if err != nil {
-		t.Fatalf("ListAccounts: %v", err)
-	}
+	require.NoError(t, err)
 	if len(users) != 1 {
 		t.Fatalf("ListAccounts returned %d users, want 1", len(users))
 	}
@@ -136,9 +122,7 @@ func TestUserService_ResetPassword_RequiresGM(t *testing.T) {
 	ctx := t.Context()
 
 	user, _, err := svc.CreateAccount(ctx, gmRequester, "player@example.com", models.RolePlayer)
-	if err != nil {
-		t.Fatalf("CreateAccount: %v", err)
-	}
+	require.NoError(t, err)
 
 	_, err = svc.ResetPassword(ctx, playerRequester, user.ID)
 	if !errors.Is(err, application.ErrForbidden) {
@@ -151,14 +135,10 @@ func TestUserService_ResetPassword(t *testing.T) {
 	ctx := t.Context()
 
 	user, originalPassword, err := svc.CreateAccount(ctx, gmRequester, "player@example.com", models.RolePlayer)
-	if err != nil {
-		t.Fatalf("CreateAccount: %v", err)
-	}
+	require.NoError(t, err)
 
 	newPassword, err := svc.ResetPassword(ctx, gmRequester, user.ID)
-	if err != nil {
-		t.Fatalf("ResetPassword: %v", err)
-	}
+	require.NoError(t, err)
 	if newPassword == "" {
 		t.Fatal("expected a non-empty temporary password")
 	}

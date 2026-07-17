@@ -2,11 +2,11 @@ package logging_test
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/logging"
 	"github.com/charmbracelet/log"
+	"github.com/stretchr/testify/require"
 )
 
 func TestApplySetsLevel(t *testing.T) {
@@ -15,9 +15,7 @@ func TestApplySetsLevel(t *testing.T) {
 	logger := log.New(&buf)
 	logging.Apply(logger, false, "warn", "text")
 
-	if logger.GetLevel() != log.WarnLevel {
-		t.Fatalf("expected warn level, got %s", logger.GetLevel())
-	}
+	require.Equal(t, log.WarnLevel, logger.GetLevel())
 }
 
 func TestApplyFormats(t *testing.T) {
@@ -39,9 +37,7 @@ func TestApplyFormats(t *testing.T) {
 			logging.Apply(logger, false, "info", tt.format)
 			logger.Info("hello")
 
-			if !strings.Contains(buf.String(), tt.want) {
-				t.Fatalf("expected output to contain %q, got %q", tt.want, buf.String())
-			}
+			require.Contains(t, buf.String(), tt.want)
 		})
 	}
 }
@@ -51,7 +47,5 @@ func TestSetupReadsLevelFromEnv(t *testing.T) {
 
 	logging.Setup()
 
-	if log.Default().GetLevel() != log.ErrorLevel {
-		t.Fatalf("expected error level, got %s", log.Default().GetLevel())
-	}
+	require.Equal(t, log.ErrorLevel, log.Default().GetLevel())
 }

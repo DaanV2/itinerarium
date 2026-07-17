@@ -6,24 +6,21 @@ import (
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewKeyStore_GeneratesOnFirstStart(t *testing.T) {
 	dir := t.TempDir()
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(dir))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore")
 
-	if keys.PrivateKey() == nil || keys.PublicKey() == nil {
-		t.Fatal("expected a generated key pair")
-	}
+	require.NotNil(t, keys.PrivateKey(), "expected a generated key pair")
+	require.NotNil(t, keys.PublicKey(), "expected a generated key pair")
 
 	for _, name := range []string{"private.pem", "public.pem"} {
-		if _, err := os.Stat(filepath.Join(dir, name)); err != nil {
-			t.Fatalf("expected %s to be written: %v", name, err)
-		}
+		_, err := os.Stat(filepath.Join(dir, name))
+		require.NoError(t, err, "expected %s to be written", name)
 	}
 }
 
@@ -31,16 +28,11 @@ func TestNewKeyStore_LoadsExistingKeys(t *testing.T) {
 	dir := t.TempDir()
 
 	first, err := authentication.NewKeyStore(authentication.WithKeysDir(dir))
-	if err != nil {
-		t.Fatalf("NewKeyStore (generate): %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore (generate)")
 
 	second, err := authentication.NewKeyStore(authentication.WithKeysDir(dir))
-	if err != nil {
-		t.Fatalf("NewKeyStore (load): %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore (load)")
 
-	if !first.PrivateKey().Equal(second.PrivateKey()) {
-		t.Fatal("expected the second start to load the same key pair, got a different one")
-	}
+	require.True(t, first.PrivateKey().Equal(second.PrivateKey()),
+		"expected the second start to load the same key pair, got a different one")
 }

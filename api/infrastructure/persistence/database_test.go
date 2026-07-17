@@ -5,27 +5,21 @@ import (
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInMemoryDatabaseMigratesAndShutsDown(t *testing.T) {
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
+	require.NoError(t, err, "New")
 
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
-
-	if err := db.Shutdown(context.Background()); err != nil {
-		t.Fatalf("Shutdown: %v", err)
-	}
+	require.NoError(t, db.Migrate(), "Migrate")
+	require.NoError(t, db.Shutdown(context.Background()), "Shutdown")
 }
 
 func TestNewRejectsUnsupportedType(t *testing.T) {
-	if _, err := persistence.New(persistence.WithType("bogus")); err == nil {
-		t.Fatal("expected New to reject an unsupported database type")
-	}
+	_, err := persistence.New(persistence.WithType("bogus"))
+	require.Error(t, err, "New should reject an unsupported database type")
 }
 
 func TestDBTypeValid(t *testing.T) {
@@ -39,8 +33,6 @@ func TestDBTypeValid(t *testing.T) {
 		{persistence.MySQL, true},
 		{persistence.DBType("bogus"), false},
 	} {
-		if got := tt.dbType.Valid(); got != tt.want {
-			t.Errorf("DBType(%q).Valid() = %v, want %v", tt.dbType, got, tt.want)
-		}
+		assert.Equal(t, tt.want, tt.dbType.Valid(), "DBType(%q).Valid()", tt.dbType)
 	}
 }

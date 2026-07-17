@@ -13,6 +13,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/require"
 )
 
 type journalTestEnv struct {
@@ -27,17 +28,11 @@ func newJournalTestEnv(t *testing.T) journalTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err, "persistence.New")
+	require.NoError(t, db.Migrate(), "Migrate")
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore")
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
@@ -50,39 +45,25 @@ func newJournalTestEnv(t *testing.T) journalTestEnv {
 	ctx := t.Context()
 
 	gm := &models.User{Email: "gm@example.com", PasswordHash: "hash", Role: models.RoleGM}
-	if err := users.Create(ctx, gm); err != nil {
-		t.Fatalf("Create gm: %v", err)
-	}
+	require.NoError(t, users.Create(ctx, gm), "Create gm")
 
 	player := &models.User{Email: "player@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, player); err != nil {
-		t.Fatalf("Create player: %v", err)
-	}
+	require.NoError(t, users.Create(ctx, player), "Create player")
 
 	other := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	if err := users.Create(ctx, other); err != nil {
-		t.Fatalf("Create other: %v", err)
-	}
+	require.NoError(t, users.Create(ctx, other), "Create other")
 
 	gmToken, err := tokens.Issue(gm.ID)
-	if err != nil {
-		t.Fatalf("Issue(gm): %v", err)
-	}
+	require.NoError(t, err, "Issue(gm)")
 
 	playerToken, err := tokens.Issue(player.ID)
-	if err != nil {
-		t.Fatalf("Issue(player): %v", err)
-	}
+	require.NoError(t, err, "Issue(player)")
 
 	otherToken, err := tokens.Issue(other.ID)
-	if err != nil {
-		t.Fatalf("Issue(other): %v", err)
-	}
+	require.NoError(t, err, "Issue(other)")
 
 	character := &models.Character{Name: "Aria", UserID: player.ID}
-	if err := characters.Create(ctx, character); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, characters.Create(ctx, character), "Create character")
 
 	router := transport.NewRouter(
 		transport.WithHandle(
@@ -114,9 +95,7 @@ func (e journalTestEnv) doJSON(t *testing.T, method, path, token string, payload
 
 	var body bytes.Buffer
 	if payload != nil {
-		if err := json.NewEncoder(&body).Encode(payload); err != nil {
-			t.Fatalf("encoding request: %v", err)
-		}
+		require.NoError(t, json.NewEncoder(&body).Encode(payload), "encoding request")
 	}
 
 	req := httptest.NewRequestWithContext(t.Context(), method, path, &body)
@@ -135,9 +114,7 @@ func TestCreateJournalEntry_RequiresAuth(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/characters/"+env.characterID+"/journal", "",
 		map[string]string{"content": "Dear diary"})
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 with no token, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusUnauthorized, rec.Code, "body: %s", rec.Body.String())
 }
 
 func TestCreateJournalEntry_OwnerCanWrite(t *testing.T) {
@@ -145,20 +122,14 @@ func TestCreateJournalEntry_OwnerCanWrite(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/characters/"+env.characterID+"/journal", env.playerToken,
 		map[string]string{"content": "Dear diary"})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body.String())
 
 	var created struct {
 		Content string `json:"content"`
 		GameDay int    `json:"game_day"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
-	if created.Content != "Dear diary" {
-		t.Fatalf("Content = %q, want %q", created.Content, "Dear diary")
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created), "decoding body")
+	require.Equal(t, "Dear diary", created.Content)
 }
 
 func TestCreateJournalEntry_OtherPlayerCannotWriteForForeignCharacter(t *testing.T) {
@@ -166,9 +137,7 @@ func TestCreateJournalEntry_OtherPlayerCannotWriteForForeignCharacter(t *testing
 
 	rec := env.doJSON(t, http.MethodPost, "/api/characters/"+env.characterID+"/journal", env.otherToken,
 		map[string]string{"content": "Not mine to write"})
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusNotFound, rec.Code, "body: %s", rec.Body.String())
 }
 
 func TestListJournalEntries_OtherPlayerHidden(t *testing.T) {
@@ -178,9 +147,7 @@ func TestListJournalEntries_OtherPlayerHidden(t *testing.T) {
 		map[string]string{"content": "Secret entry"})
 
 	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/journal", env.otherToken, nil)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusNotFound, rec.Code, "body: %s", rec.Body.String())
 }
 
 func TestListJournalEntries_GMCanReadAnyCharacter(t *testing.T) {
@@ -190,17 +157,11 @@ func TestListJournalEntries_GMCanReadAnyCharacter(t *testing.T) {
 		map[string]string{"content": "Entry one"})
 
 	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/journal", env.gmToken, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	var list []struct{ Content string }
-	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
-	if len(list) != 1 {
-		t.Fatalf("expected 1 entry, got %d", len(list))
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &list), "decoding body")
+	require.Len(t, list, 1)
 }
 
 func TestGetJournalEntry_OtherPlayerHidden(t *testing.T) {
@@ -210,16 +171,12 @@ func TestGetJournalEntry_OtherPlayerHidden(t *testing.T) {
 		map[string]string{"content": "Secret entry"})
 
 	var created struct{ ID string }
-	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created), "decoding body")
 
 	rec := env.doJSON(
 		t, http.MethodGet, "/api/characters/"+env.characterID+"/journal/"+created.ID, env.otherToken, nil,
 	)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusNotFound, rec.Code, "body: %s", rec.Body.String())
 }
 
 func TestUpdateJournalEntry_OwnerCanEdit(t *testing.T) {
@@ -229,25 +186,17 @@ func TestUpdateJournalEntry_OwnerCanEdit(t *testing.T) {
 		map[string]string{"content": "Original"})
 
 	var created struct{ ID string }
-	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created), "decoding body")
 
 	rec := env.doJSON(
 		t, http.MethodPatch, "/api/characters/"+env.characterID+"/journal/"+created.ID, env.playerToken,
 		map[string]string{"content": "Revised"},
 	)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	var updated struct{ Content string }
-	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
-	if updated.Content != "Revised" {
-		t.Fatalf("Content = %q, want %q", updated.Content, "Revised")
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &updated), "decoding body")
+	require.Equal(t, "Revised", updated.Content)
 }
 
 func TestUpdateJournalEntry_OtherPlayerCannotEdit(t *testing.T) {
@@ -257,15 +206,11 @@ func TestUpdateJournalEntry_OtherPlayerCannotEdit(t *testing.T) {
 		map[string]string{"content": "Original"})
 
 	var created struct{ ID string }
-	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created), "decoding body")
 
 	rec := env.doJSON(
 		t, http.MethodPatch, "/api/characters/"+env.characterID+"/journal/"+created.ID, env.otherToken,
 		map[string]string{"content": "Hijacked"},
 	)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusNotFound, rec.Code, "body: %s", rec.Body.String())
 }

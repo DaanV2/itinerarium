@@ -1,11 +1,11 @@
 package repositories_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/require"
 )
 
 func TestKnowledgeRepositories_EnsureGeneralAndTemplate_AreSingletonsAndIdempotent(t *testing.T) {
@@ -13,32 +13,19 @@ func TestKnowledgeRepositories_EnsureGeneralAndTemplate_AreSingletonsAndIdempote
 	ctx := t.Context()
 
 	general1, err := repo.EnsureGeneral(ctx)
-	if err != nil {
-		t.Fatalf("EnsureGeneral: %v", err)
-	}
+	require.NoError(t, err, "EnsureGeneral")
+
 	general2, err := repo.EnsureGeneral(ctx)
-	if err != nil {
-		t.Fatalf("EnsureGeneral (second): %v", err)
-	}
-	if general1.ID != general2.ID {
-		t.Fatalf("EnsureGeneral created a second row: %s != %s", general1.ID, general2.ID)
-	}
+	require.NoError(t, err, "EnsureGeneral (second)")
+	require.Equal(t, general1.ID, general2.ID, "EnsureGeneral must not create a second row")
 
 	template, err := repo.EnsureTemplate(ctx)
-	if err != nil {
-		t.Fatalf("EnsureTemplate: %v", err)
-	}
-	if template.ID == general1.ID {
-		t.Fatal("template repository reused the general repository's ID")
-	}
+	require.NoError(t, err, "EnsureTemplate")
+	require.NotEqual(t, general1.ID, template.ID, "template repository must not reuse the general repository's ID")
 
 	all, err := repo.List(ctx)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(all) != 2 {
-		t.Fatalf("List returned %d repositories, want 2", len(all))
-	}
+	require.NoError(t, err, "List")
+	require.Len(t, all, 2)
 }
 
 func TestKnowledgeRepositories_EnsureForGroup_OnePerGroup(t *testing.T) {
@@ -46,28 +33,18 @@ func TestKnowledgeRepositories_EnsureForGroup_OnePerGroup(t *testing.T) {
 	ctx := t.Context()
 
 	first, err := repo.EnsureForGroup(ctx, "group-1")
-	if err != nil {
-		t.Fatalf("EnsureForGroup: %v", err)
-	}
-	if first.Type != models.RepositoryTypeGroup || first.GroupID == nil || *first.GroupID != "group-1" {
-		t.Fatalf("unexpected repository: %+v", first)
-	}
+	require.NoError(t, err, "EnsureForGroup")
+	require.Equal(t, models.RepositoryTypeGroup, first.Type)
+	require.NotNil(t, first.GroupID)
+	require.Equal(t, "group-1", *first.GroupID)
 
 	second, err := repo.EnsureForGroup(ctx, "group-1")
-	if err != nil {
-		t.Fatalf("EnsureForGroup (second): %v", err)
-	}
-	if first.ID != second.ID {
-		t.Fatalf("EnsureForGroup created a second row for the same group: %s != %s", first.ID, second.ID)
-	}
+	require.NoError(t, err, "EnsureForGroup (second)")
+	require.Equal(t, first.ID, second.ID, "EnsureForGroup must not create a second row for the same group")
 
 	other, err := repo.EnsureForGroup(ctx, "group-2")
-	if err != nil {
-		t.Fatalf("EnsureForGroup(group-2): %v", err)
-	}
-	if other.ID == first.ID {
-		t.Fatal("two different groups shared a repository")
-	}
+	require.NoError(t, err, "EnsureForGroup(group-2)")
+	require.NotEqual(t, first.ID, other.ID, "two different groups must not share a repository")
 }
 
 func TestKnowledgeRepositories_EnsureForCharacter_OnePerCharacter(t *testing.T) {
@@ -75,63 +52,47 @@ func TestKnowledgeRepositories_EnsureForCharacter_OnePerCharacter(t *testing.T) 
 	ctx := t.Context()
 
 	first, err := repo.EnsureForCharacter(ctx, "char-1")
-	if err != nil {
-		t.Fatalf("EnsureForCharacter: %v", err)
-	}
-	if first.Type != models.RepositoryTypeCharacter || first.CharacterID == nil || *first.CharacterID != "char-1" {
-		t.Fatalf("unexpected repository: %+v", first)
-	}
+	require.NoError(t, err, "EnsureForCharacter")
+	require.Equal(t, models.RepositoryTypeCharacter, first.Type)
+	require.NotNil(t, first.CharacterID)
+	require.Equal(t, "char-1", *first.CharacterID)
 
 	second, err := repo.EnsureForCharacter(ctx, "char-1")
-	if err != nil {
-		t.Fatalf("EnsureForCharacter (second): %v", err)
-	}
-	if first.ID != second.ID {
-		t.Fatalf("EnsureForCharacter created a second row for the same character: %s != %s", first.ID, second.ID)
-	}
+	require.NoError(t, err, "EnsureForCharacter (second)")
+	require.Equal(t, first.ID, second.ID, "EnsureForCharacter must not create a second row for the same character")
 }
 
 func TestKnowledgeRepositories_GetByID_NotFound(t *testing.T) {
 	repo := repositories.NewKnowledgeRepositories(newTestDB(t))
 
-	if _, err := repo.GetByID(t.Context(), "does-not-exist"); !errors.Is(err, repositories.ErrNotFound) {
-		t.Fatalf("GetByID(missing) = %v, want ErrNotFound", err)
-	}
+	_, err := repo.GetByID(t.Context(), "does-not-exist")
+	require.ErrorIs(t, err, repositories.ErrNotFound, "GetByID(missing)")
 }
 
 func TestKnowledgeRepositories_ListVisible(t *testing.T) {
 	repo := repositories.NewKnowledgeRepositories(newTestDB(t))
 	ctx := t.Context()
 
-	if _, err := repo.EnsureGeneral(ctx); err != nil {
-		t.Fatalf("EnsureGeneral: %v", err)
-	}
-	if _, err := repo.EnsureTemplate(ctx); err != nil {
-		t.Fatalf("EnsureTemplate: %v", err)
-	}
-	if _, err := repo.EnsureForCharacter(ctx, "char-1"); err != nil {
-		t.Fatalf("EnsureForCharacter: %v", err)
-	}
-	if _, err := repo.EnsureForCharacter(ctx, "char-2"); err != nil {
-		t.Fatalf("EnsureForCharacter(char-2): %v", err)
-	}
-	if _, err := repo.EnsureForGroup(ctx, "group-1"); err != nil {
-		t.Fatalf("EnsureForGroup: %v", err)
-	}
+	_, err := repo.EnsureGeneral(ctx)
+	require.NoError(t, err, "EnsureGeneral")
+	_, err = repo.EnsureTemplate(ctx)
+	require.NoError(t, err, "EnsureTemplate")
+	_, err = repo.EnsureForCharacter(ctx, "char-1")
+	require.NoError(t, err, "EnsureForCharacter")
+	_, err = repo.EnsureForCharacter(ctx, "char-2")
+	require.NoError(t, err, "EnsureForCharacter(char-2)")
+	_, err = repo.EnsureForGroup(ctx, "group-1")
+	require.NoError(t, err, "EnsureForGroup")
 
 	visible, err := repo.ListVisible(ctx, []string{"char-1"}, []string{"group-1"})
-	if err != nil {
-		t.Fatalf("ListVisible: %v", err)
-	}
+	require.NoError(t, err, "ListVisible")
 
 	// general + template + char-1's own repository + group-1's repository —
 	// char-2's repository must not appear.
-	if len(visible) != 4 {
-		t.Fatalf("ListVisible returned %d repositories, want 4: %+v", len(visible), visible)
-	}
+	require.Len(t, visible, 4)
 	for _, r := range visible {
-		if r.CharacterID != nil && *r.CharacterID == "char-2" {
-			t.Fatal("ListVisible leaked another character's repository")
+		if r.CharacterID != nil {
+			require.NotEqual(t, "char-2", *r.CharacterID, "ListVisible leaked another character's repository")
 		}
 	}
 }

@@ -7,18 +7,16 @@ import (
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestJournalEntriesEnv(t *testing.T) (*application.JournalEntryService, *application.CharacterService) {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err)
+	err = db.Migrate()
+	require.NoError(t, err)
 
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
@@ -34,9 +32,7 @@ func TestJournalEntryService_Create_StampsCurrentGameDay(t *testing.T) {
 	ctx := t.Context()
 
 	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	day := 3
 
@@ -45,9 +41,7 @@ func TestJournalEntryService_Create_StampsCurrentGameDay(t *testing.T) {
 	}
 
 	e, err := svc.Create(ctx, playerRequester, c.ID, "Dear diary...")
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
+	require.NoError(t, err)
 	if e.GameDay != day {
 		t.Fatalf("GameDay = %d, want %d", e.GameDay, day)
 	}
@@ -61,9 +55,7 @@ func TestJournalEntryService_Create_RejectsEmptyContent(t *testing.T) {
 	ctx := t.Context()
 
 	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	_, err = svc.Create(ctx, playerRequester, c.ID, "")
 	if !errors.Is(err, application.ErrInvalidContent) {
@@ -78,9 +70,7 @@ func TestJournalEntryService_Create_OtherPlayerCannotWriteForForeignCharacter(t 
 	other := fakeRequester{id: "other-1", gm: false}
 
 	c, err := characterSvc.Create(ctx, other, "", "Beren")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	_, err = svc.Create(ctx, playerRequester, c.ID, "Not mine to write")
 	if !errors.Is(err, application.ErrNotFound) {
@@ -93,18 +83,14 @@ func TestJournalEntryService_List_OwnerSeesOwnEntries(t *testing.T) {
 	ctx := t.Context()
 
 	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	if _, err := svc.Create(ctx, playerRequester, c.ID, "Entry one"); err != nil {
 		t.Fatalf("Create entry: %v", err)
 	}
 
 	entries, err := svc.List(ctx, playerRequester, c.ID)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	require.NoError(t, err)
 	if len(entries) != 1 {
 		t.Fatalf("List returned %d entries, want 1", len(entries))
 	}
@@ -117,9 +103,7 @@ func TestJournalEntryService_List_OtherPlayerHidden(t *testing.T) {
 	other := fakeRequester{id: "other-1", gm: false}
 
 	c, err := characterSvc.Create(ctx, other, "", "Beren")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	if _, err := svc.Create(ctx, other, c.ID, "Secret entry"); err != nil {
 		t.Fatalf("Create entry: %v", err)
@@ -136,18 +120,14 @@ func TestJournalEntryService_List_GMSeesAnyCharacter(t *testing.T) {
 	ctx := t.Context()
 
 	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	if _, err := svc.Create(ctx, playerRequester, c.ID, "Entry one"); err != nil {
 		t.Fatalf("Create entry: %v", err)
 	}
 
 	entries, err := svc.List(ctx, gmRequester, c.ID)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	require.NoError(t, err)
 	if len(entries) != 1 {
 		t.Fatalf("List returned %d entries, want 1", len(entries))
 	}
@@ -160,14 +140,10 @@ func TestJournalEntryService_Get_OtherPlayerHidden(t *testing.T) {
 	other := fakeRequester{id: "other-1", gm: false}
 
 	c, err := characterSvc.Create(ctx, other, "", "Beren")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	e, err := svc.Create(ctx, other, c.ID, "Secret entry")
-	if err != nil {
-		t.Fatalf("Create entry: %v", err)
-	}
+	require.NoError(t, err)
 
 	_, err = svc.Get(ctx, playerRequester, e.ID)
 	if !errors.Is(err, application.ErrNotFound) {
@@ -180,19 +156,13 @@ func TestJournalEntryService_Update_OwnerCanEditContent(t *testing.T) {
 	ctx := t.Context()
 
 	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	e, err := svc.Create(ctx, playerRequester, c.ID, "Original")
-	if err != nil {
-		t.Fatalf("Create entry: %v", err)
-	}
+	require.NoError(t, err)
 
 	updated, err := svc.Update(ctx, playerRequester, e.ID, "Revised")
-	if err != nil {
-		t.Fatalf("Update: %v", err)
-	}
+	require.NoError(t, err)
 	if updated.Content != "Revised" {
 		t.Fatalf("Content = %q, want %q", updated.Content, "Revised")
 	}
@@ -208,14 +178,10 @@ func TestJournalEntryService_Update_OtherPlayerCannotEdit(t *testing.T) {
 	other := fakeRequester{id: "other-1", gm: false}
 
 	c, err := characterSvc.Create(ctx, other, "", "Beren")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	e, err := svc.Create(ctx, other, c.ID, "Secret entry")
-	if err != nil {
-		t.Fatalf("Create entry: %v", err)
-	}
+	require.NoError(t, err)
 
 	_, err = svc.Update(ctx, playerRequester, e.ID, "Hijacked")
 	if !errors.Is(err, application.ErrNotFound) {

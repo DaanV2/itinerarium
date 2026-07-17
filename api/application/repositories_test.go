@@ -8,6 +8,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/require"
 )
 
 type repositoryTestEnv struct {
@@ -20,12 +21,9 @@ func newTestRepositoryEnv(t *testing.T) repositoryTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err)
+	err = db.Migrate()
+	require.NoError(t, err)
 
 	knowledgeRepo := repositories.NewKnowledgeRepositories(db)
 	characterRepo := repositories.NewCharacters(db)
@@ -42,17 +40,13 @@ func TestRepositoryService_EnsureSystemRepositories_IsIdempotent(t *testing.T) {
 	env := newTestRepositoryEnv(t)
 	ctx := t.Context()
 
-	if err := env.repos.EnsureSystemRepositories(ctx); err != nil {
-		t.Fatalf("EnsureSystemRepositories: %v", err)
-	}
-	if err := env.repos.EnsureSystemRepositories(ctx); err != nil {
-		t.Fatalf("second EnsureSystemRepositories: %v", err)
-	}
+	err := env.repos.EnsureSystemRepositories(ctx)
+	require.NoError(t, err)
+	err = env.repos.EnsureSystemRepositories(ctx)
+	require.NoError(t, err)
 
 	repos, err := env.repos.List(ctx, gmRequester)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	require.NoError(t, err)
 
 	var general, template int
 	for _, r := range repos {
@@ -75,14 +69,10 @@ func TestRepositoryService_CharacterCreate_ProvisionsRepository(t *testing.T) {
 	ctx := t.Context()
 
 	character, err := env.characters.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	repos, err := env.repos.List(ctx, gmRequester)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	require.NoError(t, err)
 
 	found := false
 	for _, r := range repos {
@@ -100,14 +90,10 @@ func TestRepositoryService_GroupCreate_ProvisionsRepository(t *testing.T) {
 	ctx := t.Context()
 
 	group, err := env.groups.Create(ctx, gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
-	if err != nil {
-		t.Fatalf("Create group: %v", err)
-	}
+	require.NoError(t, err)
 
 	repos, err := env.repos.List(ctx, gmRequester)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	require.NoError(t, err)
 
 	found := false
 	for _, r := range repos {
@@ -124,14 +110,11 @@ func TestRepositoryService_Get_GeneralAndTemplateVisibleToEveryone(t *testing.T)
 	env := newTestRepositoryEnv(t)
 	ctx := t.Context()
 
-	if err := env.repos.EnsureSystemRepositories(ctx); err != nil {
-		t.Fatalf("EnsureSystemRepositories: %v", err)
-	}
+	err := env.repos.EnsureSystemRepositories(ctx)
+	require.NoError(t, err)
 
 	repos, err := env.repos.List(ctx, gmRequester)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	require.NoError(t, err)
 
 	for _, r := range repos {
 		if _, err := env.repos.Get(ctx, playerRequester, r.ID); err != nil {
@@ -145,14 +128,10 @@ func TestRepositoryService_Get_CharacterRepositoryOwnerOnly(t *testing.T) {
 	ctx := t.Context()
 
 	character, err := env.characters.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	repos, err := env.repos.List(ctx, gmRequester)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	require.NoError(t, err)
 
 	var repoID string
 	for _, r := range repos {
@@ -183,18 +162,12 @@ func TestRepositoryService_Get_GroupRepositoryMembersOnly(t *testing.T) {
 	ctx := t.Context()
 
 	group, err := env.groups.Create(ctx, gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
-	if err != nil {
-		t.Fatalf("Create group: %v", err)
-	}
+	require.NoError(t, err)
 	character, err := env.characters.Create(ctx, playerRequester, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err)
 
 	repos, err := env.repos.List(ctx, gmRequester)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	require.NoError(t, err)
 
 	var repoID string
 	for _, r := range repos {
@@ -212,9 +185,8 @@ func TestRepositoryService_Get_GroupRepositoryMembersOnly(t *testing.T) {
 		t.Fatalf("Get before joining = %v, want ErrNotFound", err)
 	}
 
-	if err := env.groups.Join(ctx, playerRequester, group.ID, character.ID); err != nil {
-		t.Fatalf("Join: %v", err)
-	}
+	err = env.groups.Join(ctx, playerRequester, group.ID, character.ID)
+	require.NoError(t, err)
 
 	if _, err := env.repos.Get(ctx, playerRequester, repoID); err != nil {
 		t.Fatalf("Get after joining: %v", err)
@@ -231,9 +203,8 @@ func TestRepositoryService_List_PlayerSeesOnlyOwnAndSystemRepositories(t *testin
 	env := newTestRepositoryEnv(t)
 	ctx := t.Context()
 
-	if err := env.repos.EnsureSystemRepositories(ctx); err != nil {
-		t.Fatalf("EnsureSystemRepositories: %v", err)
-	}
+	err := env.repos.EnsureSystemRepositories(ctx)
+	require.NoError(t, err)
 	if _, err := env.characters.Create(ctx, playerRequester, "", "Aria"); err != nil {
 		t.Fatalf("Create character: %v", err)
 	}
@@ -242,9 +213,7 @@ func TestRepositoryService_List_PlayerSeesOnlyOwnAndSystemRepositories(t *testin
 	}
 
 	repos, err := env.repos.List(ctx, playerRequester)
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	require.NoError(t, err)
 
 	// general + template + this player's own character repository.
 	if len(repos) != 3 {

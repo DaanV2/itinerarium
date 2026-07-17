@@ -4,19 +4,13 @@ import (
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHashAndVerifyPassword(t *testing.T) {
 	hash, err := authentication.HashPassword("correct horse battery staple")
-	if err != nil {
-		t.Fatalf("HashPassword: %v", err)
-	}
+	require.NoError(t, err, "HashPassword")
 
-	if !authentication.VerifyPassword(hash, "correct horse battery staple") {
-		t.Fatal("expected the correct password to verify")
-	}
-
-	if authentication.VerifyPassword(hash, "wrong password") {
-		t.Fatal("expected an incorrect password to fail verification")
-	}
+	require.True(t, authentication.VerifyPassword(hash, "correct horse battery staple"))
+	require.False(t, authentication.VerifyPassword(hash, "wrong password"))
 }

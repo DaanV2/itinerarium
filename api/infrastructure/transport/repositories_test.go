@@ -13,6 +13,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/require"
 )
 
 type repositoriesTestEnv struct {
@@ -27,17 +28,11 @@ func newRepositoriesTestEnv(t *testing.T) repositoriesTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err, "persistence.New")
+	require.NoError(t, db.Migrate(), "Migrate")
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore")
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
@@ -49,23 +44,17 @@ func newRepositoriesTestEnv(t *testing.T) repositoriesTestEnv {
 	requireAuth := transport.RequireAuth(authSvc)
 
 	ctx := t.Context()
-	if err := repoSvc.EnsureSystemRepositories(ctx); err != nil {
-		t.Fatalf("EnsureSystemRepositories: %v", err)
-	}
+	require.NoError(t, repoSvc.EnsureSystemRepositories(ctx), "EnsureSystemRepositories")
 
 	gm := &models.User{Email: "gm@example.com", PasswordHash: "hash", Role: models.RoleGM}
 	player := &models.User{Email: "player@example.com", PasswordHash: "hash", Role: models.RolePlayer}
 	other := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
 	for _, u := range []*models.User{gm, player, other} {
-		if err := users.Create(ctx, u); err != nil {
-			t.Fatalf("Create user: %v", err)
-		}
+		require.NoError(t, users.Create(ctx, u), "Create user")
 	}
 
 	character, err := characterSvc.Create(ctx, application.UserRequester{User: player}, "", "Aria")
-	if err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, err, "Create character")
 
 	router := transport.NewRouter(
 		transport.WithHandle("GET /api/repositories", requireAuth(transport.ListRepositoriesHandler(repoSvc))),
@@ -99,41 +88,29 @@ func TestRepositories_List_GMSeesGeneralTemplateAndCharacterRepository(t *testin
 	env := newRepositoriesTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/repositories", env.gmToken)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	var got []struct {
 		Type        string  `json:"type"`
 		CharacterID *string `json:"character_id"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got), "decoding body")
 
 	// general + template + Aria's character repository.
-	if len(got) != 3 {
-		t.Fatalf("List returned %d repositories, want 3: %+v", len(got), got)
-	}
+	require.Len(t, got, 3)
 }
 
 func TestRepositories_List_OwnerSeesOwnCharacterRepository(t *testing.T) {
 	env := newRepositoriesTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/repositories", env.playerToken)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	var got []struct {
 		Type string `json:"type"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatalf("decoding body: %v", err)
-	}
-	if len(got) != 3 {
-		t.Fatalf("List returned %d repositories for owner, want 3: %+v", len(got), got)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got), "decoding body")
+	require.Len(t, got, 3)
 }
 
 func TestRepositories_Get_ForeignCharacterRepositoryHidden(t *testing.T) {
@@ -141,14 +118,13 @@ func TestRepositories_Get_ForeignCharacterRepositoryHidden(t *testing.T) {
 
 	// Find the character repository ID via the GM's list.
 	listRec := env.doJSON(t, http.MethodGet, "/api/repositories", env.gmToken)
+
 	var repos []struct {
 		ID          string  `json:"id"`
 		Type        string  `json:"type"`
 		CharacterID *string `json:"character_id"`
 	}
-	if err := json.Unmarshal(listRec.Body.Bytes(), &repos); err != nil {
-		t.Fatalf("decoding list: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(listRec.Body.Bytes(), &repos), "decoding list")
 
 	var repoID string
 	for _, r := range repos {
@@ -156,21 +132,17 @@ func TestRepositories_Get_ForeignCharacterRepositoryHidden(t *testing.T) {
 			repoID = r.ID
 		}
 	}
-	if repoID == "" {
-		t.Fatalf("character repository not found in %+v", repos)
-	}
+
+	require.NotEmpty(t, repoID, "character repository not found in %+v", repos)
 
 	// Owner and GM can read it…
-	if rec := env.doJSON(t, http.MethodGet, "/api/repositories/"+repoID, env.playerToken); rec.Code != http.StatusOK {
-		t.Fatalf("owner Get: expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if rec := env.doJSON(t, http.MethodGet, "/api/repositories/"+repoID, env.gmToken); rec.Code != http.StatusOK {
-		t.Fatalf("GM Get: expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
+	rec := env.doJSON(t, http.MethodGet, "/api/repositories/"+repoID, env.playerToken)
+	require.Equal(t, http.StatusOK, rec.Code, "owner Get body: %s", rec.Body.String())
+
+	rec = env.doJSON(t, http.MethodGet, "/api/repositories/"+repoID, env.gmToken)
+	require.Equal(t, http.StatusOK, rec.Code, "GM Get body: %s", rec.Body.String())
 
 	// …a different player gets 404, never 403 (existence hidden).
-	rec := env.doJSON(t, http.MethodGet, "/api/repositories/"+repoID, env.otherToken)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 for foreign player, got %d: %s", rec.Code, rec.Body.String())
-	}
+	rec = env.doJSON(t, http.MethodGet, "/api/repositories/"+repoID, env.otherToken)
+	require.Equal(t, http.StatusNotFound, rec.Code, "foreign player body: %s", rec.Body.String())
 }

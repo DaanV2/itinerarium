@@ -5,6 +5,7 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/stretchr/testify/require"
 )
 
 // TestMigrate_UpgradesM1InventorySchema proves an existing M1 database — where
@@ -13,9 +14,7 @@ import (
 // group/location-owned rows (NULL character_id) become insertable.
 func TestMigrate_UpgradesM1InventorySchema(t *testing.T) {
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
+	require.NoError(t, err, "persistence.New")
 
 	// Recreate the M1 tables as AutoMigrate built them before this change.
 	legacyDDL := []string{
@@ -33,23 +32,16 @@ func TestMigrate_UpgradesM1InventorySchema(t *testing.T) {
 			"VALUES ('bal-1','char-1','cur-1',42)",
 	}
 	for _, ddl := range legacyDDL {
-		if err := db.DB().Exec(ddl).Error; err != nil {
-			t.Fatalf("legacy DDL %q: %v", ddl, err)
-		}
+		require.NoError(t, db.DB().Exec(ddl).Error, "legacy DDL %q", ddl)
 	}
 
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate over M1 schema: %v", err)
-	}
+	require.NoError(t, db.Migrate(), "Migrate over M1 schema")
 
 	// Legacy character-owned rows survive with their owner intact.
 	var legacy models.InventoryItem
-	if err := db.DB().First(&legacy, "id = ?", "item-1").Error; err != nil {
-		t.Fatalf("loading legacy item: %v", err)
-	}
-	if legacy.CharacterID == nil || *legacy.CharacterID != "char-1" {
-		t.Fatalf("legacy item CharacterID = %v, want char-1", legacy.CharacterID)
-	}
+	require.NoError(t, db.DB().First(&legacy, "id = ?", "item-1").Error, "loading legacy item")
+	require.NotNil(t, legacy.CharacterID)
+	require.Equal(t, "char-1", *legacy.CharacterID)
 
 	// Group-owned rows (NULL character_id) are now insertable.
 	groupItem := &models.InventoryItem{
@@ -57,16 +49,12 @@ func TestMigrate_UpgradesM1InventorySchema(t *testing.T) {
 		Name:           "Shared Rations",
 		Quantity:       10,
 	}
-	if err := db.DB().Create(groupItem).Error; err != nil {
-		t.Fatalf("inserting group-owned item after migration: %v", err)
-	}
+	require.NoError(t, db.DB().Create(groupItem).Error, "inserting group-owned item after migration")
 
 	groupBalance := &models.MoneyBalance{
 		GroupID:    groupItem.GroupID,
 		CurrencyID: "cur-1",
 		Amount:     7,
 	}
-	if err := db.DB().Create(groupBalance).Error; err != nil {
-		t.Fatalf("inserting group-owned balance after migration: %v", err)
-	}
+	require.NoError(t, db.DB().Create(groupBalance).Error, "inserting group-owned balance after migration")
 }

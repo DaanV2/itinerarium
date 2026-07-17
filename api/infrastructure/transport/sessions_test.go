@@ -13,6 +13,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/require"
 )
 
 type sessionTestEnv struct {
@@ -26,17 +27,11 @@ func newSessionTestEnv(t *testing.T) sessionTestEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err, "persistence.New")
+	require.NoError(t, db.Migrate(), "Migrate")
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore")
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
@@ -50,15 +45,11 @@ func newSessionTestEnv(t *testing.T) sessionTestEnv {
 	gm := &models.User{Email: "gm@example.com", PasswordHash: "hash", Role: models.RoleGM}
 	player := &models.User{Email: "player@example.com", PasswordHash: "hash", Role: models.RolePlayer}
 	for _, u := range []*models.User{gm, player} {
-		if err := users.Create(ctx, u); err != nil {
-			t.Fatalf("Create user: %v", err)
-		}
+		require.NoError(t, users.Create(ctx, u), "Create user")
 	}
 
 	character := &models.Character{Name: "Aria", UserID: player.ID}
-	if err := characters.Create(ctx, character); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, characters.Create(ctx, character), "Create character")
 
 	router := transport.NewRouter(
 		transport.WithHandle("GET /api/sessions", requireAuth(transport.ListSessionsHandler(sessionSvc))),
@@ -90,9 +81,7 @@ func (e sessionTestEnv) doJSON(t *testing.T, method, path, token string, payload
 
 	var body bytes.Buffer
 	if payload != nil {
-		if err := json.NewEncoder(&body).Encode(payload); err != nil {
-			t.Fatalf("encoding request: %v", err)
-		}
+		require.NoError(t, json.NewEncoder(&body).Encode(payload), "encoding request")
 	}
 
 	req := httptest.NewRequestWithContext(t.Context(), method, path, &body)
@@ -110,16 +99,12 @@ func (e sessionTestEnv) createSession(t *testing.T, name string) string {
 	t.Helper()
 
 	rec := e.doJSON(t, http.MethodPost, "/api/sessions", e.gmToken, map[string]any{"name": name})
-	if rec.Code != http.StatusCreated {
-		t.Fatalf("create session: expected 201, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, rec.Code, "create session body: %s", rec.Body.String())
 
 	var created struct {
 		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decoding session: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created), "decoding session")
 
 	return created.ID
 }
@@ -128,18 +113,14 @@ func TestSessions_RequireAuth(t *testing.T) {
 	env := newSessionTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/sessions", "", nil)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 with no token, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusUnauthorized, rec.Code, "body: %s", rec.Body.String())
 }
 
 func TestSessions_CreateIsGMOnly(t *testing.T) {
 	env := newSessionTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodPost, "/api/sessions", env.playerToken, map[string]any{"name": "Session One"})
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for player create, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusForbidden, rec.Code, "player create body: %s", rec.Body.String())
 }
 
 func TestSessions_ListIsGMOnly(t *testing.T) {
@@ -147,9 +128,7 @@ func TestSessions_ListIsGMOnly(t *testing.T) {
 	env.createSession(t, "Session One")
 
 	rec := env.doJSON(t, http.MethodGet, "/api/sessions", env.playerToken, nil)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for player list, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusForbidden, rec.Code, "player list body: %s", rec.Body.String())
 }
 
 func TestSessions_AddParticipantAndAdvanceGameDay(t *testing.T) {
@@ -158,39 +137,28 @@ func TestSessions_AddParticipantAndAdvanceGameDay(t *testing.T) {
 
 	addRec := env.doJSON(t, http.MethodPost, "/api/sessions/"+sessionID+"/participants", env.gmToken,
 		map[string]any{"character_id": env.characterID})
-	if addRec.Code != http.StatusNoContent {
-		t.Fatalf("add participant: expected 204, got %d: %s", addRec.Code, addRec.Body.String())
-	}
+	require.Equal(t, http.StatusNoContent, addRec.Code, "add participant body: %s", addRec.Body.String())
 
 	advanceRec := env.doJSON(t, http.MethodPost, "/api/sessions/"+sessionID+"/game-day", env.gmToken,
 		map[string]any{"delta": 2})
-	if advanceRec.Code != http.StatusOK {
-		t.Fatalf("advance game day: expected 200, got %d: %s", advanceRec.Code, advanceRec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, advanceRec.Code, "advance game day body: %s", advanceRec.Body.String())
 
 	getRec := env.doJSON(t, http.MethodGet, "/api/sessions/"+sessionID, env.gmToken, nil)
-	if getRec.Code != http.StatusOK {
-		t.Fatalf("get: expected 200, got %d: %s", getRec.Code, getRec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, getRec.Code, "get body: %s", getRec.Body.String())
 
 	var session struct {
 		Participants []struct {
 			ID string `json:"id"`
 		} `json:"participants"`
 	}
-	if err := json.Unmarshal(getRec.Body.Bytes(), &session); err != nil {
-		t.Fatalf("decoding session: %v", err)
-	}
-	if len(session.Participants) != 1 || session.Participants[0].ID != env.characterID {
-		t.Fatalf("participants = %v, want [%s]", session.Participants, env.characterID)
-	}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &session), "decoding session")
+	require.Len(t, session.Participants, 1)
+	require.Equal(t, env.characterID, session.Participants[0].ID)
 
 	removeRec := env.doJSON(
 		t, http.MethodDelete, "/api/sessions/"+sessionID+"/participants/"+env.characterID, env.gmToken, nil,
 	)
-	if removeRec.Code != http.StatusNoContent {
-		t.Fatalf("remove participant: expected 204, got %d: %s", removeRec.Code, removeRec.Body.String())
-	}
+	require.Equal(t, http.StatusNoContent, removeRec.Code, "remove participant body: %s", removeRec.Body.String())
 }
 
 func TestSessions_AdvanceGameDayIsGMOnly(t *testing.T) {
@@ -199,7 +167,5 @@ func TestSessions_AdvanceGameDayIsGMOnly(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/sessions/"+sessionID+"/game-day", env.playerToken,
 		map[string]any{"delta": 1})
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for player game-day advance, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusForbidden, rec.Code, "player game-day advance body: %s", rec.Body.String())
 }

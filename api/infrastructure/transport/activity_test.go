@@ -13,6 +13,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/require"
 )
 
 type activityHTTPEnv struct {
@@ -27,17 +28,11 @@ func newActivityHTTPEnv(t *testing.T) activityHTTPEnv {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err, "persistence.New")
+	require.NoError(t, db.Migrate(), "Migrate")
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err, "NewKeyStore")
 
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
@@ -57,14 +52,10 @@ func newActivityHTTPEnv(t *testing.T) activityHTTPEnv {
 
 	newUser := func(email string, role models.Role) string {
 		u := &models.User{Email: email, PasswordHash: "hash", Role: role}
-		if err := users.Create(ctx, u); err != nil {
-			t.Fatalf("Create user %s: %v", email, err)
-		}
+		require.NoError(t, users.Create(ctx, u), "Create user %s", email)
 
 		token, err := tokens.Issue(u.ID)
-		if err != nil {
-			t.Fatalf("Issue(%s): %v", email, err)
-		}
+		require.NoError(t, err, "Issue(%s)", email)
 
 		return token
 	}
@@ -74,14 +65,10 @@ func newActivityHTTPEnv(t *testing.T) activityHTTPEnv {
 	otherToken := newUser("other@example.com", models.RolePlayer)
 
 	player, err := users.GetByEmail(ctx, "player@example.com")
-	if err != nil {
-		t.Fatalf("GetByEmail: %v", err)
-	}
+	require.NoError(t, err, "GetByEmail")
 
 	character := &models.Character{Name: "Aria", UserID: player.ID, CurrentGameDay: 10}
-	if err := characterRepo.Create(ctx, character); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	require.NoError(t, characterRepo.Create(ctx, character), "Create character")
 
 	router := transport.NewRouter(
 		transport.WithHandle(
@@ -107,9 +94,7 @@ func (e activityHTTPEnv) doJSON(t *testing.T, method, path, token string, payloa
 
 	var body bytes.Buffer
 	if payload != nil {
-		if err := json.NewEncoder(&body).Encode(payload); err != nil {
-			t.Fatalf("encoding request: %v", err)
-		}
+		require.NoError(t, json.NewEncoder(&body).Encode(payload), "encoding request")
 	}
 
 	req := httptest.NewRequestWithContext(t.Context(), method, path, &body)
@@ -127,27 +112,21 @@ func TestCharacterActivity_RequiresAuth(t *testing.T) {
 	env := newActivityHTTPEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/activity", "", nil)
-	if rec.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 with no token, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusUnauthorized, rec.Code, "body: %s", rec.Body.String())
 }
 
 func TestCharacterActivity_ForeignCharacterHidden(t *testing.T) {
 	env := newActivityHTTPEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/activity", env.otherToken, nil)
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusNotFound, rec.Code, "body: %s", rec.Body.String())
 }
 
 func TestListActivity_PlayerForbidden(t *testing.T) {
 	env := newActivityHTTPEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/activity", env.playerToken, nil)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d: %s", rec.Code, rec.Body.String())
-	}
+	require.Equal(t, http.StatusForbidden, rec.Code, "body: %s", rec.Body.String())
 }
 
 func TestAnnounce_PlayerForbidden_GMCreates_ActorStrippedInPlayerFeed(t *testing.T) {
@@ -162,37 +141,25 @@ func TestAnnounce_PlayerForbidden_GMCreates_ActorStrippedInPlayerFeed(t *testing
 		"character_ids": []string{env.characterID},
 	}
 
-	if rec := env.doJSON(
-		t, http.MethodPost, "/api/activity/announcements", env.playerToken, announcement,
-	); rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for player announce, got %d: %s", rec.Code, rec.Body.String())
-	}
+	rec := env.doJSON(t, http.MethodPost, "/api/activity/announcements", env.playerToken, announcement)
+	require.Equal(t, http.StatusForbidden, rec.Code, "player announce body: %s", rec.Body.String())
 
-	if rec := env.doJSON(
-		t, http.MethodPost, "/api/activity/announcements", env.gmToken, announcement,
-	); rec.Code != http.StatusCreated {
-		t.Fatalf("expected 201 for GM announce, got %d: %s", rec.Code, rec.Body.String())
-	}
+	rec = env.doJSON(t, http.MethodPost, "/api/activity/announcements", env.gmToken, announcement)
+	require.Equal(t, http.StatusCreated, rec.Code, "GM announce body: %s", rec.Body.String())
 
-	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/activity", env.playerToken, nil)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
+	rec = env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/activity", env.playerToken, nil)
+	require.Equal(t, http.StatusOK, rec.Code, "body: %s", rec.Body.String())
 
 	// The raw response body must not contain the actor anywhere — the strip
 	// happens server-side, never in the client (core domain rule 2).
-	if bytes.Contains(rec.Body.Bytes(), []byte("The Grey Hand")) {
-		t.Fatalf("actor leaked into player response: %s", rec.Body.String())
-	}
+	require.NotContains(t, rec.Body.String(), "The Grey Hand", "actor leaked into player response")
 
 	var feed []struct {
 		EntityName string `json:"entity_name"`
 		Announced  bool   `json:"announced"`
 	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &feed); err != nil {
-		t.Fatalf("decoding feed: %v", err)
-	}
-	if len(feed) != 1 || feed[0].EntityName != "The Ruby of Vess" || !feed[0].Announced {
-		t.Fatalf("feed = %+v, want the announced theft", feed)
-	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &feed), "decoding feed")
+	require.Len(t, feed, 1, "want only the announced theft")
+	require.Equal(t, "The Ruby of Vess", feed[0].EntityName)
+	require.True(t, feed[0].Announced)
 }

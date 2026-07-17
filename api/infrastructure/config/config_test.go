@@ -4,11 +4,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/config"
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 )
 
 func TestFlagDefaultApplies(t *testing.T) {
@@ -16,13 +16,8 @@ func TestFlagDefaultApplies(t *testing.T) {
 	strFlag := set.String("test-defaults.some-key", "fallback", "test flag")
 	intFlag := set.Int("test-defaults.some-int", 42, "test flag")
 
-	if got := strFlag.Value(); got != "fallback" {
-		t.Fatalf("expected fallback, got %q", got)
-	}
-
-	if got := intFlag.Value(); got != 42 {
-		t.Fatalf("expected 42, got %d", got)
-	}
+	require.Equal(t, "fallback", strFlag.Value())
+	require.Equal(t, 42, intFlag.Value())
 }
 
 func TestEnvOverridesDefault(t *testing.T) {
@@ -31,9 +26,7 @@ func TestEnvOverridesDefault(t *testing.T) {
 
 	t.Setenv("TESTENV_DATABASE_PATH", "/tmp/override.db")
 
-	if got := f.Value(); got != "/tmp/override.db" {
-		t.Fatalf("expected env override, got %q", got)
-	}
+	require.Equal(t, "/tmp/override.db", f.Value(), "env should override the default")
 }
 
 func TestFlagOverridesEnv(t *testing.T) {
@@ -45,13 +38,9 @@ func TestFlagOverridesEnv(t *testing.T) {
 	fs := pflag.NewFlagSet("cmd", pflag.ContinueOnError)
 	set.AddToSet(fs)
 
-	if err := fs.Set("testprio.value", "from-flag"); err != nil {
-		t.Fatalf("setting flag: %v", err)
-	}
+	require.NoError(t, fs.Set("testprio.value", "from-flag"), "setting flag")
 
-	if got := f.Value(); got != "from-flag" {
-		t.Fatalf("expected the flag to win over env, got %q", got)
-	}
+	require.Equal(t, "from-flag", f.Value(), "the flag should win over env")
 }
 
 func TestUsageAdvertisesEnvVar(t *testing.T) {
@@ -62,55 +51,40 @@ func TestUsageAdvertisesEnvVar(t *testing.T) {
 	set.AddToSet(fs)
 
 	f := fs.Lookup("testusage.some-key")
-	if f == nil {
-		t.Fatal("expected the flag to be registered on the command set")
-	}
+	require.NotNil(t, f, "the flag should be registered on the command set")
 
-	if !strings.Contains(f.Usage, "TESTUSAGE_SOME_KEY") {
-		t.Fatalf("expected usage to advertise the env var, got %q", f.Usage)
-	}
+	require.Contains(t, f.Usage, "TESTUSAGE_SOME_KEY", "usage should advertise the env var")
 }
 
 func TestValidateRunsEverySet(t *testing.T) {
 	sentinel := errors.New("always invalid")
 	config.New("test-validate").WithValidate(func(*config.Config) error { return sentinel })
 
-	if err := config.Validate(); !errors.Is(err, sentinel) {
-		t.Fatalf("expected Validate to surface the set's error, got %v", err)
-	}
+	require.ErrorIs(t, config.Validate(), sentinel, "Validate should surface the set's error")
 }
 
 func TestGetReturnsRegisteredSet(t *testing.T) {
 	created := config.New("test-get")
-	if got := config.Get("test-get"); got != created {
-		t.Fatal("expected Get to return the registered set instance")
-	}
+	require.Same(t, created, config.Get("test-get"), "Get should return the registered set instance")
 }
 
 func TestEnvName(t *testing.T) {
-	if got := config.EnvName("database.max-idle-conns"); got != "DATABASE_MAX_IDLE_CONNS" {
-		t.Fatalf("expected DATABASE_MAX_IDLE_CONNS, got %q", got)
-	}
+	require.Equal(t, "DATABASE_MAX_IDLE_CONNS", config.EnvName("database.max-idle-conns"))
 }
 
 func TestConfigPathsStartsWithDotConfig(t *testing.T) {
 	paths := config.ConfigPaths()
-	if len(paths) == 0 || paths[0] != ".config" {
-		t.Fatalf("expected first search path to be \".config\", got %v", paths)
-	}
+	require.NotEmpty(t, paths)
+	require.Equal(t, ".config", paths[0], "first search path should be .config")
 }
 
 func TestLoadMissingExplicitFileErrors(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "does-not-exist.yaml")
-	if err := config.Load(file); err == nil {
-		t.Fatal("expected an error for a missing explicit config file")
-	}
+	require.Error(t, config.Load(file), "a missing explicit config file should error")
 }
 
 func TestLoadWithoutFileToleratesNoConfig(t *testing.T) {
-	if err := config.Load(""); err != nil {
-		t.Fatalf("expected auto-discovery to tolerate a missing config.yaml, got %v", err)
-	}
+	require.NoError(t, config.Load(""), "auto-discovery should tolerate a missing config.yaml")
 }
 
 func TestLoadReadsYAMLValues(t *testing.T) {
@@ -118,17 +92,11 @@ func TestLoadReadsYAMLValues(t *testing.T) {
 	f := set.String("testyaml.value", "default", "test flag")
 
 	file := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(file, []byte("testyaml:\n  value: from-yaml\n"), 0o600); err != nil {
-		t.Fatalf("writing config file: %v", err)
-	}
+	require.NoError(t, os.WriteFile(file, []byte("testyaml:\n  value: from-yaml\n"), 0o600), "writing config file")
 
-	if err := config.Load(file); err != nil {
-		t.Fatalf("Load: %v", err)
-	}
+	require.NoError(t, config.Load(file), "Load")
 
-	if got := f.Value(); got != "from-yaml" {
-		t.Fatalf("expected the YAML value, got %q", got)
-	}
+	require.Equal(t, "from-yaml", f.Value(), "expected the YAML value")
 }
 
 func TestSaveAsWritesResolvedConfig(t *testing.T) {
@@ -136,16 +104,10 @@ func TestSaveAsWritesResolvedConfig(t *testing.T) {
 	set.String("testsave.some-key", "some-value", "test flag")
 
 	file := filepath.Join(t.TempDir(), "nested", "config.yaml")
-	if err := config.SaveAs(file); err != nil {
-		t.Fatalf("SaveAs failed: %v", err)
-	}
+	require.NoError(t, config.SaveAs(file), "SaveAs")
 
 	data, err := os.ReadFile(file) //nolint:gosec // file is a t.TempDir() path this test just wrote itself
-	if err != nil {
-		t.Fatalf("expected config file to exist: %v", err)
-	}
+	require.NoError(t, err, "expected config file to exist")
 
-	if !strings.Contains(string(data), "some-value") {
-		t.Fatalf("expected saved config to contain the resolved value, got: %s", data)
-	}
+	require.Contains(t, string(data), "some-value", "saved config should contain the resolved value")
 }

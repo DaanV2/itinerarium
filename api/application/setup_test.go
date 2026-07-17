@@ -11,6 +11,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/require"
 )
 
 // noopRevocationStore never revokes anything; the setup flow only issues
@@ -25,17 +26,12 @@ func newTestSetupService(t *testing.T) *application.SetupService {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err)
+	err = db.Migrate()
+	require.NoError(t, err)
 
 	keys, err := authentication.NewKeyStore(authentication.WithKeysDir(t.TempDir()))
-	if err != nil {
-		t.Fatalf("NewKeyStore: %v", err)
-	}
+	require.NoError(t, err)
 
 	tokens := authentication.NewTokenService(keys, noopRevocationStore{})
 	users := repositories.NewUsers(db)
@@ -48,17 +44,13 @@ func TestSetupService_CreateInitialGM(t *testing.T) {
 	ctx := t.Context()
 
 	needsSetup, err := svc.NeedsSetup(ctx)
-	if err != nil {
-		t.Fatalf("NeedsSetup: %v", err)
-	}
+	require.NoError(t, err)
 	if !needsSetup {
 		t.Fatal("expected a fresh installation to need setup")
 	}
 
 	user, token, err := svc.CreateInitialGM(ctx, "gm@example.com", "hunter22hunter")
-	if err != nil {
-		t.Fatalf("CreateInitialGM: %v", err)
-	}
+	require.NoError(t, err)
 	if user.Role != models.RoleGM {
 		t.Fatalf("Role = %q, want gm", user.Role)
 	}
@@ -67,9 +59,7 @@ func TestSetupService_CreateInitialGM(t *testing.T) {
 	}
 
 	needsSetup, err = svc.NeedsSetup(ctx)
-	if err != nil {
-		t.Fatalf("NeedsSetup: %v", err)
-	}
+	require.NoError(t, err)
 	if needsSetup {
 		t.Fatal("expected setup to be complete after creating the initial account")
 	}

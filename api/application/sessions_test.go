@@ -8,18 +8,16 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestSessionEnv(t *testing.T) (*application.SessionService, *application.CharacterService) {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
-	if err != nil {
-		t.Fatalf("persistence.New: %v", err)
-	}
-	if err := db.Migrate(); err != nil {
-		t.Fatalf("Migrate: %v", err)
-	}
+	require.NoError(t, err)
+	err = db.Migrate()
+	require.NoError(t, err)
 
 	charSvc := application.NewCharacterService(
 		repositories.NewCharacters(db), repositories.NewUsers(db), repositories.NewKnowledgeRepositories(db),
@@ -33,9 +31,7 @@ func createSession(t *testing.T, svc *application.SessionService, name string) *
 	t.Helper()
 
 	session, err := svc.Create(t.Context(), gmRequester, name, "")
-	if err != nil {
-		t.Fatalf("Create session: %v", err)
-	}
+	require.NoError(t, err)
 
 	return session
 }
@@ -86,26 +82,20 @@ func TestSessionService_AddAndRemoveParticipant(t *testing.T) {
 	session := createSession(t, svc, "Session One")
 	character := ownedCharacter(t, charSvc, "Aria")
 
-	if err := svc.AddParticipant(ctx, gmRequester, session.ID, character.ID); err != nil {
-		t.Fatalf("AddParticipant: %v", err)
-	}
+	err := svc.AddParticipant(ctx, gmRequester, session.ID, character.ID)
+	require.NoError(t, err)
 
 	loaded, err := svc.Get(ctx, gmRequester, session.ID)
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
+	require.NoError(t, err)
 	if len(loaded.Participants) != 1 || loaded.Participants[0].ID != character.ID {
 		t.Fatalf("Participants = %v, want [%s]", loaded.Participants, character.ID)
 	}
 
-	if err := svc.RemoveParticipant(ctx, gmRequester, session.ID, character.ID); err != nil {
-		t.Fatalf("RemoveParticipant: %v", err)
-	}
+	err = svc.RemoveParticipant(ctx, gmRequester, session.ID, character.ID)
+	require.NoError(t, err)
 
 	loaded, err = svc.Get(ctx, gmRequester, session.ID)
-	if err != nil {
-		t.Fatalf("Get: %v", err)
-	}
+	require.NoError(t, err)
 	if len(loaded.Participants) != 0 {
 		t.Fatalf("Participants = %v, want none", loaded.Participants)
 	}
@@ -128,14 +118,11 @@ func TestSessionService_AddParticipant_DuplicateRejected(t *testing.T) {
 	session := createSession(t, svc, "Session One")
 	character := ownedCharacter(t, charSvc, "Aria")
 
-	if err := svc.AddParticipant(ctx, gmRequester, session.ID, character.ID); err != nil {
-		t.Fatalf("AddParticipant: %v", err)
-	}
-
 	err := svc.AddParticipant(ctx, gmRequester, session.ID, character.ID)
-	if !errors.Is(err, application.ErrAlreadyParticipant) {
-		t.Fatalf("second AddParticipant = %v, want ErrAlreadyParticipant", err)
-	}
+	require.NoError(t, err)
+
+	err = svc.AddParticipant(ctx, gmRequester, session.ID, character.ID)
+	require.ErrorIs(t, err, application.ErrAlreadyParticipant)
 }
 
 func TestSessionService_RemoveParticipant_NonParticipantRejected(t *testing.T) {
@@ -156,12 +143,10 @@ func TestSessionService_AdvanceGameDay_BulkAppliesToAllParticipants(t *testing.T
 	aria := ownedCharacter(t, charSvc, "Aria")
 	bram := ownedCharacter(t, charSvc, "Bram")
 
-	if err := svc.AddParticipant(ctx, gmRequester, session.ID, aria.ID); err != nil {
-		t.Fatalf("AddParticipant(Aria): %v", err)
-	}
-	if err := svc.AddParticipant(ctx, gmRequester, session.ID, bram.ID); err != nil {
-		t.Fatalf("AddParticipant(Bram): %v", err)
-	}
+	err := svc.AddParticipant(ctx, gmRequester, session.ID, aria.ID)
+	require.NoError(t, err)
+	err = svc.AddParticipant(ctx, gmRequester, session.ID, bram.ID)
+	require.NoError(t, err)
 
 	if _, err := svc.AdvanceGameDay(ctx, gmRequester, session.ID, 3, nil); err != nil {
 		t.Fatalf("AdvanceGameDay: %v", err)
@@ -183,9 +168,7 @@ func TestSessionService_AdvanceGameDay_BulkAppliesToAllParticipants(t *testing.T
 	}
 
 	loaded, err := charSvc.Get(ctx, gmRequester, aria.ID)
-	if err != nil {
-		t.Fatalf("Get(Aria): %v", err)
-	}
+	require.NoError(t, err)
 	if loaded.CurrentGameDay != 0 {
 		t.Errorf("Aria.CurrentGameDay = %d, want 0", loaded.CurrentGameDay)
 	}
@@ -198,29 +181,23 @@ func TestSessionService_AdvanceGameDay_SingleCharacterCatchUp(t *testing.T) {
 	aria := ownedCharacter(t, charSvc, "Aria")
 	bram := ownedCharacter(t, charSvc, "Bram")
 
-	if err := svc.AddParticipant(ctx, gmRequester, session.ID, aria.ID); err != nil {
-		t.Fatalf("AddParticipant(Aria): %v", err)
-	}
-	if err := svc.AddParticipant(ctx, gmRequester, session.ID, bram.ID); err != nil {
-		t.Fatalf("AddParticipant(Bram): %v", err)
-	}
+	err := svc.AddParticipant(ctx, gmRequester, session.ID, aria.ID)
+	require.NoError(t, err)
+	err = svc.AddParticipant(ctx, gmRequester, session.ID, bram.ID)
+	require.NoError(t, err)
 
 	if _, err := svc.AdvanceGameDay(ctx, gmRequester, session.ID, 2, &bram.ID); err != nil {
 		t.Fatalf("AdvanceGameDay(Bram only): %v", err)
 	}
 
 	loadedAria, err := charSvc.Get(ctx, gmRequester, aria.ID)
-	if err != nil {
-		t.Fatalf("Get(Aria): %v", err)
-	}
+	require.NoError(t, err)
 	if loadedAria.CurrentGameDay != 0 {
 		t.Errorf("Aria.CurrentGameDay = %d, want 0 (unaffected)", loadedAria.CurrentGameDay)
 	}
 
 	loadedBram, err := charSvc.Get(ctx, gmRequester, bram.ID)
-	if err != nil {
-		t.Fatalf("Get(Bram): %v", err)
-	}
+	require.NoError(t, err)
 	if loadedBram.CurrentGameDay != 2 {
 		t.Errorf("Bram.CurrentGameDay = %d, want 2", loadedBram.CurrentGameDay)
 	}
@@ -232,11 +209,10 @@ func TestSessionService_AdvanceGameDay_RejectsNegativeResult(t *testing.T) {
 	session := createSession(t, svc, "Session One")
 	character := ownedCharacter(t, charSvc, "Aria")
 
-	if err := svc.AddParticipant(ctx, gmRequester, session.ID, character.ID); err != nil {
-		t.Fatalf("AddParticipant: %v", err)
-	}
+	err := svc.AddParticipant(ctx, gmRequester, session.ID, character.ID)
+	require.NoError(t, err)
 
-	_, err := svc.AdvanceGameDay(ctx, gmRequester, session.ID, -1, nil)
+	_, err = svc.AdvanceGameDay(ctx, gmRequester, session.ID, -1, nil)
 	if !errors.Is(err, application.ErrInvalidGameDay) {
 		t.Fatalf("AdvanceGameDay(negative result) = %v, want ErrInvalidGameDay", err)
 	}
