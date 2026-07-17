@@ -91,6 +91,7 @@ func journalRouter(services *Services) *transport.Router {
 		transport.WithHandle("POST /", transport.CreateJournalEntryHandler(services.Journals)),
 		transport.WithHandle("GET /{entryId}", transport.GetJournalEntryHandler(services.Journals)),
 		transport.WithHandle("PATCH /{entryId}", transport.UpdateJournalEntryHandler(services.Journals)),
+		transport.WithHandle("POST /{entryId}/convert", transport.ConvertJournalEntryHandler(services.Journals)),
 	)
 }
 

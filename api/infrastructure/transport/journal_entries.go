@@ -107,12 +107,34 @@ func UpdateJournalEntryHandler(svc *application.JournalEntryService) http.Handle
 	})
 }
 
+// ConvertJournalEntryHandler copies a journal entry into a new document in
+// the character's personal repository. The journal entry itself is left
+// untouched. Must be wrapped in RequireAuth.
+func ConvertJournalEntryHandler(svc *application.JournalEntryService) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		view, err := svc.Convert(r.Context(), requesterFrom(r), r.PathValue("entryId"))
+		if err != nil {
+			writeJournalEntryServiceError(w, err)
+
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, toDocumentResponse(view))
+	})
+}
+
 func writeJournalEntryServiceError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, application.ErrNotFound):
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, application.ErrInvalidContent):
 		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, application.ErrPathCollision):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "path_collision"})
+	case errors.Is(err, application.ErrInvalidDocument):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, application.ErrForbidden):
+		writeError(w, http.StatusForbidden, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, "processing request")
 	}

@@ -38,6 +38,9 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 	repositoryService := application.NewRepositoryService(
 		repos.KnowledgeRepositories, repos.Groups, repos.Characters,
 	)
+	documentService := application.NewDocumentService(
+		repos.Documents, repositoryService, repos.Characters, repos.Groups, repos.DocumentShares,
+	)
 
 	return &Services{
 		Setup:      application.NewSetupService(repos.Users, tokens),
@@ -59,10 +62,10 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 		Locations:    locations,
 		Sessions:     application.NewSessionService(repos.Sessions, characters),
 		Repositories: repositoryService,
-		Documents: application.NewDocumentService(
-			repos.Documents, repositoryService, repos.Characters, repos.Groups, repos.DocumentShares,
+		Documents:    documentService,
+		Journals: application.NewJournalEntryService(
+			repos.JournalEntries, repos.Characters, documentService, repos.KnowledgeRepositories,
 		),
-		Journals: application.NewJournalEntryService(repos.JournalEntries, repos.Characters),
 		Activity: application.NewActivityService(
 			repos.ActivityEntries,
 			characters,

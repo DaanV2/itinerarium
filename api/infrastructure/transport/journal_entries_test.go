@@ -37,9 +37,15 @@ func newJournalTestEnv(t *testing.T) journalTestEnv {
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
+	groups := repositories.NewGroups(db)
 	journalEntries := repositories.NewJournalEntries(db)
+	knowledgeRepos := repositories.NewKnowledgeRepositories(db)
 	authSvc := application.NewAuthService(tokens, users)
-	journalSvc := application.NewJournalEntryService(journalEntries, characters)
+	repositoryService := application.NewRepositoryService(knowledgeRepos, groups, characters)
+	documentSvc := application.NewDocumentService(
+		repositories.NewDocuments(db), repositoryService, characters, groups, repositories.NewDocumentShares(db),
+	)
+	journalSvc := application.NewJournalEntryService(journalEntries, characters, documentSvc, knowledgeRepos)
 	requireAuth := transport.RequireAuth(authSvc)
 
 	ctx := t.Context()
@@ -78,6 +84,10 @@ func newJournalTestEnv(t *testing.T) journalTestEnv {
 		transport.WithHandle(
 			"PATCH /api/characters/{id}/journal/{entryId}",
 			requireAuth(transport.UpdateJournalEntryHandler(journalSvc)),
+		),
+		transport.WithHandle(
+			"POST /api/characters/{id}/journal/{entryId}/convert",
+			requireAuth(transport.ConvertJournalEntryHandler(journalSvc)),
 		),
 	)
 
@@ -211,6 +221,50 @@ func TestUpdateJournalEntry_OtherPlayerCannotEdit(t *testing.T) {
 	rec := env.doJSON(
 		t, http.MethodPatch, "/api/characters/"+env.characterID+"/journal/"+created.ID, env.otherToken,
 		map[string]string{"content": "Hijacked"},
+	)
+	require.Equal(t, http.StatusNotFound, rec.Code, "body: %s", rec.Body.String())
+}
+
+func TestConvertJournalEntry_OwnerCreatesDocument(t *testing.T) {
+	env := newJournalTestEnv(t)
+
+	createRec := env.doJSON(t, http.MethodPost, "/api/characters/"+env.characterID+"/journal", env.playerToken,
+		map[string]string{"content": "Dear diary, today I met a dragon."})
+
+	var created struct{ ID string }
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created), "decoding body")
+
+	rec := env.doJSON(
+		t, http.MethodPost, "/api/characters/"+env.characterID+"/journal/"+created.ID+"/convert", env.playerToken, nil,
+	)
+	require.Equal(t, http.StatusCreated, rec.Code, "body: %s", rec.Body.String())
+
+	var doc struct {
+		Title    string `json:"title"`
+		Sections []struct{ Content string }
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &doc), "decoding body")
+	require.Len(t, doc.Sections, 1)
+	require.Equal(t, "Dear diary, today I met a dragon.", doc.Sections[0].Content)
+
+	// The journal entry itself is unaffected.
+	getRec := env.doJSON(
+		t, http.MethodGet, "/api/characters/"+env.characterID+"/journal/"+created.ID, env.playerToken, nil,
+	)
+	require.Equal(t, http.StatusOK, getRec.Code, "body: %s", getRec.Body.String())
+}
+
+func TestConvertJournalEntry_OtherPlayerCannotConvert(t *testing.T) {
+	env := newJournalTestEnv(t)
+
+	createRec := env.doJSON(t, http.MethodPost, "/api/characters/"+env.characterID+"/journal", env.playerToken,
+		map[string]string{"content": "Secret entry"})
+
+	var created struct{ ID string }
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created), "decoding body")
+
+	rec := env.doJSON(
+		t, http.MethodPost, "/api/characters/"+env.characterID+"/journal/"+created.ID+"/convert", env.otherToken, nil,
 	)
 	require.Equal(t, http.StatusNotFound, rec.Code, "body: %s", rec.Body.String())
 }
