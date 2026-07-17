@@ -1,13 +1,13 @@
 package application_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,23 +41,18 @@ func TestGroupService_Create_PlayerForbidden(t *testing.T) {
 	svc, _, _ := newTestGroupEnv(t)
 
 	_, err := svc.Create(t.Context(), playerRequester, "Thieves Guild", models.GroupTypeOrganization, "")
-	if !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("Create as player = %v, want ErrForbidden", err)
-	}
+	require.ErrorIs(t, err, application.ErrForbidden)
 }
 
 func TestGroupService_Create_RejectsInvalidInput(t *testing.T) {
 	svc, _, _ := newTestGroupEnv(t)
 	ctx := t.Context()
 
-	if _, err := svc.Create(ctx, gmRequester, "", models.GroupTypeFamily, ""); !errors.Is(err, application.ErrInvalidName) {
-		t.Fatalf("Create(empty name) = %v, want ErrInvalidName", err)
-	}
+	_, err := svc.Create(ctx, gmRequester, "", models.GroupTypeFamily, "")
+	require.ErrorIs(t, err, application.ErrInvalidName)
 
-	_, err := svc.Create(ctx, gmRequester, "The Council", models.GroupType("guild"), "")
-	if !errors.Is(err, application.ErrInvalidGroupType) {
-		t.Fatalf("Create(bad type) = %v, want ErrInvalidGroupType", err)
-	}
+	_, err = svc.Create(ctx, gmRequester, "The Council", models.GroupType("guild"), "")
+	require.ErrorIs(t, err, application.ErrInvalidGroupType)
 }
 
 func TestGroupService_TypesShareMechanics(t *testing.T) {
@@ -68,16 +63,13 @@ func TestGroupService_TypesShareMechanics(t *testing.T) {
 	for _, groupType := range []models.GroupType{
 		models.GroupTypeOrganization, models.GroupTypeFamily, models.GroupTypeOther,
 	} {
-		if _, err := svc.Create(ctx, gmRequester, "Group "+string(groupType), groupType, ""); err != nil {
-			t.Fatalf("Create(%s): %v", groupType, err)
-		}
+		_, err := svc.Create(ctx, gmRequester, "Group "+string(groupType), groupType, "")
+		require.NoError(t, err)
 	}
 
 	groups, err := svc.List(ctx, playerRequester)
 	require.NoError(t, err)
-	if len(groups) != 3 {
-		t.Fatalf("List returned %d groups, want 3", len(groups))
-	}
+	assert.Len(t, groups, 3)
 }
 
 func TestGroupService_Update_PlayerForbidden(t *testing.T) {
@@ -87,9 +79,7 @@ func TestGroupService_Update_PlayerForbidden(t *testing.T) {
 	newName := "Assassins Guild"
 
 	_, err := svc.Update(t.Context(), playerRequester, group.ID, &newName, nil, nil)
-	if !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("Update as player = %v, want ErrForbidden", err)
-	}
+	require.ErrorIs(t, err, application.ErrForbidden)
 }
 
 func TestGroupService_JoinAndLeave_RecordsGameDayStampedEvents(t *testing.T) {
@@ -99,39 +89,29 @@ func TestGroupService_JoinAndLeave_RecordsGameDayStampedEvents(t *testing.T) {
 	character := ownedCharacter(t, charSvc, "Aria")
 
 	day := 7
-	if _, err := charSvc.Update(ctx, gmRequester, character.ID, nil, &day); err != nil {
-		t.Fatalf("set game day: %v", err)
-	}
+	_, err := charSvc.Update(ctx, gmRequester, character.ID, nil, &day)
+	require.NoError(t, err)
 
-	err := svc.Join(ctx, playerRequester, group.ID, character.ID)
+	err = svc.Join(ctx, playerRequester, group.ID, character.ID)
 	require.NoError(t, err)
 
 	loaded, err := svc.Get(ctx, playerRequester, group.ID)
 	require.NoError(t, err)
-	if len(loaded.Members) != 1 || loaded.Members[0].ID != character.ID {
-		t.Fatalf("Members = %v, want [%s]", loaded.Members, character.ID)
-	}
+	require.Len(t, loaded.Members, 1)
+	assert.Equal(t, character.ID, loaded.Members[0].ID)
 
 	err = svc.Leave(ctx, playerRequester, group.ID, character.ID)
 	require.NoError(t, err)
 
 	entries, err := activity.ListByEntity(ctx, "group", group.ID)
 	require.NoError(t, err)
-	if len(entries) != 2 {
-		t.Fatalf("recorded %d entries, want 2 (join + leave)", len(entries))
-	}
+	require.Len(t, entries, 2, "recorded entries, want 2 (join + leave)")
 	for i, want := range []models.ActivityAction{models.ActivityActionJoined, models.ActivityActionLeft} {
 		entry := entries[i]
-		if entry.Action != want {
-			t.Errorf("entry[%d].Action = %s, want %s", i, entry.Action, want)
-		}
-		if entry.GameDay != day {
-			t.Errorf("entry[%d].GameDay = %d, want %d", i, entry.GameDay, day)
-		}
-		if entry.CharacterID != character.ID || entry.Actor != character.Name {
-			t.Errorf("entry[%d] actor = %s/%s, want %s/%s",
-				i, entry.CharacterID, entry.Actor, character.ID, character.Name)
-		}
+		assert.Equal(t, want, entry.Action, "entry[%d].Action", i)
+		assert.Equal(t, day, entry.GameDay, "entry[%d].GameDay", i)
+		assert.Equal(t, character.ID, entry.CharacterID, "entry[%d].CharacterID", i)
+		assert.Equal(t, character.Name, entry.Actor, "entry[%d].Actor", i)
 	}
 }
 
@@ -143,9 +123,7 @@ func TestGroupService_Join_ForeignCharacterHidden(t *testing.T) {
 	// Another player must not be able to move Aria — and must not learn she
 	// exists: ErrNotFound, never ErrForbidden.
 	err := svc.Join(t.Context(), otherPlayer, group.ID, character.ID)
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Join with foreign character = %v, want ErrNotFound", err)
-	}
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestGroupService_Join_DuplicateRejected(t *testing.T) {
@@ -157,9 +135,8 @@ func TestGroupService_Join_DuplicateRejected(t *testing.T) {
 	err := svc.Join(ctx, playerRequester, group.ID, character.ID)
 	require.NoError(t, err)
 
-	if err := svc.Join(ctx, playerRequester, group.ID, character.ID); !errors.Is(err, application.ErrAlreadyMember) {
-		t.Fatalf("second Join = %v, want ErrAlreadyMember", err)
-	}
+	err = svc.Join(ctx, playerRequester, group.ID, character.ID)
+	require.ErrorIs(t, err, application.ErrAlreadyMember)
 }
 
 func TestGroupService_Leave_NonMemberRejected(t *testing.T) {
@@ -167,9 +144,8 @@ func TestGroupService_Leave_NonMemberRejected(t *testing.T) {
 	group := createGroup(t, svc, "Thieves Guild")
 	character := ownedCharacter(t, charSvc, "Aria")
 
-	if err := svc.Leave(t.Context(), playerRequester, group.ID, character.ID); !errors.Is(err, application.ErrNotMember) {
-		t.Fatalf("Leave without membership = %v, want ErrNotMember", err)
-	}
+	err := svc.Leave(t.Context(), playerRequester, group.ID, character.ID)
+	require.ErrorIs(t, err, application.ErrNotMember)
 }
 
 func TestGroupService_GMManagesAnyCharacter(t *testing.T) {

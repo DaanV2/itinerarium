@@ -1,13 +1,13 @@
 package application_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -146,25 +146,21 @@ func TestActivityService_Feed_GroupScopeGatedByMembershipAndGameDay(t *testing.T
 	require.NoError(t, err)
 
 	memberFeed := env.feed(t, playerRequester, member.ID)
-	if findEntry(memberFeed, models.ActivityActionAdded, "Lockpicks") == nil {
-		t.Fatalf("member feed = %+v, want the Lockpicks addition", memberFeed)
-	}
-	if entry := findEntry(memberFeed, models.ActivityActionJoined, "Thieves Guild"); entry == nil {
-		t.Fatalf("member feed = %+v, want the join event", memberFeed)
-	} else if entry.Actor != "Aria" {
-		t.Fatalf("join entry actor = %q, want %q", entry.Actor, "Aria")
-	}
+	assert.NotNil(t, findEntry(memberFeed, models.ActivityActionAdded, "Lockpicks"),
+		"member feed = %+v, want the Lockpicks addition", memberFeed)
+
+	joinEntry := findEntry(memberFeed, models.ActivityActionJoined, "Thieves Guild")
+	require.NotNil(t, joinEntry, "member feed = %+v, want the join event", memberFeed)
+	assert.Equal(t, "Aria", joinEntry.Actor)
 
 	// A non-member sees nothing — group content stays invisible (rule 3).
-	if outsiderFeed := env.feed(t, otherRequester, outsider.ID); len(outsiderFeed) != 0 {
-		t.Fatalf("outsider feed = %+v, want empty", outsiderFeed)
-	}
+	outsiderFeed := env.feed(t, otherRequester, outsider.ID)
+	assert.Empty(t, outsiderFeed, "outsider feed = %+v, want empty", outsiderFeed)
 
 	// Rewinding below the events' game day makes them disappear again (M4).
 	env.setGameDay(t, member.ID, 4)
-	if rewound := env.feed(t, playerRequester, member.ID); len(rewound) != 0 {
-		t.Fatalf("rewound feed = %+v, want empty", rewound)
-	}
+	rewound := env.feed(t, playerRequester, member.ID)
+	assert.Empty(t, rewound, "rewound feed = %+v, want empty", rewound)
 }
 
 func TestActivityService_Feed_PlayerChangeStampedWithOwnCharacter(t *testing.T) {
@@ -177,27 +173,21 @@ func TestActivityService_Feed_PlayerChangeStampedWithOwnCharacter(t *testing.T) 
 
 	group := createGroup(t, env.groups, "Caravan")
 	for _, c := range []*models.Character{actor, ahead} {
-		if err := env.groups.Join(ctx, gmRequester, group.ID, c.ID); err != nil {
-			t.Fatalf("Join: %v", err)
-		}
+		err := env.groups.Join(ctx, gmRequester, group.ID, c.ID)
+		require.NoError(t, err)
 	}
 
-	if _, err := env.inventory.AddItem(ctx, playerRequester, groupOwner(group.ID), "Rations", nil, 5, ""); err != nil {
-		t.Fatalf("AddItem: %v", err)
-	}
+	_, err := env.inventory.AddItem(ctx, playerRequester, groupOwner(group.ID), "Rations", nil, 5, "")
+	require.NoError(t, err)
 
 	entry := findEntry(env.feed(t, playerRequester, actor.ID), models.ActivityActionAdded, "Rations")
-	if entry == nil {
-		t.Fatalf("actor cannot see their own addition")
-	}
-	if entry.GameDay != 3 || entry.Actor != "Aria" {
-		t.Fatalf("entry = day %d actor %q, want day 3 actor Aria", entry.GameDay, entry.Actor)
-	}
+	require.NotNil(t, entry, "actor cannot see their own addition")
+	assert.Equal(t, 3, entry.GameDay)
+	assert.Equal(t, "Aria", entry.Actor)
 
 	// The member further along sees it too (3 <= 10).
-	if findEntry(env.feed(t, otherRequester, ahead.ID), models.ActivityActionAdded, "Rations") == nil {
-		t.Fatalf("fellow member cannot see the addition")
-	}
+	assert.NotNil(t, findEntry(env.feed(t, otherRequester, ahead.ID), models.ActivityActionAdded, "Rations"),
+		"fellow member cannot see the addition")
 }
 
 func TestActivityService_Feed_LocationScopeRequiresAccess(t *testing.T) {
@@ -210,35 +200,30 @@ func TestActivityService_Feed_LocationScopeRequiresAccess(t *testing.T) {
 
 	location, err := env.locations.Create(ctx, gmRequester, "The Vault", "", "")
 	require.NoError(t, err)
-	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &granted.ID, nil); err != nil {
-		t.Fatalf("GrantAccess: %v", err)
-	}
+	_, err = env.locations.GrantAccess(ctx, gmRequester, location.ID, &granted.ID, nil)
+	require.NoError(t, err)
 
-	if _, err := env.inventory.AddItem(ctx, gmRequester, locOwner(location.ID), "Gold Idol", nil, 1, ""); err != nil {
-		t.Fatalf("AddItem: %v", err)
-	}
+	_, err = env.inventory.AddItem(ctx, gmRequester, locOwner(location.ID), "Gold Idol", nil, 1, "")
+	require.NoError(t, err)
 
-	if findEntry(env.feed(t, playerRequester, granted.ID), models.ActivityActionAdded, "Gold Idol") == nil {
-		t.Fatalf("granted character cannot see the location event")
-	}
-	if deniedFeed := env.feed(t, otherRequester, denied.ID); len(deniedFeed) != 0 {
-		t.Fatalf("denied feed = %+v, want empty — location existence must not leak", deniedFeed)
-	}
+	assert.NotNil(t, findEntry(env.feed(t, playerRequester, granted.ID), models.ActivityActionAdded, "Gold Idol"),
+		"granted character cannot see the location event")
+
+	deniedFeed := env.feed(t, otherRequester, denied.ID)
+	assert.Empty(t, deniedFeed, "denied feed = %+v, want empty — location existence must not leak", deniedFeed)
 }
 
 func TestActivityService_Feed_CharacterInventoryNotTracked(t *testing.T) {
 	env := newActivityTestEnv(t)
 	character := env.newCharacter(t, playerRequester, "Aria", 5)
 
-	if _, err := env.inventory.AddItem(
+	_, err := env.inventory.AddItem(
 		t.Context(), playerRequester, charOwner(character.ID), "Diary", nil, 1, "",
-	); err != nil {
-		t.Fatalf("AddItem: %v", err)
-	}
+	)
+	require.NoError(t, err)
 
-	if feed := env.feed(t, playerRequester, character.ID); len(feed) != 0 {
-		t.Fatalf("feed = %+v, want empty — personal inventories are private", feed)
-	}
+	feed := env.feed(t, playerRequester, character.ID)
+	assert.Empty(t, feed, "feed = %+v, want empty — personal inventories are private", feed)
 }
 
 func TestActivityService_Feed_DocumentEventsSurfaceAtRevealDay(t *testing.T) {
@@ -257,24 +242,21 @@ func TestActivityService_Feed_DocumentEventsSurfaceAtRevealDay(t *testing.T) {
 	}
 
 	day := 5
-	if _, err := env.docs.Create(ctx, gmRequester, generalID, &application.CreateDocumentInput{
+	_, err = env.docs.Create(ctx, gmRequester, generalID, &application.CreateDocumentInput{
 		Path:            "lore/prophecy",
 		Title:           "The Prophecy",
 		SharedOnGameDay: &day,
 		Sections:        []application.DocumentSectionInput{{Content: "It is foretold."}},
-	}); err != nil {
-		t.Fatalf("Create document: %v", err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Before the reveal day the entry must not leak the document's existence.
-	if feed := env.feed(t, playerRequester, character.ID); len(feed) != 0 {
-		t.Fatalf("feed before reveal = %+v, want empty", feed)
-	}
+	feed := env.feed(t, playerRequester, character.ID)
+	assert.Empty(t, feed, "feed before reveal = %+v, want empty", feed)
 
 	env.setGameDay(t, character.ID, 5)
-	if findEntry(env.feed(t, playerRequester, character.ID), models.ActivityActionAdded, "The Prophecy") == nil {
-		t.Fatalf("document addition missing from feed after reveal day")
-	}
+	assert.NotNil(t, findEntry(env.feed(t, playerRequester, character.ID), models.ActivityActionAdded, "The Prophecy"),
+		"document addition missing from feed after reveal day")
 }
 
 func TestActivityService_Feed_GroupMoneyChangeTracked(t *testing.T) {
@@ -290,17 +272,13 @@ func TestActivityService_Feed_GroupMoneyChangeTracked(t *testing.T) {
 	err = env.currencies.Create(ctx, currency)
 	require.NoError(t, err)
 
-	if _, err := env.inventory.SetMoney(ctx, gmRequester, groupOwner(group.ID), currency.ID, 250); err != nil {
-		t.Fatalf("SetMoney: %v", err)
-	}
+	_, err = env.inventory.SetMoney(ctx, gmRequester, groupOwner(group.ID), currency.ID, 250)
+	require.NoError(t, err)
 
 	entry := findEntry(env.feed(t, playerRequester, member.ID), models.ActivityActionUpdated, "Gold")
-	if entry == nil {
-		t.Fatalf("money change missing from member feed")
-	}
-	if entry.EntityType != "money" || entry.Actor != "GM" {
-		t.Fatalf("entry = type %q actor %q, want money/GM", entry.EntityType, entry.Actor)
-	}
+	require.NotNil(t, entry, "money change missing from member feed")
+	assert.Equal(t, "money", entry.EntityType)
+	assert.Equal(t, "GM", entry.Actor)
 }
 
 func TestActivityService_Announce_BypassesAccessAndStripsActor(t *testing.T) {
@@ -311,36 +289,29 @@ func TestActivityService_Announce_BypassesAccessAndStripsActor(t *testing.T) {
 	otherRequester := fakeRequester{id: "player-2", gm: false}
 	bystander := env.newCharacter(t, otherRequester, "Beren", 5)
 
-	if _, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
+	_, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
 		GameDay:      4,
 		Action:       models.ActivityActionStolen,
 		EntityType:   "item",
 		EntityName:   "The Ruby of Vess",
 		Actor:        "The Grey Hand",
 		CharacterIDs: []string{target.ID},
-	}); err != nil {
-		t.Fatalf("Announce: %v", err)
-	}
+	})
+	require.NoError(t, err)
 
 	// The target sees the theft — without the actor (rules 2 and 4).
 	entry := findEntry(env.feed(t, playerRequester, target.ID), models.ActivityActionStolen, "The Ruby of Vess")
-	if entry == nil {
-		t.Fatalf("announced theft missing from target feed")
-	}
-	if entry.Actor != "" {
-		t.Fatalf("actor leaked to player: %q", entry.Actor)
-	}
+	require.NotNil(t, entry, "announced theft missing from target feed")
+	assert.Empty(t, entry.Actor, "actor leaked to player")
 
 	// A GM reading the same feed keeps the full picture.
 	gmEntry := findEntry(env.feed(t, gmRequester, target.ID), models.ActivityActionStolen, "The Ruby of Vess")
-	if gmEntry == nil || gmEntry.Actor != "The Grey Hand" {
-		t.Fatalf("GM view of announced entry = %+v, want actor preserved", gmEntry)
-	}
+	require.NotNil(t, gmEntry, "GM view of announced entry missing")
+	assert.Equal(t, "The Grey Hand", gmEntry.Actor)
 
 	// Characters outside the target list never see it.
-	if bystanderFeed := env.feed(t, otherRequester, bystander.ID); len(bystanderFeed) != 0 {
-		t.Fatalf("bystander feed = %+v, want empty", bystanderFeed)
-	}
+	bystanderFeed := env.feed(t, otherRequester, bystander.ID)
+	assert.Empty(t, bystanderFeed, "bystander feed = %+v, want empty", bystanderFeed)
 }
 
 func TestActivityService_Announce_PublicReachesEveryoneAtGameDay(t *testing.T) {
@@ -351,22 +322,19 @@ func TestActivityService_Announce_PublicReachesEveryoneAtGameDay(t *testing.T) {
 	otherRequester := fakeRequester{id: "player-2", gm: false}
 	ahead := env.newCharacter(t, otherRequester, "Beren", 10)
 
-	if _, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
+	_, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
 		GameDay:    5,
 		Action:     models.ActivityActionDestroyed,
 		EntityName: "The Old Bridge",
 		Public:     true,
-	}); err != nil {
-		t.Fatalf("Announce: %v", err)
-	}
+	})
+	require.NoError(t, err)
 
 	// Public announcements still respect the surfacing game day.
-	if feed := env.feed(t, playerRequester, behind.ID); len(feed) != 0 {
-		t.Fatalf("feed before the announcement day = %+v, want empty", feed)
-	}
-	if findEntry(env.feed(t, otherRequester, ahead.ID), models.ActivityActionDestroyed, "The Old Bridge") == nil {
-		t.Fatalf("public announcement missing from feed past its day")
-	}
+	feed := env.feed(t, playerRequester, behind.ID)
+	assert.Empty(t, feed, "feed before the announcement day = %+v, want empty", feed)
+	assert.NotNil(t, findEntry(env.feed(t, otherRequester, ahead.ID), models.ActivityActionDestroyed, "The Old Bridge"),
+		"public announcement missing from feed past its day")
 }
 
 func TestActivityService_Announce_GroupTargetFollowsMembership(t *testing.T) {
@@ -378,81 +346,68 @@ func TestActivityService_Announce_GroupTargetFollowsMembership(t *testing.T) {
 	err := env.groups.Join(ctx, playerRequester, group.ID, member.ID)
 	require.NoError(t, err)
 
-	if _, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
+	_, err = env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
 		GameDay:    5,
 		Action:     models.ActivityActionStolen,
 		EntityName: "The Reliquary",
 		GroupIDs:   []string{group.ID},
-	}); err != nil {
-		t.Fatalf("Announce: %v", err)
-	}
+	})
+	require.NoError(t, err)
 
-	if findEntry(env.feed(t, playerRequester, member.ID), models.ActivityActionStolen, "The Reliquary") == nil {
-		t.Fatalf("group-targeted announcement missing from member feed")
-	}
+	assert.NotNil(t, findEntry(env.feed(t, playerRequester, member.ID), models.ActivityActionStolen, "The Reliquary"),
+		"group-targeted announcement missing from member feed")
 }
 
 func TestActivityService_Announce_Validation(t *testing.T) {
 	env := newActivityTestEnv(t)
 	ctx := t.Context()
 
-	if _, err := env.activity.Announce(ctx, playerRequester, &application.AnnounceInput{
+	_, err := env.activity.Announce(ctx, playerRequester, &application.AnnounceInput{
 		GameDay: 1, Action: models.ActivityActionStolen, EntityName: "X", Public: true,
-	}); !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("Announce as player = %v, want ErrForbidden", err)
-	}
+	})
+	require.ErrorIs(t, err, application.ErrForbidden)
 
-	if _, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
+	_, err = env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
 		GameDay: 1, Action: models.ActivityActionStolen, EntityName: "X",
-	}); !errors.Is(err, application.ErrInvalidAnnouncement) {
-		t.Fatalf("Announce without targets = %v, want ErrInvalidAnnouncement", err)
-	}
+	})
+	require.ErrorIs(t, err, application.ErrInvalidAnnouncement)
 
-	if _, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
+	_, err = env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
 		GameDay: 1, Action: models.ActivityAction("evaporated"), EntityName: "X", Public: true,
-	}); !errors.Is(err, application.ErrInvalidAnnouncement) {
-		t.Fatalf("Announce with unknown action = %v, want ErrInvalidAnnouncement", err)
-	}
+	})
+	require.ErrorIs(t, err, application.ErrInvalidAnnouncement)
 
-	if _, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
+	_, err = env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
 		GameDay: 1, Action: models.ActivityActionStolen, EntityName: "X",
 		CharacterIDs: []string{"no-such-character"},
-	}); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Announce to unknown character = %v, want ErrNotFound", err)
-	}
+	})
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestActivityService_ListAll_GMOnlySeesEverything(t *testing.T) {
 	env := newActivityTestEnv(t)
 	ctx := t.Context()
 
-	if _, err := env.activity.ListAll(ctx, playerRequester); !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("ListAll as player = %v, want ErrForbidden", err)
-	}
+	_, err := env.activity.ListAll(ctx, playerRequester)
+	require.ErrorIs(t, err, application.ErrForbidden)
 
 	member := env.newCharacter(t, playerRequester, "Aria", 99)
 	group := createGroup(t, env.groups, "Night Watch")
-	err := env.groups.Join(ctx, playerRequester, group.ID, member.ID)
+	err = env.groups.Join(ctx, playerRequester, group.ID, member.ID)
 	require.NoError(t, err)
-	if _, err := env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
+	_, err = env.activity.Announce(ctx, gmRequester, &application.AnnounceInput{
 		GameDay: 500, Action: models.ActivityActionDestroyed, EntityName: "The Beacon",
 		CharacterIDs: []string{member.ID},
-	}); err != nil {
-		t.Fatalf("Announce: %v", err)
-	}
+	})
+	require.NoError(t, err)
 
 	entries, err := env.activity.ListAll(ctx, gmRequester)
 	require.NoError(t, err)
-	if len(entries) != 2 {
-		t.Fatalf("ListAll returned %d entries, want 2 (join + announcement)", len(entries))
-	}
+	assert.Len(t, entries, 2, "ListAll should return join + announcement")
 
 	announced := findEntry(entries, models.ActivityActionDestroyed, "The Beacon")
-	if announced == nil {
-		t.Fatalf("announcement missing from GM log — GMs see all activity regardless of game day")
-	}
-	if len(announced.Targets) != 1 || announced.Targets[0].CharacterID == nil ||
-		*announced.Targets[0].CharacterID != member.ID {
-		t.Fatalf("announcement targets = %+v, want the member", announced.Targets)
-	}
+	require.NotNil(t, announced, "announcement missing from GM log — GMs see all activity regardless of game day")
+	require.Len(t, announced.Targets, 1)
+	require.NotNil(t, announced.Targets[0].CharacterID)
+	assert.Equal(t, member.ID, *announced.Targets[0].CharacterID, "announcement targets = %+v, want the member", announced.Targets)
 }

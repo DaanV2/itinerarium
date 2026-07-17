@@ -137,7 +137,7 @@ func TestInventory_RequiresAuth(t *testing.T) {
 	env := newInventoryTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/inventory", "", nil)
-	require.Equal(t, rec.Code, http.StatusUnauthorized)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
 func TestInventory_AddAndListItem(t *testing.T) {
@@ -145,14 +145,10 @@ func TestInventory_AddAndListItem(t *testing.T) {
 
 	addRec := env.doJSON(t, http.MethodPost, "/api/characters/"+env.characterID+"/inventory", env.playerToken,
 		map[string]any{"name": "Torch", "quantity": 3})
-	if addRec.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", addRec.Code, addRec.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, addRec.Code, addRec.Body.String())
 
 	listRec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/inventory", env.playerToken, nil)
-	if listRec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", listRec.Code, listRec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, listRec.Code, listRec.Body.String())
 
 	var items []struct {
 		Name     string `json:"name"`
@@ -160,8 +156,9 @@ func TestInventory_AddAndListItem(t *testing.T) {
 	}
 	err := json.Unmarshal(listRec.Body.Bytes(), &items)
 	require.NoError(t, err)
-	if len(items) != 1 || items[0].Name != "Torch" || items[0].Quantity != 3 {
-		t.Fatalf("items = %+v, want one Torch x3", items)
+	if assert.Len(t, items, 1, "items = %+v, want one Torch x3", items) {
+		assert.Equal(t, "Torch", items[0].Name)
+		assert.Equal(t, 3, items[0].Quantity)
 	}
 }
 
@@ -169,7 +166,7 @@ func TestInventory_OtherPlayerGets404(t *testing.T) {
 	env := newInventoryTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/inventory", env.otherToken, nil)
-	require.Equal(t, rec.Code, http.StatusNotFound)
+	require.Equal(t, http.StatusNotFound, rec.Code)
 }
 
 func TestInventory_AddItemForOtherPlayerGets404(t *testing.T) {
@@ -177,7 +174,7 @@ func TestInventory_AddItemForOtherPlayerGets404(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/characters/"+env.characterID+"/inventory", env.otherToken,
 		map[string]any{"name": "Torch", "quantity": 1})
-	require.Equal(t, rec.Code, http.StatusNotFound)
+	require.Equal(t, http.StatusNotFound, rec.Code)
 }
 
 func TestMoney_SetAndList(t *testing.T) {
@@ -185,9 +182,7 @@ func TestMoney_SetAndList(t *testing.T) {
 
 	currencyRec := env.doJSON(t, http.MethodPost, "/api/currencies", env.gmToken,
 		map[string]any{"code": "gp", "name": "Gold", "ratio": 100})
-	if currencyRec.Code != http.StatusCreated {
-		t.Fatalf("CreateCurrency expected 201, got %d: %s", currencyRec.Code, currencyRec.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, currencyRec.Code, currencyRec.Body.String())
 
 	var currency struct {
 		ID string `json:"id"`
@@ -198,9 +193,7 @@ func TestMoney_SetAndList(t *testing.T) {
 	setRec := env.doJSON(t, http.MethodPut,
 		"/api/characters/"+env.characterID+"/money/"+currency.ID, env.playerToken,
 		map[string]any{"amount": 42})
-	if setRec.Code != http.StatusOK {
-		t.Fatalf("SetMoney expected 200, got %d: %s", setRec.Code, setRec.Body.String())
-	}
+	require.Equal(t, http.StatusOK, setRec.Code, setRec.Body.String())
 
 	listRec := env.doJSON(t, http.MethodGet, "/api/characters/"+env.characterID+"/money", env.playerToken, nil)
 
@@ -209,8 +202,8 @@ func TestMoney_SetAndList(t *testing.T) {
 	}
 	err = json.Unmarshal(listRec.Body.Bytes(), &balances)
 	require.NoError(t, err)
-	if len(balances) != 1 || balances[0].Amount != 42 {
-		t.Fatalf("balances = %+v, want one balance of 42", balances)
+	if assert.Len(t, balances, 1, "balances = %+v, want one balance of 42", balances) {
+		assert.Equal(t, int64(42), balances[0].Amount)
 	}
 }
 
@@ -219,7 +212,7 @@ func TestCurrency_PlayerCannotCreate(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/currencies", env.playerToken,
 		map[string]any{"code": "gp", "name": "Gold", "ratio": 100})
-	require.Equal(t, rec.Code, http.StatusForbidden)
+	require.Equal(t, http.StatusForbidden, rec.Code)
 }
 
 func seedGoldSilverCopper(t *testing.T, env inventoryTestEnv) {
@@ -231,7 +224,7 @@ func seedGoldSilverCopper(t *testing.T, env inventoryTestEnv) {
 		{"code": "gp", "name": "Gold", "ratio": 100},
 	} {
 		rec := env.doJSON(t, http.MethodPost, "/api/currencies", env.gmToken, c)
-		require.Equal(t, rec.Code, http.StatusCreated)
+		require.Equal(t, http.StatusCreated, rec.Code)
 	}
 }
 
@@ -241,7 +234,7 @@ func TestCurrency_Convert_PlayerCanUse(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/currencies/convert", env.playerToken,
 		map[string]any{"amounts": []map[string]any{{"currency": "gp", "amount": 5}}, "to": "sp"})
-	require.Equal(t, rec.Code, http.StatusOK)
+	require.Equal(t, http.StatusOK, rec.Code)
 
 	var body struct {
 		Whole     int64 `json:"whole"`
@@ -262,7 +255,7 @@ func TestCurrency_Convert_UnknownCurrencyIs404(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/currencies/convert", env.playerToken,
 		map[string]any{"amounts": []map[string]any{{"currency": "nope", "amount": 5}}, "to": "sp"})
-	require.Equal(t, rec.Code, http.StatusNotFound)
+	require.Equal(t, http.StatusNotFound, rec.Code)
 
 }
 
@@ -272,7 +265,7 @@ func TestCurrency_Simplify_BreaksIntoDenominations(t *testing.T) {
 
 	org := map[string]any{"amounts": []map[string]any{{"currency": "cp", "amount": 1234}}}
 	rec := env.doJSON(t, http.MethodPost, "/api/currencies/simplify", env.playerToken, org)
-	require.EqualValues(t, rec.Code, http.StatusOK, "Simplify expected 200, got %d: %s", rec.Code, rec.Body.String())
+	require.Equal(t, http.StatusOK, rec.Code, "Simplify expected 200, got %d: %s", rec.Code, rec.Body.String())
 
 	var breakdown []struct {
 		Currency struct {
@@ -285,7 +278,7 @@ func TestCurrency_Simplify_BreaksIntoDenominations(t *testing.T) {
 
 	want := map[string]int64{"gp": 12, "sp": 3, "cp": 4}
 
-	require.Equal(t, len(want), len(breakdown), "Simplify returned %d entries, want %d: %+v", len(breakdown), len(want), breakdown)
+	require.Len(t, breakdown, len(want), "Simplify returned %d entries, want %d: %+v", len(breakdown), len(want), breakdown)
 
 	for _, entry := range breakdown {
 		require.Contains(t, want, entry.Currency.Code, "Simplify returned unexpected currency %s", entry.Currency.Code)

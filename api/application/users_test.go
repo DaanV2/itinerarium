@@ -1,7 +1,6 @@
 package application_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -53,7 +52,7 @@ func TestUserService_CreateAccount(t *testing.T) {
 
 	user, password, err := svc.CreateAccount(ctx, gmRequester, "player@example.com", models.RolePlayer)
 	require.NoError(t, err)
-	assert.Equal(t, user.Role, models.RolePlayer, "Role = %q, want player", user.Role)
+	assert.Equal(t, models.RolePlayer, user.Role, "Role = %q, want player", user.Role)
 	assert.Greater(t, len(password), 8, "temporary password length = %d, want > 8", len(password))
 }
 
@@ -85,9 +84,7 @@ func TestUserService_CreateAccount_ValidatesInput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, err := svc.CreateAccount(ctx, gmRequester, tt.email, tt.role)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("CreateAccount(%q, %q) = %v, want %v", tt.email, tt.role, err, tt.wantErr)
-			}
+			require.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }
@@ -97,24 +94,19 @@ func TestUserService_ListAccounts_RequiresGM(t *testing.T) {
 	ctx := t.Context()
 
 	_, err := svc.ListAccounts(ctx, playerRequester)
-	if !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("ListAccounts(player) = %v, want ErrForbidden", err)
-	}
+	require.ErrorIs(t, err, application.ErrForbidden)
 }
 
 func TestUserService_ListAccounts(t *testing.T) {
 	svc := application.NewUserService(newTestUsersRepo(t))
 	ctx := t.Context()
 
-	if _, _, err := svc.CreateAccount(ctx, gmRequester, "one@example.com", models.RolePlayer); err != nil {
-		t.Fatalf("CreateAccount: %v", err)
-	}
+	_, _, err := svc.CreateAccount(ctx, gmRequester, "one@example.com", models.RolePlayer)
+	require.NoError(t, err)
 
 	users, err := svc.ListAccounts(ctx, gmRequester)
 	require.NoError(t, err)
-	if len(users) != 1 {
-		t.Fatalf("ListAccounts returned %d users, want 1", len(users))
-	}
+	assert.Len(t, users, 1)
 }
 
 func TestUserService_ResetPassword_RequiresGM(t *testing.T) {
@@ -125,9 +117,7 @@ func TestUserService_ResetPassword_RequiresGM(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = svc.ResetPassword(ctx, playerRequester, user.ID)
-	if !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("ResetPassword(player) = %v, want ErrForbidden", err)
-	}
+	require.ErrorIs(t, err, application.ErrForbidden)
 }
 
 func TestUserService_ResetPassword(t *testing.T) {
@@ -139,12 +129,8 @@ func TestUserService_ResetPassword(t *testing.T) {
 
 	newPassword, err := svc.ResetPassword(ctx, gmRequester, user.ID)
 	require.NoError(t, err)
-	if newPassword == "" {
-		t.Fatal("expected a non-empty temporary password")
-	}
-	if newPassword == originalPassword {
-		t.Fatal("expected the reset password to differ from the original")
-	}
+	assert.NotEmpty(t, newPassword, "expected a non-empty temporary password")
+	assert.NotEqual(t, originalPassword, newPassword, "expected the reset password to differ from the original")
 }
 
 func TestUserService_ResetPassword_UnknownAccount(t *testing.T) {
@@ -152,7 +138,5 @@ func TestUserService_ResetPassword_UnknownAccount(t *testing.T) {
 	ctx := t.Context()
 
 	_, err := svc.ResetPassword(ctx, gmRequester, "does-not-exist")
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("ResetPassword(unknown) = %v, want ErrNotFound", err)
-	}
+	require.ErrorIs(t, err, application.ErrNotFound)
 }

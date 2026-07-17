@@ -1,13 +1,13 @@
 package application_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -73,7 +73,7 @@ func (e documentTestEnv) findRepository(
 		}
 	}
 
-	t.Fatalf("no %s repository found for owner %q", repoType, ownerID)
+	require.Failf(t, "repository not found", "no %s repository found for owner %q", repoType, ownerID)
 
 	return nil
 }
@@ -81,9 +81,8 @@ func (e documentTestEnv) findRepository(
 func (e documentTestEnv) setGameDay(t *testing.T, characterID string, day int) {
 	t.Helper()
 
-	if _, err := e.characters.Update(t.Context(), gmRequester, characterID, nil, &day); err != nil {
-		t.Fatalf("set game day: %v", err)
-	}
+	_, err := e.characters.Update(t.Context(), gmRequester, characterID, nil, &day)
+	require.NoError(t, err)
 }
 
 func mustCreateDocument(
@@ -108,15 +107,13 @@ func TestDocumentService_Delete_GMOnly(t *testing.T) {
 		Sections: []application.DocumentSectionInput{{Content: "Soon gone."}},
 	})
 
-	if err := env.docs.Delete(ctx, playerRequester, view.Document.ID); !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("Delete as player = %v, want ErrForbidden", err)
-	}
+	err := env.docs.Delete(ctx, playerRequester, view.Document.ID)
+	require.ErrorIs(t, err, application.ErrForbidden)
 
-	err := env.docs.Delete(ctx, gmRequester, view.Document.ID)
+	err = env.docs.Delete(ctx, gmRequester, view.Document.ID)
 	require.NoError(t, err)
-	if _, err := env.docs.Get(ctx, gmRequester, view.Document.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Get after delete = %v, want ErrNotFound", err)
-	}
+	_, err = env.docs.Get(ctx, gmRequester, view.Document.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestDocumentService_CreateAndGet_TitleFallsBackToFileName(t *testing.T) {
@@ -129,17 +126,13 @@ func TestDocumentService_CreateAndGet_TitleFallsBackToFileName(t *testing.T) {
 		Sections: []application.DocumentSectionInput{{Content: "The guild runs the docks."}},
 	})
 
-	if view.Document.Path != "factions/thieves-guild" {
-		t.Fatalf("Path = %q, want normalized %q", view.Document.Path, "factions/thieves-guild")
-	}
-	if view.Document.Title != "thieves-guild" {
-		t.Fatalf("Title = %q, want file-name fallback %q", view.Document.Title, "thieves-guild")
-	}
+	assert.Equal(t, "factions/thieves-guild", view.Document.Path)
+	assert.Equal(t, "thieves-guild", view.Document.Title)
 
 	got, err := env.docs.Get(ctx, gmRequester, view.Document.ID)
 	require.NoError(t, err)
-	if len(got.Document.Sections) != 1 || got.Document.Sections[0].Content != "The guild runs the docks." {
-		t.Fatalf("Sections = %+v, want the created section back", got.Document.Sections)
+	if assert.Len(t, got.Document.Sections, 1, "want the created section back") {
+		assert.Equal(t, "The guild runs the docks.", got.Document.Sections[0].Content)
 	}
 }
 
@@ -158,29 +151,24 @@ func TestDocumentService_GameDayGatesVisibility_IncludingRewind(t *testing.T) {
 	})
 
 	// Day 0 < 5: absent from lists AND a direct Get is a 404, never a 403.
-	if _, err := env.docs.Get(ctx, playerRequester, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Get before game day = %v, want ErrNotFound", err)
-	}
+	_, err = env.docs.Get(ctx, playerRequester, doc.Document.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 
 	listed, err := env.docs.ListByRepository(ctx, playerRequester, general.ID)
 	require.NoError(t, err)
-	if len(listed) != 0 {
-		t.Fatalf("List before game day returned %d documents, want 0", len(listed))
-	}
+	assert.Empty(t, listed)
 
 	// Reaching day 5 reveals it.
 	env.setGameDay(t, character.ID, 5)
 
-	if _, err := env.docs.Get(ctx, playerRequester, doc.Document.ID); err != nil {
-		t.Fatalf("Get at game day = %v, want success", err)
-	}
+	_, err = env.docs.Get(ctx, playerRequester, doc.Document.ID)
+	require.NoError(t, err)
 
 	// Rewinding hides it again.
 	env.setGameDay(t, character.ID, 4)
 
-	if _, err := env.docs.Get(ctx, playerRequester, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Get after rewind = %v, want ErrNotFound", err)
-	}
+	_, err = env.docs.Get(ctx, playerRequester, doc.Document.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestDocumentService_GroupRepository_HiddenFromNonMembers(t *testing.T) {
@@ -191,9 +179,8 @@ func TestDocumentService_GroupRepository_HiddenFromNonMembers(t *testing.T) {
 	require.NoError(t, err)
 
 	outsider := fakeRequester{id: "outsider-1", gm: false}
-	if _, err := env.characters.Create(ctx, outsider, "", "Beren"); err != nil {
-		t.Fatalf("Create outsider character: %v", err)
-	}
+	_, err = env.characters.Create(ctx, outsider, "", "Beren")
+	require.NoError(t, err)
 
 	group, err := env.groups.Create(ctx, gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
 	require.NoError(t, err)
@@ -206,16 +193,13 @@ func TestDocumentService_GroupRepository_HiddenFromNonMembers(t *testing.T) {
 		Sections: []application.DocumentSectionInput{{Content: "We strike at midnight."}},
 	})
 
-	if _, err := env.docs.Get(ctx, playerRequester, doc.Document.ID); err != nil {
-		t.Fatalf("member Get = %v, want success", err)
-	}
+	_, err = env.docs.Get(ctx, playerRequester, doc.Document.ID)
+	require.NoError(t, err)
 
-	if _, err := env.docs.Get(ctx, outsider, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("outsider Get = %v, want ErrNotFound", err)
-	}
-	if _, err := env.docs.ListByRepository(ctx, outsider, groupRepo.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("outsider ListByRepository = %v, want ErrNotFound", err)
-	}
+	_, err = env.docs.Get(ctx, outsider, doc.Document.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
+	_, err = env.docs.ListByRepository(ctx, outsider, groupRepo.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestDocumentService_CharacterRepository_HiddenFromOtherPlayers(t *testing.T) {
@@ -226,9 +210,8 @@ func TestDocumentService_CharacterRepository_HiddenFromOtherPlayers(t *testing.T
 	require.NoError(t, err)
 
 	other := fakeRequester{id: "other-1", gm: false}
-	if _, err := env.characters.Create(ctx, other, "", "Beren"); err != nil {
-		t.Fatalf("Create other character: %v", err)
-	}
+	_, err = env.characters.Create(ctx, other, "", "Beren")
+	require.NoError(t, err)
 
 	charRepo := env.findRepository(t, models.RepositoryTypeCharacter, character.ID)
 	doc := mustCreateDocument(t, env, playerRequester, charRepo.ID, &application.CreateDocumentInput{
@@ -236,16 +219,13 @@ func TestDocumentService_CharacterRepository_HiddenFromOtherPlayers(t *testing.T
 		Sections: []application.DocumentSectionInput{{Content: "I do not trust the duke."}},
 	})
 
-	if _, err := env.docs.Get(ctx, playerRequester, doc.Document.ID); err != nil {
-		t.Fatalf("owner Get = %v, want success", err)
-	}
-	if _, err := env.docs.Get(ctx, gmRequester, doc.Document.ID); err != nil {
-		t.Fatalf("GM Get = %v, want success", err)
-	}
+	_, err = env.docs.Get(ctx, playerRequester, doc.Document.ID)
+	require.NoError(t, err)
+	_, err = env.docs.Get(ctx, gmRequester, doc.Document.ID)
+	require.NoError(t, err)
 
-	if _, err := env.docs.Get(ctx, other, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("other player Get = %v, want ErrNotFound", err)
-	}
+	_, err = env.docs.Get(ctx, other, doc.Document.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestDocumentService_GMOnlySections_StrippedForPlayers(t *testing.T) {
@@ -253,9 +233,8 @@ func TestDocumentService_GMOnlySections_StrippedForPlayers(t *testing.T) {
 	ctx := t.Context()
 	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
 
-	if _, err := env.characters.Create(ctx, playerRequester, "", "Aria"); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	_, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	require.NoError(t, err)
 
 	doc := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{
 		Path: "npcs/duke",
@@ -267,20 +246,16 @@ func TestDocumentService_GMOnlySections_StrippedForPlayers(t *testing.T) {
 
 	playerView, err := env.docs.Get(ctx, playerRequester, doc.Document.ID)
 	require.NoError(t, err)
-	if len(playerView.Document.Sections) != 1 {
-		t.Fatalf("player sees %d sections, want 1", len(playerView.Document.Sections))
-	}
-	for _, sec := range playerView.Document.Sections {
-		if sec.GMOnly || sec.Content == "He is secretly a vampire." {
-			t.Fatalf("GM-only content leaked to player: %+v", sec)
+	if assert.Len(t, playerView.Document.Sections, 1) {
+		for _, sec := range playerView.Document.Sections {
+			assert.False(t, sec.GMOnly, "GM-only content leaked to player: %+v", sec)
+			assert.NotEqual(t, "He is secretly a vampire.", sec.Content, "GM-only content leaked to player: %+v", sec)
 		}
 	}
 
 	gmView, err := env.docs.Get(ctx, gmRequester, doc.Document.ID)
 	require.NoError(t, err)
-	if len(gmView.Document.Sections) != 2 {
-		t.Fatalf("GM sees %d sections, want 2", len(gmView.Document.Sections))
-	}
+	assert.Len(t, gmView.Document.Sections, 2)
 }
 
 func TestDocumentService_PlayerCannotCreateGMOnlySection(t *testing.T) {
@@ -288,17 +263,14 @@ func TestDocumentService_PlayerCannotCreateGMOnlySection(t *testing.T) {
 	ctx := t.Context()
 	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
 
-	if _, err := env.characters.Create(ctx, playerRequester, "", "Aria"); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	_, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	require.NoError(t, err)
 
-	_, err := env.docs.Create(ctx, playerRequester, general.ID, &application.CreateDocumentInput{
+	_, err = env.docs.Create(ctx, playerRequester, general.ID, &application.CreateDocumentInput{
 		Path:     "npcs/duke",
 		Sections: []application.DocumentSectionInput{{Content: "secret", GMOnly: true}},
 	})
-	if !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("Create = %v, want ErrForbidden", err)
-	}
+	require.ErrorIs(t, err, application.ErrForbidden)
 }
 
 func TestDocumentService_PathCollision_WarnsThenAllows(t *testing.T) {
@@ -311,15 +283,12 @@ func TestDocumentService_PathCollision_WarnsThenAllows(t *testing.T) {
 	})
 
 	_, err := env.docs.Create(ctx, gmRequester, general.ID, &application.CreateDocumentInput{Path: "lore/creation"})
-	if !errors.Is(err, application.ErrPathCollision) {
-		t.Fatalf("colliding Create = %v, want ErrPathCollision", err)
-	}
+	require.ErrorIs(t, err, application.ErrPathCollision)
 
-	if _, err := env.docs.Create(ctx, gmRequester, general.ID, &application.CreateDocumentInput{
+	_, err = env.docs.Create(ctx, gmRequester, general.ID, &application.CreateDocumentInput{
 		Path: "lore/creation", AllowCollision: true,
-	}); err != nil {
-		t.Fatalf("Create with AllowCollision = %v, want success", err)
-	}
+	})
+	require.NoError(t, err)
 }
 
 func TestDocumentService_PathCollision_OnMove(t *testing.T) {
@@ -331,14 +300,12 @@ func TestDocumentService_PathCollision_OnMove(t *testing.T) {
 	doc := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{Path: "lore/draft"})
 
 	update := application.UpdateDocumentInput{Path: "lore/creation", Title: doc.Document.Title}
-	if _, err := env.docs.Update(ctx, gmRequester, doc.Document.ID, &update); !errors.Is(err, application.ErrPathCollision) {
-		t.Fatalf("moving onto occupied path = %v, want ErrPathCollision", err)
-	}
+	_, err := env.docs.Update(ctx, gmRequester, doc.Document.ID, &update)
+	require.ErrorIs(t, err, application.ErrPathCollision)
 
 	update.AllowCollision = true
-	if _, err := env.docs.Update(ctx, gmRequester, doc.Document.ID, &update); err != nil {
-		t.Fatalf("move with AllowCollision = %v, want success", err)
-	}
+	_, err = env.docs.Update(ctx, gmRequester, doc.Document.ID, &update)
+	require.NoError(t, err)
 }
 
 func TestDocumentService_ConcurrentEdit_WarnsThenForces(t *testing.T) {
@@ -362,24 +329,20 @@ func TestDocumentService_ConcurrentEdit_WarnsThenForces(t *testing.T) {
 		Sections:        []application.DocumentSectionInput{{ID: loaded.Document.Sections[0].ID, Content: "v2"}},
 		ExpectedVersion: &staleVersion,
 	}
-	if _, err := env.docs.Update(ctx, gmRequester, created.Document.ID, &first); err != nil {
-		t.Fatalf("first Update = %v, want success", err)
-	}
+	_, err = env.docs.Update(ctx, gmRequester, created.Document.ID, &first)
+	require.NoError(t, err)
 
 	// A second save still holding the old version warns.
 	second := first
 	second.Sections = []application.DocumentSectionInput{{ID: loaded.Document.Sections[0].ID, Content: "v3"}}
-	if _, err := env.docs.Update(ctx, gmRequester, created.Document.ID, &second); !errors.Is(err, application.ErrConcurrentEdit) {
-		t.Fatalf("stale Update = %v, want ErrConcurrentEdit", err)
-	}
+	_, err = env.docs.Update(ctx, gmRequester, created.Document.ID, &second)
+	require.ErrorIs(t, err, application.ErrConcurrentEdit)
 
 	// Forcing overwrites anyway.
 	second.Force = true
 	updated, err := env.docs.Update(ctx, gmRequester, created.Document.ID, &second)
 	require.NoError(t, err)
-	if updated.Document.Sections[0].Content != "v3" {
-		t.Fatalf("Content = %q, want %q", updated.Document.Sections[0].Content, "v3")
-	}
+	assert.Equal(t, "v3", updated.Document.Sections[0].Content)
 }
 
 func TestDocumentService_PlayerEditOnAllGMOnlyDocument_AppendsVisibleSection(t *testing.T) {
@@ -387,9 +350,8 @@ func TestDocumentService_PlayerEditOnAllGMOnlyDocument_AppendsVisibleSection(t *
 	ctx := t.Context()
 	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
 
-	if _, err := env.characters.Create(ctx, playerRequester, "", "Aria"); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	_, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	require.NoError(t, err)
 
 	doc := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{
 		Path:     "npcs/duke",
@@ -399,9 +361,7 @@ func TestDocumentService_PlayerEditOnAllGMOnlyDocument_AppendsVisibleSection(t *
 	// The player opens an apparently empty document and writes into it.
 	playerView, err := env.docs.Get(ctx, playerRequester, doc.Document.ID)
 	require.NoError(t, err)
-	if len(playerView.Document.Sections) != 0 {
-		t.Fatalf("player sees %d sections, want 0", len(playerView.Document.Sections))
-	}
+	assert.Empty(t, playerView.Document.Sections)
 
 	_, err = env.docs.Update(ctx, playerRequester, doc.Document.ID, &application.UpdateDocumentInput{
 		Path:     playerView.Document.Path,
@@ -412,14 +372,13 @@ func TestDocumentService_PlayerEditOnAllGMOnlyDocument_AppendsVisibleSection(t *
 
 	gmView, err := env.docs.Get(ctx, gmRequester, doc.Document.ID)
 	require.NoError(t, err)
-	if len(gmView.Document.Sections) != 2 {
-		t.Fatalf("GM sees %d sections, want GM section + new player section", len(gmView.Document.Sections))
-	}
-	if !gmView.Document.Sections[0].GMOnly || gmView.Document.Sections[0].Content != "He is secretly a vampire." {
-		t.Fatalf("GM-only section was touched by a player edit: %+v", gmView.Document.Sections[0])
-	}
-	if gmView.Document.Sections[1].GMOnly || gmView.Document.Sections[1].Content != "The duke seems friendly." {
-		t.Fatalf("player section = %+v, want visible appended section", gmView.Document.Sections[1])
+	if assert.Len(t, gmView.Document.Sections, 2, "want GM section + new player section") {
+		assert.True(t, gmView.Document.Sections[0].GMOnly)
+		assert.Equal(t, "He is secretly a vampire.", gmView.Document.Sections[0].Content,
+			"GM-only section was touched by a player edit")
+		assert.False(t, gmView.Document.Sections[1].GMOnly)
+		assert.Equal(t, "The duke seems friendly.", gmView.Document.Sections[1].Content,
+			"want visible appended section")
 	}
 }
 
@@ -428,9 +387,8 @@ func TestDocumentService_PlayerEdit_PreservesGMSectionsInPlace(t *testing.T) {
 	ctx := t.Context()
 	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
 
-	if _, err := env.characters.Create(ctx, playerRequester, "", "Aria"); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	_, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	require.NoError(t, err)
 
 	doc := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{
 		Path: "npcs/duke",
@@ -464,13 +422,11 @@ func TestDocumentService_PlayerEdit_PreservesGMSectionsInPlace(t *testing.T) {
 		{"Public info, updated.", false},
 		{"GM outro.", true},
 	}
-	if len(gmView.Document.Sections) != len(want) {
-		t.Fatalf("GM sees %d sections, want %d", len(gmView.Document.Sections), len(want))
-	}
-	for i, w := range want {
-		got := gmView.Document.Sections[i]
-		if got.Content != w.content || got.GMOnly != w.gmOnly {
-			t.Fatalf("section %d = %+v, want content %q gmOnly %t", i, got, w.content, w.gmOnly)
+	if assert.Len(t, gmView.Document.Sections, len(want)) {
+		for i, w := range want {
+			got := gmView.Document.Sections[i]
+			assert.Equal(t, got.Content, w.content, "section %d content", i)
+			assert.Equal(t, got.GMOnly, w.gmOnly, "section %d gmOnly", i)
 		}
 	}
 }
@@ -480,20 +436,17 @@ func TestDocumentService_PlayerCannotChangeRevealDay(t *testing.T) {
 	ctx := t.Context()
 	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
 
-	if _, err := env.characters.Create(ctx, playerRequester, "", "Aria"); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	_, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	require.NoError(t, err)
 
 	doc := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{Path: "lore/creation"})
 
-	_, err := env.docs.Update(ctx, playerRequester, doc.Document.ID, &application.UpdateDocumentInput{
+	_, err = env.docs.Update(ctx, playerRequester, doc.Document.ID, &application.UpdateDocumentInput{
 		Path:            doc.Document.Path,
 		Title:           doc.Document.Title,
 		SharedOnGameDay: 10,
 	})
-	if !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("player reveal-day change = %v, want ErrForbidden", err)
-	}
+	require.ErrorIs(t, err, application.ErrForbidden)
 }
 
 func TestDocumentService_PlayerCannotReferenceGMOnlySection(t *testing.T) {
@@ -501,9 +454,8 @@ func TestDocumentService_PlayerCannotReferenceGMOnlySection(t *testing.T) {
 	ctx := t.Context()
 	general := env.findRepository(t, models.RepositoryTypeGeneral, "")
 
-	if _, err := env.characters.Create(ctx, playerRequester, "", "Aria"); err != nil {
-		t.Fatalf("Create character: %v", err)
-	}
+	_, err := env.characters.Create(ctx, playerRequester, "", "Aria")
+	require.NoError(t, err)
 
 	doc := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{
 		Path:     "npcs/duke",
@@ -522,9 +474,7 @@ func TestDocumentService_PlayerCannotReferenceGMOnlySection(t *testing.T) {
 			{ID: gmView.Document.Sections[0].ID, Content: "overwritten"},
 		},
 	})
-	if !errors.Is(err, application.ErrInvalidDocument) {
-		t.Fatalf("player Update referencing GM section = %v, want ErrInvalidDocument", err)
-	}
+	require.ErrorIs(t, err, application.ErrInvalidDocument)
 }
 
 func TestDocumentService_CreateFromMarkdown_ParsesFrontmatter(t *testing.T) {
@@ -538,17 +488,14 @@ func TestDocumentService_CreateFromMarkdown_ParsesFrontmatter(t *testing.T) {
 	})
 
 	doc := view.Document
-	if doc.Title != "The Thieves Guild" {
-		t.Fatalf("Title = %q, want frontmatter title", doc.Title)
+	assert.Equal(t, "The Thieves Guild", doc.Title)
+	if assert.Len(t, doc.Tags, 2) {
+		assert.Equal(t, "faction", doc.Tags[0])
+		assert.Equal(t, "city", doc.Tags[1])
 	}
-	if len(doc.Tags) != 2 || doc.Tags[0] != "faction" || doc.Tags[1] != "city" {
-		t.Fatalf("Tags = %v, want [faction city]", doc.Tags)
-	}
-	if doc.SharedOnGameDay != 12 {
-		t.Fatalf("SharedOnGameDay = %d, want 12", doc.SharedOnGameDay)
-	}
-	if len(doc.Sections) != 1 || doc.Sections[0].Content != "Full markdown content here..." {
-		t.Fatalf("Sections = %+v, want the body as one section", doc.Sections)
+	assert.Equal(t, 12, doc.SharedOnGameDay)
+	if assert.Len(t, doc.Sections, 1, "want the body as one section") {
+		assert.Equal(t, "Full markdown content here...", doc.Sections[0].Content)
 	}
 }
 
@@ -567,17 +514,13 @@ func TestDocumentService_RevealedFlag_TracksCharacterGameDays(t *testing.T) {
 
 	view, err := env.docs.Get(ctx, gmRequester, doc.Document.ID)
 	require.NoError(t, err)
-	if view.Revealed {
-		t.Fatalf("Revealed = true before any character reached day 5")
-	}
+	assert.False(t, view.Revealed, "before any character reached day 5")
 
 	env.setGameDay(t, character.ID, 5)
 
 	view, err = env.docs.Get(ctx, gmRequester, doc.Document.ID)
 	require.NoError(t, err)
-	if !view.Revealed {
-		t.Fatalf("Revealed = false after a character reached day 5")
-	}
+	assert.True(t, view.Revealed, "after a character reached day 5")
 }
 
 func TestDocumentService_FolderTree_NestsAndSortsAlphabetically(t *testing.T) {
@@ -597,29 +540,26 @@ func TestDocumentService_FolderTree_NestsAndSortsAlphabetically(t *testing.T) {
 	tree, err := env.docs.FolderTree(ctx, gmRequester, general.ID)
 	require.NoError(t, err)
 
-	if len(tree.Documents) != 2 || tree.Documents[0].Title != "apple" || tree.Documents[1].Title != "zebra" {
-		t.Fatalf("root documents = %+v, want [apple zebra]", tree.Documents)
+	if assert.Len(t, tree.Documents, 2, "want [apple zebra]") {
+		assert.Equal(t, "apple", tree.Documents[0].Title)
+		assert.Equal(t, "zebra", tree.Documents[1].Title)
 	}
-	if len(tree.Folders) != 1 || tree.Folders[0].Name != "factions" {
-		t.Fatalf("root folders = %+v, want [factions]", tree.Folders)
+	if assert.Len(t, tree.Folders, 1, "want [factions]") {
+		assert.Equal(t, "factions", tree.Folders[0].Name)
 	}
 
 	factions := tree.Folders[0]
-	if factions.Path != "factions" {
-		t.Fatalf("factions.Path = %q, want %q", factions.Path, "factions")
+	assert.Equal(t, "factions", factions.Path)
+	if assert.Len(t, factions.Documents, 2, "want [city-watch thieves-guild]") {
+		assert.Equal(t, "city-watch", factions.Documents[0].Title)
+		assert.Equal(t, "thieves-guild", factions.Documents[1].Title)
 	}
-	if len(factions.Documents) != 2 ||
-		factions.Documents[0].Title != "city-watch" || factions.Documents[1].Title != "thieves-guild" {
-		t.Fatalf("factions documents = %+v, want [city-watch thieves-guild]", factions.Documents)
-	}
-	if len(factions.Folders) != 1 || factions.Folders[0].Name != "watch" {
-		t.Fatalf("factions folders = %+v, want [watch]", factions.Folders)
-	}
-	if factions.Folders[0].Path != "factions/watch" {
-		t.Fatalf("watch.Path = %q, want %q", factions.Folders[0].Path, "factions/watch")
-	}
-	if len(factions.Folders[0].Documents) != 1 || factions.Folders[0].Documents[0].Title != "roster" {
-		t.Fatalf("watch documents = %+v, want [roster]", factions.Folders[0].Documents)
+	if assert.Len(t, factions.Folders, 1, "want [watch]") {
+		assert.Equal(t, "watch", factions.Folders[0].Name)
+		assert.Equal(t, "factions/watch", factions.Folders[0].Path)
+		if assert.Len(t, factions.Folders[0].Documents, 1, "want [roster]") {
+			assert.Equal(t, "roster", factions.Folders[0].Documents[0].Title)
+		}
 	}
 }
 
@@ -640,8 +580,8 @@ func TestDocumentService_FolderTree_HidesFoldersWithNoAccessibleDocuments(t *tes
 	tree, err := env.docs.FolderTree(ctx, playerRequester, general.ID)
 	require.NoError(t, err)
 
-	if len(tree.Folders) != 1 || tree.Folders[0].Name != "lore" {
-		t.Fatalf("folders = %+v, want [lore] — the unrevealed secrets folder must not leak", tree.Folders)
+	if assert.Len(t, tree.Folders, 1, "the unrevealed secrets folder must not leak") {
+		assert.Equal(t, "lore", tree.Folders[0].Name)
 	}
 
 	// Reaching the reveal day makes the previously-empty folder appear.
@@ -649,9 +589,7 @@ func TestDocumentService_FolderTree_HidesFoldersWithNoAccessibleDocuments(t *tes
 
 	tree, err = env.docs.FolderTree(ctx, playerRequester, general.ID)
 	require.NoError(t, err)
-	if len(tree.Folders) != 2 {
-		t.Fatalf("folders = %+v, want [lore secrets] after reveal", tree.Folders)
-	}
+	assert.Len(t, tree.Folders, 2, "want [lore secrets] after reveal")
 }
 
 func TestDocumentService_ShareToGroup_MovesDocumentAndAppliesGroupRules(t *testing.T) {
@@ -679,28 +617,20 @@ func TestDocumentService_ShareToGroup_MovesDocumentAndAppliesGroupRules(t *testi
 		SharedOnGameDay:    3,
 	})
 	require.NoError(t, err)
-	if shared.Document.RepositoryID != groupRepo.ID {
-		t.Fatalf("RepositoryID = %q, want group repository %q", shared.Document.RepositoryID, groupRepo.ID)
-	}
-	if shared.Document.SharedOnGameDay != 3 {
-		t.Fatalf("SharedOnGameDay = %d, want 3", shared.Document.SharedOnGameDay)
-	}
+	assert.Equal(t, shared.Document.RepositoryID, groupRepo.ID)
+	assert.Equal(t, 3, shared.Document.SharedOnGameDay)
 
 	// It's no longer in the character repository, and it now follows the
 	// group's game-day gate: the owner's own character hasn't reached day 3
 	// yet, so it isn't visible until it does.
 	listed, err := env.docs.ListByRepository(ctx, playerRequester, charRepo.ID)
 	require.NoError(t, err)
-	if len(listed) != 0 {
-		t.Fatalf("character repository still lists %d documents, want 0", len(listed))
-	}
-	if _, err := env.docs.Get(ctx, playerRequester, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("owner Get before reaching day 3 = %v, want ErrNotFound", err)
-	}
+	assert.Empty(t, listed)
+	_, err = env.docs.Get(ctx, playerRequester, doc.Document.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 	env.setGameDay(t, character.ID, 3)
-	if _, err := env.docs.Get(ctx, playerRequester, doc.Document.ID); err != nil {
-		t.Fatalf("owner Get at day 3 = %v, want success", err)
-	}
+	_, err = env.docs.Get(ctx, playerRequester, doc.Document.ID)
+	require.NoError(t, err)
 
 	// Game-day gating now applies via the group: a fellow member below day 3
 	// sees nothing yet.
@@ -710,15 +640,13 @@ func TestDocumentService_ShareToGroup_MovesDocumentAndAppliesGroupRules(t *testi
 	err = env.groups.Join(ctx, gmRequester, group.ID, other.ID)
 	require.NoError(t, err)
 
-	if _, err := env.docs.Get(ctx, otherRequester, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("other member Get before day 3 = %v, want ErrNotFound", err)
-	}
+	_, err = env.docs.Get(ctx, otherRequester, doc.Document.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 
 	env.setGameDay(t, other.ID, 3)
 
-	if _, err := env.docs.Get(ctx, otherRequester, doc.Document.ID); err != nil {
-		t.Fatalf("other member Get at day 3 = %v, want success", err)
-	}
+	_, err = env.docs.Get(ctx, otherRequester, doc.Document.ID)
+	require.NoError(t, err)
 }
 
 func TestDocumentService_ShareToGroup_NonMemberCannotShareIntoGroup(t *testing.T) {
@@ -743,9 +671,7 @@ func TestDocumentService_ShareToGroup_NonMemberCannotShareIntoGroup(t *testing.T
 		TargetRepositoryID: groupRepo.ID,
 		SharedOnGameDay:    1,
 	})
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("ShareToGroup(non-member) = %v, want ErrNotFound", err)
-	}
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestDocumentService_ShareToGroup_OtherPlayerCannotShareSomeoneElsesDocument(t *testing.T) {
@@ -756,9 +682,8 @@ func TestDocumentService_ShareToGroup_OtherPlayerCannotShareSomeoneElsesDocument
 	require.NoError(t, err)
 
 	other := fakeRequester{id: "other-1", gm: false}
-	if _, err := env.characters.Create(ctx, other, "", "Beren"); err != nil {
-		t.Fatalf("Create other character: %v", err)
-	}
+	_, err = env.characters.Create(ctx, other, "", "Beren")
+	require.NoError(t, err)
 
 	group, err := env.groups.Create(ctx, gmRequester, "Thieves Guild", models.GroupTypeOrganization, "")
 	require.NoError(t, err)
@@ -774,9 +699,7 @@ func TestDocumentService_ShareToGroup_OtherPlayerCannotShareSomeoneElsesDocument
 		TargetRepositoryID: groupRepo.ID,
 		SharedOnGameDay:    1,
 	})
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("ShareToGroup(other player) = %v, want ErrNotFound", err)
-	}
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestDocumentService_ShareToGroup_OnlyFromCharacterRepository(t *testing.T) {
@@ -794,9 +717,7 @@ func TestDocumentService_ShareToGroup_OnlyFromCharacterRepository(t *testing.T) 
 		TargetRepositoryID: groupRepo.ID,
 		SharedOnGameDay:    1,
 	})
-	if !errors.Is(err, application.ErrInvalidDocument) {
-		t.Fatalf("ShareToGroup(from general repo) = %v, want ErrInvalidDocument", err)
-	}
+	require.ErrorIs(t, err, application.ErrInvalidDocument)
 }
 
 func TestDocumentService_ShareToGroup_TargetMustBeGroupRepository(t *testing.T) {
@@ -816,9 +737,7 @@ func TestDocumentService_ShareToGroup_TargetMustBeGroupRepository(t *testing.T) 
 		TargetRepositoryID: general.ID,
 		SharedOnGameDay:    1,
 	})
-	if !errors.Is(err, application.ErrInvalidDocument) {
-		t.Fatalf("ShareToGroup(target general repo) = %v, want ErrInvalidDocument", err)
-	}
+	require.ErrorIs(t, err, application.ErrInvalidDocument)
 }
 
 func TestDocumentService_ShareToGroup_PathCollision_WarnsThenAllows(t *testing.T) {
@@ -845,9 +764,7 @@ func TestDocumentService_ShareToGroup_PathCollision_WarnsThenAllows(t *testing.T
 		TargetRepositoryID: groupRepo.ID,
 		SharedOnGameDay:    1,
 	})
-	if !errors.Is(err, application.ErrPathCollision) {
-		t.Fatalf("ShareToGroup(colliding path) = %v, want ErrPathCollision", err)
-	}
+	require.ErrorIs(t, err, application.ErrPathCollision)
 
 	shared, err := env.docs.ShareToGroup(ctx, playerRequester, doc.Document.ID, &application.ShareDocumentInput{
 		TargetRepositoryID: groupRepo.ID,
@@ -855,13 +772,8 @@ func TestDocumentService_ShareToGroup_PathCollision_WarnsThenAllows(t *testing.T
 		AllowCollision:     true,
 	})
 	require.NoError(t, err)
-	if shared.Document.RepositoryID != groupRepo.ID {
-		t.Fatalf("RepositoryID = %q, want group repository %q", shared.Document.RepositoryID, groupRepo.ID)
-	}
+	assert.Equal(t, shared.Document.RepositoryID, groupRepo.ID)
 }
-
-//go:fix inline
-func intPtr(v int) *int { return new(v) }
 
 func TestDocumentService_DirectShare_GatesByCharacterGameDay(t *testing.T) {
 	env := newDocumentTestEnv(t)
@@ -881,39 +793,33 @@ func TestDocumentService_DirectShare_GatesByCharacterGameDay(t *testing.T) {
 	})
 
 	// The recipient's own character repository grants nothing here.
-	if _, err := env.docs.Get(ctx, other, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("pre-share Get = %v, want ErrNotFound", err)
-	}
+	_, err = env.docs.Get(ctx, other, doc.Document.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 
 	share, err := env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, recipient.ID, 3)
 	require.NoError(t, err)
 
 	// Shared, but the character's game day hasn't reached the share's yet.
-	if _, err := env.docs.Get(ctx, other, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("pre-day Get = %v, want ErrNotFound", err)
-	}
+	_, err = env.docs.Get(ctx, other, doc.Document.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 
 	env.setGameDay(t, recipient.ID, 3)
 
 	view, err := env.docs.Get(ctx, other, doc.Document.ID)
 	require.NoError(t, err)
-	if len(view.Document.Sections) != 1 || view.Document.Sections[0].Content != "The ring is cursed." {
-		t.Fatalf("Sections = %+v, want the shared content", view.Document.Sections)
+	if assert.Len(t, view.Document.Sections, 1, "want the shared content") {
+		assert.Equal(t, "The ring is cursed.", view.Document.Sections[0].Content)
 	}
 
 	// A second share attempt for the same pair is rejected.
-	if _, err := env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, recipient.ID, 3); !errors.Is(
-		err, application.ErrAlreadyShared,
-	) {
-		t.Fatalf("duplicate ShareWithCharacter = %v, want ErrAlreadyShared", err)
-	}
+	_, err = env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, recipient.ID, 3)
+	require.ErrorIs(t, err, application.ErrAlreadyShared)
 
 	// Revoking removes access again.
 	err = env.docs.RevokeShare(ctx, gmRequester, doc.Document.ID, share.ID)
 	require.NoError(t, err)
-	if _, err := env.docs.Get(ctx, other, doc.Document.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("post-revoke Get = %v, want ErrNotFound", err)
-	}
+	_, err = env.docs.Get(ctx, other, doc.Document.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestDocumentService_DirectShare_GMOnlySectionsStrippedForRecipient(t *testing.T) {
@@ -934,14 +840,13 @@ func TestDocumentService_DirectShare_GMOnlySectionsStrippedForRecipient(t *testi
 		},
 	})
 
-	if _, err := env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, character.ID, 0); err != nil {
-		t.Fatalf("ShareWithCharacter: %v", err)
-	}
+	_, err = env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, character.ID, 0)
+	require.NoError(t, err)
 
 	view, err := env.docs.Get(ctx, recipient, doc.Document.ID)
 	require.NoError(t, err)
-	if len(view.Document.Sections) != 1 || view.Document.Sections[0].GMOnly {
-		t.Fatalf("Sections = %+v, want only the non-GM section", view.Document.Sections)
+	if assert.Len(t, view.Document.Sections, 1, "want only the non-GM section") {
+		assert.False(t, view.Document.Sections[0].GMOnly)
 	}
 }
 
@@ -955,11 +860,8 @@ func TestDocumentService_ShareWithCharacter_ForbiddenForPlayers(t *testing.T) {
 
 	doc := mustCreateDocument(t, env, gmRequester, general.ID, &application.CreateDocumentInput{Path: "lore/creation"})
 
-	if _, err := env.docs.ShareWithCharacter(
-		ctx, playerRequester, doc.Document.ID, character.ID, 0,
-	); !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("player ShareWithCharacter = %v, want ErrForbidden", err)
-	}
+	_, err = env.docs.ShareWithCharacter(ctx, playerRequester, doc.Document.ID, character.ID, 0)
+	require.ErrorIs(t, err, application.ErrForbidden)
 }
 
 func TestDocumentService_ListSharedWithMe(t *testing.T) {
@@ -980,17 +882,14 @@ func TestDocumentService_ListSharedWithMe(t *testing.T) {
 
 	views, err := env.docs.ListSharedWithMe(ctx, recipient)
 	require.NoError(t, err)
-	if len(views) != 0 {
-		t.Fatalf("views = %+v, want none before sharing", views)
-	}
+	assert.Empty(t, views, "want none before sharing")
 
-	if _, err := env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, character.ID, 0); err != nil {
-		t.Fatalf("ShareWithCharacter: %v", err)
-	}
+	_, err = env.docs.ShareWithCharacter(ctx, gmRequester, doc.Document.ID, character.ID, 0)
+	require.NoError(t, err)
 
 	views, err = env.docs.ListSharedWithMe(ctx, recipient)
 	require.NoError(t, err)
-	if len(views) != 1 || views[0].Document.ID != doc.Document.ID {
-		t.Fatalf("views = %+v, want [%s]", views, doc.Document.ID)
+	if assert.Len(t, views, 1) {
+		assert.Equal(t, views[0].Document.ID, doc.Document.ID)
 	}
 }

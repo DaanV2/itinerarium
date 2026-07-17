@@ -1,13 +1,13 @@
 package application_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -73,9 +73,8 @@ func (e ownerInventoryTestEnv) grantedLocation(t *testing.T, characterID string)
 
 	location, err := e.locations.Create(t.Context(), gmRequester, "The Vault", "", "Material")
 	require.NoError(t, err)
-	if _, err := e.locations.GrantAccess(t.Context(), gmRequester, location.ID, &characterID, nil); err != nil {
-		t.Fatalf("GrantAccess: %v", err)
-	}
+	_, err = e.locations.GrantAccess(t.Context(), gmRequester, location.ID, &characterID, nil)
+	require.NoError(t, err)
 
 	return location
 }
@@ -87,29 +86,23 @@ func TestInventoryService_GroupInventory_MembersOnly(t *testing.T) {
 	group := env.memberGroup(t, character.ID)
 	owner := models.GroupOwner(group.ID)
 
-	if _, err := env.inventory.AddItem(ctx, playerRequester, owner, "Shared Rations", nil, 10, ""); err != nil {
-		t.Fatalf("AddItem as member: %v", err)
-	}
+	_, err := env.inventory.AddItem(ctx, playerRequester, owner, "Shared Rations", nil, 10, "")
+	require.NoError(t, err)
 
 	items, err := env.inventory.ListInventory(ctx, playerRequester, owner)
 	require.NoError(t, err)
-	if len(items) != 1 {
-		t.Fatalf("ListInventory returned %d items, want 1", len(items))
-	}
+	assert.Len(t, items, 1)
 
 	// A player without a member character gets 404 — the shared inventory is
 	// member-only content even though the group itself is public.
-	if _, err := env.inventory.ListInventory(ctx, otherPlayer, owner); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("ListInventory as non-member = %v, want ErrNotFound", err)
-	}
-	if _, err := env.inventory.AddItem(ctx, otherPlayer, owner, "Loot", nil, 1, ""); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("AddItem as non-member = %v, want ErrNotFound", err)
-	}
+	_, err = env.inventory.ListInventory(ctx, otherPlayer, owner)
+	require.ErrorIs(t, err, application.ErrNotFound)
+	_, err = env.inventory.AddItem(ctx, otherPlayer, owner, "Loot", nil, 1, "")
+	require.ErrorIs(t, err, application.ErrNotFound)
 
 	// GMs always have access.
-	if _, err := env.inventory.ListInventory(ctx, gmRequester, owner); err != nil {
-		t.Fatalf("ListInventory as GM: %v", err)
-	}
+	_, err = env.inventory.ListInventory(ctx, gmRequester, owner)
+	require.NoError(t, err)
 }
 
 func TestInventoryService_GroupMoney_MembersOnly(t *testing.T) {
@@ -122,19 +115,17 @@ func TestInventoryService_GroupMoney_MembersOnly(t *testing.T) {
 	gp, err := env.catalog.CreateCurrency(ctx, gmRequester, "gp", "Gold", 100)
 	require.NoError(t, err)
 
-	if _, err := env.inventory.SetMoney(ctx, playerRequester, owner, gp.ID, 250); err != nil {
-		t.Fatalf("SetMoney as member: %v", err)
-	}
+	_, err = env.inventory.SetMoney(ctx, playerRequester, owner, gp.ID, 250)
+	require.NoError(t, err)
 
 	balances, err := env.inventory.ListMoney(ctx, playerRequester, owner)
 	require.NoError(t, err)
-	if len(balances) != 1 || balances[0].Amount != 250 {
-		t.Fatalf("balances = %+v, want one of 250", balances)
+	if assert.Len(t, balances, 1) {
+		assert.Equal(t, int64(250), balances[0].Amount)
 	}
 
-	if _, err := env.inventory.ListMoney(ctx, otherPlayer, owner); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("ListMoney as non-member = %v, want ErrNotFound", err)
-	}
+	_, err = env.inventory.ListMoney(ctx, otherPlayer, owner)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestInventoryService_LocationInventory_GrantGated(t *testing.T) {
@@ -144,15 +135,13 @@ func TestInventoryService_LocationInventory_GrantGated(t *testing.T) {
 	location := env.grantedLocation(t, character.ID)
 	owner := models.LocationOwner(location.ID)
 
-	if _, err := env.inventory.AddItem(ctx, playerRequester, owner, "Stored Gear", nil, 2, ""); err != nil {
-		t.Fatalf("AddItem with grant: %v", err)
-	}
+	_, err := env.inventory.AddItem(ctx, playerRequester, owner, "Stored Gear", nil, 2, "")
+	require.NoError(t, err)
 
 	// A player without a grant gets 404 — the inventory's existence must not
 	// leak (core domain rule 3).
-	if _, err := env.inventory.ListInventory(ctx, otherPlayer, owner); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("ListInventory without grant = %v, want ErrNotFound", err)
-	}
+	_, err = env.inventory.ListInventory(ctx, otherPlayer, owner)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestInventoryService_LocationsHoldNoMoney(t *testing.T) {
@@ -162,9 +151,7 @@ func TestInventoryService_LocationsHoldNoMoney(t *testing.T) {
 	location := env.grantedLocation(t, character.ID)
 
 	_, err := env.inventory.ListMoney(ctx, playerRequester, models.LocationOwner(location.ID))
-	if !errors.Is(err, application.ErrInvalidOwner) {
-		t.Fatalf("ListMoney(location) = %v, want ErrInvalidOwner", err)
-	}
+	require.ErrorIs(t, err, application.ErrInvalidOwner)
 }
 
 func TestInventoryService_MoveItem_FullMoveRetargets(t *testing.T) {
@@ -180,15 +167,14 @@ func TestInventoryService_MoveItem_FullMoveRetargets(t *testing.T) {
 
 	moved, err := env.inventory.MoveItem(ctx, playerRequester, item.ID, groupOwner, 3)
 	require.NoError(t, err)
-	if moved.GroupID == nil || *moved.GroupID != group.ID || moved.Quantity != 3 {
-		t.Fatalf("moved = %+v, want 3 Torch owned by group %s", moved, group.ID)
+	if assert.NotNil(t, moved.GroupID) {
+		assert.Equal(t, group.ID, *moved.GroupID)
 	}
+	assert.Equal(t, 3, moved.Quantity)
 
 	source, err := env.inventory.ListInventory(ctx, playerRequester, charOwner)
 	require.NoError(t, err)
-	if len(source) != 0 {
-		t.Fatalf("source still holds %d lines after full move, want 0", len(source))
-	}
+	assert.Empty(t, source, "source still holds lines after full move")
 }
 
 func TestInventoryService_MoveItem_PartialMoveSplitsAndMerges(t *testing.T) {
@@ -205,29 +191,25 @@ func TestInventoryService_MoveItem_PartialMoveSplitsAndMerges(t *testing.T) {
 	// Split: 5 of 20 arrows go to the location.
 	split, err := env.inventory.MoveItem(ctx, playerRequester, item.ID, locOwner, 5)
 	require.NoError(t, err)
-	if split.Quantity != 5 || split.LocationID == nil {
-		t.Fatalf("split = %+v, want 5 at location", split)
-	}
+	assert.Equal(t, 5, split.Quantity)
+	assert.NotNil(t, split.LocationID)
 
 	remaining, err := env.inventory.ListInventory(ctx, playerRequester, charOwner)
 	require.NoError(t, err)
-	if len(remaining) != 1 || remaining[0].Quantity != 15 {
-		t.Fatalf("source = %+v, want one line of 15", remaining)
+	if assert.Len(t, remaining, 1) {
+		assert.Equal(t, 15, remaining[0].Quantity)
 	}
 
 	// Merge: 5 more arrows join the existing location line instead of
 	// creating a duplicate.
 	merged, err := env.inventory.MoveItem(ctx, playerRequester, item.ID, locOwner, 5)
 	require.NoError(t, err)
-	if merged.ID != split.ID || merged.Quantity != 10 {
-		t.Fatalf("merged = %+v, want line %s at quantity 10", merged, split.ID)
-	}
+	assert.Equal(t, split.ID, merged.ID)
+	assert.Equal(t, 10, merged.Quantity)
 
 	atLocation, err := env.inventory.ListInventory(ctx, playerRequester, locOwner)
 	require.NoError(t, err)
-	if len(atLocation) != 1 {
-		t.Fatalf("location holds %d lines, want 1 (merged)", len(atLocation))
-	}
+	assert.Len(t, atLocation, 1, "location holds lines, want 1 (merged)")
 }
 
 func TestInventoryService_MoveItem_Validation(t *testing.T) {
@@ -239,18 +221,15 @@ func TestInventoryService_MoveItem_Validation(t *testing.T) {
 	item, err := env.inventory.AddItem(ctx, playerRequester, charOwner, "Torch", nil, 3, "")
 	require.NoError(t, err)
 
-	if _, err := env.inventory.MoveItem(ctx, playerRequester, item.ID, charOwner, 1); !errors.Is(err, application.ErrSameInventory) {
-		t.Fatalf("MoveItem(same inventory) = %v, want ErrSameInventory", err)
-	}
+	_, err = env.inventory.MoveItem(ctx, playerRequester, item.ID, charOwner, 1)
+	require.ErrorIs(t, err, application.ErrSameInventory)
 
-	if _, err := env.inventory.MoveItem(ctx, playerRequester, item.ID, models.InventoryOwner{}, 1); !errors.Is(err, application.ErrInvalidOwner) {
-		t.Fatalf("MoveItem(no target) = %v, want ErrInvalidOwner", err)
-	}
+	_, err = env.inventory.MoveItem(ctx, playerRequester, item.ID, models.InventoryOwner{}, 1)
+	require.ErrorIs(t, err, application.ErrInvalidOwner)
 
 	other := ownedCharacter(t, env.chars, "Beren")
-	if _, err := env.inventory.MoveItem(ctx, playerRequester, item.ID, models.CharacterOwner(other.ID), 4); !errors.Is(err, application.ErrInvalidQuantity) {
-		t.Fatalf("MoveItem(too many) = %v, want ErrInvalidQuantity", err)
-	}
+	_, err = env.inventory.MoveItem(ctx, playerRequester, item.ID, models.CharacterOwner(other.ID), 4)
+	require.ErrorIs(t, err, application.ErrInvalidQuantity)
 }
 
 func TestInventoryService_MoveItem_AccessChecksBothEnds(t *testing.T) {
@@ -267,15 +246,11 @@ func TestInventoryService_MoveItem_AccessChecksBothEnds(t *testing.T) {
 
 	// Owner of the item but not a member of the target group: 404 on target.
 	_, err = env.inventory.MoveItem(ctx, playerRequester, item.ID, models.GroupOwner(group.ID), 1)
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("MoveItem(no target access) = %v, want ErrNotFound", err)
-	}
+	require.ErrorIs(t, err, application.ErrNotFound)
 
 	// A stranger must not even learn the item exists.
 	otherChar, err := env.chars.Create(ctx, otherPlayer, "", "Sneak")
 	require.NoError(t, err)
 	_, err = env.inventory.MoveItem(ctx, otherPlayer, item.ID, models.CharacterOwner(otherChar.ID), 1)
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("MoveItem(foreign source) = %v, want ErrNotFound", err)
-	}
+	require.ErrorIs(t, err, application.ErrNotFound)
 }

@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -15,6 +14,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -149,7 +149,7 @@ func (e *documentsTransportEnv) findRepositoryID(t *testing.T, repoType models.R
 		}
 	}
 
-	t.Fatalf("no %s repository found for owner %q", repoType, ownerID)
+	require.Failf(t, "repository not found", "no %s repository found for owner %q", repoType, ownerID)
 
 	return ""
 }
@@ -176,7 +176,7 @@ func (e *documentsTransportEnv) createDocumentIn(t *testing.T, repositoryID stri
 	t.Helper()
 
 	rec := e.do(t, http.MethodPost, "/api/repositories/"+repositoryID+"/documents", e.gmToken, body)
-	require.Equal(t, rec.Code, http.StatusCreated)
+	require.Equal(t, http.StatusCreated, rec.Code)
 
 	var doc map[string]any
 	err := json.Unmarshal(rec.Body.Bytes(), &doc)
@@ -204,9 +204,7 @@ func (e *documentsTransportEnv) do(t *testing.T, method, path, token string, bod
 	var reader io.Reader = http.NoBody
 	if body != nil {
 		encoded, err := json.Marshal(body)
-		if err != nil {
-			t.Fatalf("marshal body: %v", err)
-		}
+		require.NoError(t, err)
 
 		reader = bytes.NewReader(encoded)
 	}
@@ -223,7 +221,7 @@ func (e *documentsTransportEnv) createDocument(t *testing.T, body map[string]any
 	t.Helper()
 
 	rec := e.do(t, http.MethodPost, "/api/repositories/"+e.generalID+"/documents", e.gmToken, body)
-	require.Equal(t, rec.Code, http.StatusCreated)
+	require.Equal(t, http.StatusCreated, rec.Code)
 
 	var doc map[string]any
 	err := json.Unmarshal(rec.Body.Bytes(), &doc)
@@ -245,14 +243,13 @@ func TestDocumentRoutes_GMOnlyContentNeverReachesPlayers(t *testing.T) {
 
 	docID, _ := doc["id"].(string)
 	rec := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil)
-	require.Equal(t, rec.Code, http.StatusOK)
+	require.Equal(t, http.StatusOK, rec.Code)
 
 	// Grep the raw payload, not the parsed struct: nothing GM-only may be in
 	// the bytes a player receives.
 	payload := rec.Body.String()
-	if strings.Contains(payload, "vampire") || strings.Contains(payload, `"gm_only":true`) {
-		t.Fatalf("GM-only content leaked into player payload: %s", payload)
-	}
+	assert.NotContains(t, payload, "vampire", "GM-only content leaked into player payload")
+	assert.NotContains(t, payload, `"gm_only":true`, "GM-only content leaked into player payload")
 }
 
 func TestDocumentRoutes_GameDayGate_Returns404NotForbidden(t *testing.T) {
@@ -265,15 +262,11 @@ func TestDocumentRoutes_GameDayGate_Returns404NotForbidden(t *testing.T) {
 
 	docID, _ := doc["id"].(string)
 	rec := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil)
-	require.Equal(t, rec.Code, http.StatusNotFound)
+	require.Equal(t, http.StatusNotFound, rec.Code)
 
 	list := env.do(t, http.MethodGet, "/api/repositories/"+env.generalID+"/documents", env.playerToken, nil)
-	if list.Code != http.StatusOK {
-		t.Fatalf("list status = %d, want 200", list.Code)
-	}
-	if body := list.Body.String(); strings.Contains(body, "the-betrayal") {
-		t.Fatalf("gated document leaked into list: %s", body)
-	}
+	require.Equal(t, http.StatusOK, list.Code)
+	assert.NotContains(t, list.Body.String(), "the-betrayal", "gated document leaked into list")
 }
 
 func TestDocumentRoutes_FolderTree_HidesGatedFolder(t *testing.T) {
@@ -286,7 +279,7 @@ func TestDocumentRoutes_FolderTree_HidesGatedFolder(t *testing.T) {
 	})
 
 	rec := env.do(t, http.MethodGet, "/api/repositories/"+env.generalID+"/documents/tree", env.playerToken, nil)
-	require.Equal(t, rec.Code, http.StatusOK)
+	require.Equal(t, http.StatusOK, rec.Code)
 	var tree struct {
 		Folders []struct {
 			Name string `json:"name"`
@@ -295,8 +288,8 @@ func TestDocumentRoutes_FolderTree_HidesGatedFolder(t *testing.T) {
 	err := json.Unmarshal(rec.Body.Bytes(), &tree)
 	require.NoError(t, err)
 
-	if len(tree.Folders) != 1 || tree.Folders[0].Name != "lore" {
-		t.Fatalf("folders = %+v, want [lore] — the unrevealed secrets folder must not leak", tree.Folders)
+	if assert.Len(t, tree.Folders, 1, "the unrevealed secrets folder must not leak") {
+		assert.Equal(t, "lore", tree.Folders[0].Name)
 	}
 }
 
@@ -307,16 +300,12 @@ func TestDocumentRoutes_PathCollision_409WithCode(t *testing.T) {
 
 	rec := env.do(t, http.MethodPost, "/api/repositories/"+env.generalID+"/documents", env.gmToken,
 		map[string]any{"path": "lore/creation"})
-	require.Equal(t, rec.Code, http.StatusConflict)
-	if !strings.Contains(rec.Body.String(), `"code":"path_collision"`) {
-		t.Fatalf("collision body missing code: %s", rec.Body.String())
-	}
+	require.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"code":"path_collision"`)
 
 	allowed := env.do(t, http.MethodPost, "/api/repositories/"+env.generalID+"/documents", env.gmToken,
 		map[string]any{"path": "lore/creation", "allow_collision": true})
-	if allowed.Code != http.StatusCreated {
-		t.Fatalf("allow_collision create status = %d, want 201", allowed.Code)
-	}
+	assert.Equal(t, http.StatusCreated, allowed.Code)
 }
 
 func TestDocumentRoutes_ConcurrentEdit_409WithCode(t *testing.T) {
@@ -332,23 +321,17 @@ func TestDocumentRoutes_ConcurrentEdit_409WithCode(t *testing.T) {
 		"expected_version": version,
 		"sections":         []map[string]any{{"content": "v2"}},
 	}
-	if rec := env.do(t, http.MethodPatch, "/api/documents/"+docID, env.gmToken, update); rec.Code != http.StatusOK {
-		t.Fatalf("first update status = %d body %s", rec.Code, rec.Body.String())
-	}
+	rec := env.do(t, http.MethodPatch, "/api/documents/"+docID, env.gmToken, update)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 
 	// Same stale version again: warn.
 	stale := env.do(t, http.MethodPatch, "/api/documents/"+docID, env.gmToken, update)
-	if stale.Code != http.StatusConflict {
-		t.Fatalf("stale update status = %d, want 409", stale.Code)
-	}
-	if !strings.Contains(stale.Body.String(), `"code":"concurrent_edit"`) {
-		t.Fatalf("conflict body missing code: %s", stale.Body.String())
-	}
+	require.Equal(t, http.StatusConflict, stale.Code)
+	assert.Contains(t, stale.Body.String(), `"code":"concurrent_edit"`)
 
 	update["force"] = true
-	if rec := env.do(t, http.MethodPatch, "/api/documents/"+docID, env.gmToken, update); rec.Code != http.StatusOK {
-		t.Fatalf("forced update status = %d body %s", rec.Code, rec.Body.String())
-	}
+	rec = env.do(t, http.MethodPatch, "/api/documents/"+docID, env.gmToken, update)
+	assert.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 }
 
 func TestDocumentRoutes_ShareToGroup(t *testing.T) {
@@ -365,7 +348,7 @@ func TestDocumentRoutes_ShareToGroup(t *testing.T) {
 
 	rec := env.do(t, http.MethodPost, "/api/repositories/"+charRepoID+"/documents", env.playerToken,
 		map[string]any{"path": "notes/suspicions"})
-	require.Equal(t, rec.Code, http.StatusCreated)
+	require.Equal(t, http.StatusCreated, rec.Code)
 
 	var doc map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &doc)
@@ -374,25 +357,17 @@ func TestDocumentRoutes_ShareToGroup(t *testing.T) {
 
 	share := env.do(t, http.MethodPost, "/api/documents/"+docID+"/share", env.playerToken,
 		map[string]any{"target_repository_id": groupRepoID, "shared_on_game_day": 2})
-	if share.Code != http.StatusOK {
-		t.Fatalf("share status = %d, want 200: %s", share.Code, share.Body.String())
-	}
+	require.Equal(t, http.StatusOK, share.Code, share.Body.String())
 
 	var shared map[string]any
 	err = json.Unmarshal(share.Body.Bytes(), &shared)
 	require.NoError(t, err)
-	if shared["repository_id"] != groupRepoID {
-		t.Fatalf("repository_id = %v, want %q", shared["repository_id"], groupRepoID)
-	}
+	assert.Equal(t, shared["repository_id"], groupRepoID)
 
 	// It no longer lists under the character repository.
 	list := env.do(t, http.MethodGet, "/api/repositories/"+charRepoID+"/documents", env.playerToken, nil)
-	if list.Code != http.StatusOK {
-		t.Fatalf("list character repo: status %d", list.Code)
-	}
-	if strings.Contains(list.Body.String(), "suspicions") {
-		t.Fatalf("shared document still lists under the character repository: %s", list.Body.String())
-	}
+	require.Equal(t, http.StatusOK, list.Code)
+	assert.NotContains(t, list.Body.String(), "suspicions", "shared document still lists under the character repository")
 }
 
 func TestDocumentRoutes_ShareToGroup_NonMemberGets404(t *testing.T) {
@@ -408,7 +383,7 @@ func TestDocumentRoutes_ShareToGroup_NonMemberGets404(t *testing.T) {
 
 	rec := env.do(t, http.MethodPost, "/api/repositories/"+charRepoID+"/documents", env.playerToken,
 		map[string]any{"path": "notes/suspicions"})
-	require.Equal(t, rec.Code, http.StatusCreated)
+	require.Equal(t, http.StatusCreated, rec.Code)
 
 	var doc map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &doc)
@@ -417,7 +392,7 @@ func TestDocumentRoutes_ShareToGroup_NonMemberGets404(t *testing.T) {
 
 	share := env.do(t, http.MethodPost, "/api/documents/"+docID+"/share", env.playerToken,
 		map[string]any{"target_repository_id": groupRepoID, "shared_on_game_day": 2})
-	require.Equal(t, share.Code, http.StatusNotFound)
+	require.Equal(t, http.StatusNotFound, share.Code)
 }
 
 func TestDocumentRoutes_DirectShare_GatesByCharacterGameDay(t *testing.T) {
@@ -433,53 +408,40 @@ func TestDocumentRoutes_DirectShare_GatesByCharacterGameDay(t *testing.T) {
 	docID, _ := doc["id"].(string)
 
 	// Not shared yet: hidden.
-	if rec := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil); rec.Code != http.StatusNotFound {
-		t.Fatalf("pre-share GET status = %d, want 404", rec.Code)
-	}
+	preShare := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil)
+	require.Equal(t, http.StatusNotFound, preShare.Code)
 
 	share := env.do(t, http.MethodPost, "/api/documents/"+docID+"/shares", env.gmToken,
 		map[string]any{"character_id": env.characterID, "shared_on_game_day": 3})
-	if share.Code != http.StatusCreated {
-		t.Fatalf("share status = %d body %s", share.Code, share.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, share.Code, share.Body.String())
 
 	// Shared, but game day not yet reached: still hidden.
-	if rec := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil); rec.Code != http.StatusNotFound {
-		t.Fatalf("pre-day GET status = %d, want 404", rec.Code)
-	}
+	preDay := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil)
+	require.Equal(t, http.StatusNotFound, preDay.Code)
 
 	env.setCharacterGameDay(t, 3)
 
 	// Game day reached: visible, and GM-only sections still stripped.
 	rec := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil)
-	require.Equal(t, rec.Code, http.StatusOK)
+	require.Equal(t, http.StatusOK, rec.Code)
 
-	if !strings.Contains(rec.Body.String(), "cursed") {
-		t.Fatalf("shared document content missing: %s", rec.Body.String())
-	}
+	assert.Contains(t, rec.Body.String(), "cursed", "shared document content missing")
 
 	// A GM can list and revoke the share.
 	list := env.do(t, http.MethodGet, "/api/documents/"+docID+"/shares", env.gmToken, nil)
-	if list.Code != http.StatusOK {
-		t.Fatalf("list shares status = %d body %s", list.Code, list.Body.String())
-	}
+	require.Equal(t, http.StatusOK, list.Code, list.Body.String())
 
 	var shares []map[string]any
 	err := json.Unmarshal(list.Body.Bytes(), &shares)
 	require.NoError(t, err)
-	if len(shares) != 1 {
-		t.Fatalf("shares = %+v, want 1", shares)
-	}
+	require.Len(t, shares, 1)
 	shareID, _ := shares[0]["id"].(string)
 
 	revoke := env.do(t, http.MethodDelete, "/api/documents/"+docID+"/shares/"+shareID, env.gmToken, nil)
-	if revoke.Code != http.StatusNoContent {
-		t.Fatalf("revoke status = %d body %s", revoke.Code, revoke.Body.String())
-	}
+	require.Equal(t, http.StatusNoContent, revoke.Code, revoke.Body.String())
 
-	if rec := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil); rec.Code != http.StatusNotFound {
-		t.Fatalf("post-revoke GET status = %d, want 404", rec.Code)
-	}
+	postRevoke := env.do(t, http.MethodGet, "/api/documents/"+docID, env.playerToken, nil)
+	assert.Equal(t, http.StatusNotFound, postRevoke.Code)
 }
 
 func TestDocumentRoutes_ShareRoutes_ForbiddenForPlayers(t *testing.T) {
@@ -490,9 +452,7 @@ func TestDocumentRoutes_ShareRoutes_ForbiddenForPlayers(t *testing.T) {
 
 	share := env.do(t, http.MethodPost, "/api/documents/"+docID+"/shares", env.playerToken,
 		map[string]any{"character_id": env.characterID, "shared_on_game_day": 1})
-	if share.Code != http.StatusForbidden {
-		t.Fatalf("player share status = %d, want 403", share.Code)
-	}
+	assert.Equal(t, http.StatusForbidden, share.Code)
 }
 
 func TestDocumentRoutes_ListSharedWithMe(t *testing.T) {
@@ -502,18 +462,17 @@ func TestDocumentRoutes_ListSharedWithMe(t *testing.T) {
 	doc := env.createDocumentIn(t, otherID, map[string]any{"path": "secrets/heirloom"})
 	docID, _ := doc["id"].(string)
 
-	if rec := env.do(t, http.MethodPost, "/api/documents/"+docID+"/shares", env.gmToken,
-		map[string]any{"character_id": env.characterID, "shared_on_game_day": 0}); rec.Code != http.StatusCreated {
-		t.Fatalf("share status = %d body %s", rec.Code, rec.Body.String())
-	}
+	shareRec := env.do(t, http.MethodPost, "/api/documents/"+docID+"/shares", env.gmToken,
+		map[string]any{"character_id": env.characterID, "shared_on_game_day": 0})
+	require.Equal(t, http.StatusCreated, shareRec.Code, shareRec.Body.String())
 
 	rec := env.do(t, http.MethodGet, "/api/documents/shared", env.playerToken, nil)
-	require.Equal(t, rec.Code, http.StatusOK)
+	require.Equal(t, http.StatusOK, rec.Code)
 
 	var docs []map[string]any
 	err := json.Unmarshal(rec.Body.Bytes(), &docs)
 	require.NoError(t, err)
-	if len(docs) != 1 || docs[0]["id"] != docID {
-		t.Fatalf("shared docs = %+v, want [%s]", docs, docID)
+	if assert.Len(t, docs, 1) {
+		assert.Equal(t, docs[0]["id"], docID)
 	}
 }

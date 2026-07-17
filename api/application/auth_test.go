@@ -1,12 +1,12 @@
 package application_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,21 +54,15 @@ func TestAuthService_Authenticate(t *testing.T) {
 
 	requester, err := auth.Authenticate(ctx, token)
 	require.NoError(t, err)
-	if requester.UserID() != userID {
-		t.Fatalf("UserID = %q, want %q", requester.UserID(), userID)
-	}
-	if !requester.IsGM() {
-		t.Fatal("expected the requester to be a GM")
-	}
+	assert.Equal(t, userID, requester.UserID())
+	assert.True(t, requester.IsGM(), "expected the requester to be a GM")
 }
 
 func TestAuthService_Authenticate_RejectsGarbageToken(t *testing.T) {
 	auth, _, _ := newTestAuthService(t)
 
 	_, err := auth.Authenticate(t.Context(), "not-a-token")
-	if !errors.Is(err, application.ErrUnauthenticated) {
-		t.Fatalf("Authenticate(garbage) = %v, want ErrUnauthenticated", err)
-	}
+	require.ErrorIs(t, err, application.ErrUnauthenticated)
 }
 
 func TestAuthService_Authenticate_RejectsUnknownSubject(t *testing.T) {
@@ -78,9 +72,7 @@ func TestAuthService_Authenticate_RejectsUnknownSubject(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = auth.Authenticate(t.Context(), token)
-	if !errors.Is(err, application.ErrUnauthenticated) {
-		t.Fatalf("Authenticate(unknown subject) = %v, want ErrUnauthenticated", err)
-	}
+	require.ErrorIs(t, err, application.ErrUnauthenticated)
 }
 
 func TestAuthService_Login(t *testing.T) {
@@ -88,28 +80,20 @@ func TestAuthService_Login(t *testing.T) {
 
 	user, token, err := auth.Login(t.Context(), "player@example.com", "hunter22hunter")
 	require.NoError(t, err)
-	if user.Email != "player@example.com" {
-		t.Fatalf("Email = %q, want player@example.com", user.Email)
-	}
-	if token == "" {
-		t.Fatal("expected a non-empty access token")
-	}
+	assert.Equal(t, "player@example.com", user.Email)
+	assert.NotEmpty(t, token, "expected a non-empty access token")
 }
 
 func TestAuthService_Login_RejectsWrongPassword(t *testing.T) {
 	auth := newTestAuthServiceWithPassword(t, "player@example.com", "hunter22hunter")
 
 	_, _, err := auth.Login(t.Context(), "player@example.com", "wrong-password")
-	if !errors.Is(err, application.ErrInvalidCredentials) {
-		t.Fatalf("Login(wrong password) = %v, want ErrInvalidCredentials", err)
-	}
+	require.ErrorIs(t, err, application.ErrInvalidCredentials)
 }
 
 func TestAuthService_Login_RejectsUnknownEmail(t *testing.T) {
 	auth := newTestAuthServiceWithPassword(t, "player@example.com", "hunter22hunter")
 
 	_, _, err := auth.Login(t.Context(), "nobody@example.com", "hunter22hunter")
-	if !errors.Is(err, application.ErrInvalidCredentials) {
-		t.Fatalf("Login(unknown email) = %v, want ErrInvalidCredentials", err)
-	}
+	require.ErrorIs(t, err, application.ErrInvalidCredentials)
 }

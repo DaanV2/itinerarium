@@ -27,7 +27,7 @@ vet:
 
 # Run golangci-lint (same config as CI)
 lint:
-    golangci-lint run ./...
+    golangci-lint run --fix ./...
 
 # Run all Go tests
 test:

@@ -2,7 +2,6 @@ package application_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,38 +45,27 @@ func TestSetupService_CreateInitialGM(t *testing.T) {
 
 	needsSetup, err := svc.NeedsSetup(ctx)
 	require.NoError(t, err)
-	if !needsSetup {
-		t.Fatal("expected a fresh installation to need setup")
-	}
+	assert.True(t, needsSetup, "expected a fresh installation to need setup")
 
 	user, token, err := svc.CreateInitialGM(ctx, "gm@example.com", "hunter22hunter")
 	require.NoError(t, err)
-	if user.Role != models.RoleGM {
-		t.Fatalf("Role = %q, want gm", user.Role)
-	}
-	if token == "" {
-		t.Fatal("expected a non-empty access token")
-	}
+	assert.Equal(t, models.RoleGM, user.Role)
+	assert.NotEmpty(t, token, "expected a non-empty access token")
 
 	needsSetup, err = svc.NeedsSetup(ctx)
 	require.NoError(t, err)
-	if needsSetup {
-		t.Fatal("expected setup to be complete after creating the initial account")
-	}
+	assert.False(t, needsSetup, "expected setup to be complete after creating the initial account")
 }
 
 func TestSetupService_CreateInitialGM_RefusesOnceSetUp(t *testing.T) {
 	svc := newTestSetupService(t)
 	ctx := t.Context()
 
-	if _, _, err := svc.CreateInitialGM(ctx, "gm@example.com", "hunter22hunter"); err != nil {
-		t.Fatalf("CreateInitialGM (first): %v", err)
-	}
+	_, _, err := svc.CreateInitialGM(ctx, "gm@example.com", "hunter22hunter")
+	require.NoError(t, err)
 
-	_, _, err := svc.CreateInitialGM(ctx, "second@example.com", "hunter22hunter")
-	if !errors.Is(err, application.ErrAlreadySetUp) {
-		t.Fatalf("CreateInitialGM (second) = %v, want ErrAlreadySetUp", err)
-	}
+	_, _, err = svc.CreateInitialGM(ctx, "second@example.com", "hunter22hunter")
+	require.ErrorIs(t, err, application.ErrAlreadySetUp)
 }
 
 func TestSetupService_CreateInitialGM_ValidatesInput(t *testing.T) {
@@ -97,9 +86,7 @@ func TestSetupService_CreateInitialGM_ValidatesInput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, _, err := svc.CreateInitialGM(ctx, tt.email, tt.password)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("CreateInitialGM(%q, %q) = %v, want %v", tt.email, tt.password, err, tt.wantErr)
-			}
+			require.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }

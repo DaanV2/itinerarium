@@ -1,13 +1,13 @@
 package application_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,27 +56,21 @@ func TestLocationService_Create_PlayerForbidden(t *testing.T) {
 	env := newTestLocationEnv(t)
 
 	_, err := env.locations.Create(t.Context(), playerRequester, "The Feywild", "", "Feywild")
-	if !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("Create as player = %v, want ErrForbidden", err)
-	}
+	require.ErrorIs(t, err, application.ErrForbidden)
 }
 
 func TestLocationService_Create_RejectsEmptyName(t *testing.T) {
 	env := newTestLocationEnv(t)
 
 	_, err := env.locations.Create(t.Context(), gmRequester, "", "", "")
-	if !errors.Is(err, application.ErrInvalidName) {
-		t.Fatalf("Create(empty name) = %v, want ErrInvalidName", err)
-	}
+	require.ErrorIs(t, err, application.ErrInvalidName)
 }
 
 func TestLocationService_Get_UnknownLocation(t *testing.T) {
 	env := newTestLocationEnv(t)
 
 	_, err := env.locations.Get(t.Context(), gmRequester, "does-not-exist")
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Get(unknown) = %v, want ErrNotFound", err)
-	}
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestLocationService_HiddenWithoutGrant(t *testing.T) {
@@ -88,14 +82,11 @@ func TestLocationService_HiddenWithoutGrant(t *testing.T) {
 	// Not in the list…
 	locations, err := env.locations.List(ctx, playerRequester)
 	require.NoError(t, err)
-	if len(locations) != 0 {
-		t.Fatalf("List leaked %d locations to an unauthorised player", len(locations))
-	}
+	assert.Empty(t, locations, "List leaked locations to an unauthorised player")
 
 	// …and a direct read is 404, never 403 (existence must not leak).
-	if _, err := env.locations.Get(ctx, playerRequester, location.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Get without grant = %v, want ErrNotFound", err)
-	}
+	_, err = env.locations.Get(ctx, playerRequester, location.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestLocationService_DirectGrantRevealsLocation(t *testing.T) {
@@ -104,21 +95,16 @@ func TestLocationService_DirectGrantRevealsLocation(t *testing.T) {
 	location := env.createLocation(t, "The Tavern")
 	character := ownedCharacter(t, env.characters, "Aria")
 
-	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil); err != nil {
-		t.Fatalf("GrantAccess: %v", err)
-	}
+	_, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil)
+	require.NoError(t, err)
 
 	got, err := env.locations.Get(ctx, playerRequester, location.ID)
 	require.NoError(t, err)
-	if got.ID != location.ID {
-		t.Fatalf("Get returned %s, want %s", got.ID, location.ID)
-	}
+	assert.Equal(t, location.ID, got.ID)
 
 	locations, err := env.locations.List(ctx, playerRequester)
 	require.NoError(t, err)
-	if len(locations) != 1 {
-		t.Fatalf("List returned %d locations, want 1", len(locations))
-	}
+	assert.Len(t, locations, 1)
 }
 
 func TestLocationService_GroupGrantRevealsLocation(t *testing.T) {
@@ -132,20 +118,17 @@ func TestLocationService_GroupGrantRevealsLocation(t *testing.T) {
 	err = env.groups.Join(ctx, playerRequester, group.ID, character.ID)
 	require.NoError(t, err)
 
-	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, nil, &group.ID); err != nil {
-		t.Fatalf("GrantAccess(group): %v", err)
-	}
+	_, err = env.locations.GrantAccess(ctx, gmRequester, location.ID, nil, &group.ID)
+	require.NoError(t, err)
 
-	if _, err := env.locations.Get(ctx, playerRequester, location.ID); err != nil {
-		t.Fatalf("Get via group grant: %v", err)
-	}
+	_, err = env.locations.Get(ctx, playerRequester, location.ID)
+	require.NoError(t, err)
 
 	// Leaving the group takes the access away again.
 	err = env.groups.Leave(ctx, playerRequester, group.ID, character.ID)
 	require.NoError(t, err)
-	if _, err := env.locations.Get(ctx, playerRequester, location.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Get after leaving group = %v, want ErrNotFound", err)
-	}
+	_, err = env.locations.Get(ctx, playerRequester, location.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestLocationService_AnyoneWithAccessCanEdit(t *testing.T) {
@@ -158,20 +141,15 @@ func TestLocationService_AnyoneWithAccessCanEdit(t *testing.T) {
 
 	// Without access the edit reads as not-found…
 	_, err := env.locations.Update(ctx, playerRequester, location.ID, nil, &newDescription, nil)
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Update without grant = %v, want ErrNotFound", err)
-	}
+	require.ErrorIs(t, err, application.ErrNotFound)
 
 	// …with access it succeeds (rule 7: seeing a location means editing it).
-	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil); err != nil {
-		t.Fatalf("GrantAccess: %v", err)
-	}
+	_, err = env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil)
+	require.NoError(t, err)
 
 	updated, err := env.locations.Update(ctx, playerRequester, location.ID, nil, &newDescription, nil)
 	require.NoError(t, err)
-	if updated.Description != newDescription {
-		t.Fatalf("Description = %q, want %q", updated.Description, newDescription)
-	}
+	assert.Equal(t, newDescription, updated.Description)
 }
 
 func TestLocationService_GrantAccess_Validation(t *testing.T) {
@@ -180,25 +158,20 @@ func TestLocationService_GrantAccess_Validation(t *testing.T) {
 	location := env.createLocation(t, "The Tavern")
 	character := ownedCharacter(t, env.characters, "Aria")
 
-	if _, err := env.locations.GrantAccess(ctx, playerRequester, location.ID, &character.ID, nil); !errors.Is(err, application.ErrForbidden) {
-		t.Fatalf("GrantAccess as player = %v, want ErrForbidden", err)
-	}
+	_, err := env.locations.GrantAccess(ctx, playerRequester, location.ID, &character.ID, nil)
+	require.ErrorIs(t, err, application.ErrForbidden)
 
-	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, nil, nil); !errors.Is(err, application.ErrInvalidGrant) {
-		t.Fatalf("GrantAccess with no target = %v, want ErrInvalidGrant", err)
-	}
+	_, err = env.locations.GrantAccess(ctx, gmRequester, location.ID, nil, nil)
+	require.ErrorIs(t, err, application.ErrInvalidGrant)
 
 	groupID := "some-group"
-	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, &groupID); !errors.Is(err, application.ErrInvalidGrant) {
-		t.Fatalf("GrantAccess with two targets = %v, want ErrInvalidGrant", err)
-	}
+	_, err = env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, &groupID)
+	require.ErrorIs(t, err, application.ErrInvalidGrant)
 
-	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil); err != nil {
-		t.Fatalf("GrantAccess: %v", err)
-	}
-	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil); !errors.Is(err, application.ErrAlreadyGranted) {
-		t.Fatalf("duplicate GrantAccess = %v, want ErrAlreadyGranted", err)
-	}
+	_, err = env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil)
+	require.NoError(t, err)
+	_, err = env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil)
+	require.ErrorIs(t, err, application.ErrAlreadyGranted)
 }
 
 func TestLocationService_RevokeAccessHidesAgain(t *testing.T) {
@@ -213,9 +186,8 @@ func TestLocationService_RevokeAccessHidesAgain(t *testing.T) {
 	err = env.locations.RevokeAccess(ctx, gmRequester, location.ID, grant.ID)
 	require.NoError(t, err)
 
-	if _, err := env.locations.Get(ctx, playerRequester, location.ID); !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("Get after revoke = %v, want ErrNotFound", err)
-	}
+	_, err = env.locations.Get(ctx, playerRequester, location.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }
 
 func TestLocationService_AssignCharacter(t *testing.T) {
@@ -227,25 +199,20 @@ func TestLocationService_AssignCharacter(t *testing.T) {
 	// A player cannot place a character at a location it cannot see — and the
 	// error must read as not-found.
 	_, err := env.locations.AssignCharacter(ctx, playerRequester, character.ID, &location.ID)
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("AssignCharacter without access = %v, want ErrNotFound", err)
-	}
+	require.ErrorIs(t, err, application.ErrNotFound)
 
-	if _, err := env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil); err != nil {
-		t.Fatalf("GrantAccess: %v", err)
-	}
+	_, err = env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil)
+	require.NoError(t, err)
 
 	updated, err := env.locations.AssignCharacter(ctx, playerRequester, character.ID, &location.ID)
 	require.NoError(t, err)
-	if updated.LocationID == nil || *updated.LocationID != location.ID {
-		t.Fatalf("LocationID = %v, want %s", updated.LocationID, location.ID)
+	if assert.NotNil(t, updated.LocationID) {
+		assert.Equal(t, location.ID, *updated.LocationID)
 	}
 
 	cleared, err := env.locations.AssignCharacter(ctx, playerRequester, character.ID, nil)
 	require.NoError(t, err)
-	if cleared.LocationID != nil {
-		t.Fatalf("LocationID = %v, want nil after clearing", cleared.LocationID)
-	}
+	assert.Nil(t, cleared.LocationID, "LocationID should be nil after clearing")
 }
 
 func TestLocationService_AssignCharacter_GMAnywhere_ForeignHidden(t *testing.T) {
@@ -255,13 +222,10 @@ func TestLocationService_AssignCharacter_GMAnywhere_ForeignHidden(t *testing.T) 
 	character := ownedCharacter(t, env.characters, "Aria")
 
 	// GMs place any character anywhere, no grant needed.
-	if _, err := env.locations.AssignCharacter(ctx, gmRequester, character.ID, &location.ID); err != nil {
-		t.Fatalf("AssignCharacter as GM: %v", err)
-	}
+	_, err := env.locations.AssignCharacter(ctx, gmRequester, character.ID, &location.ID)
+	require.NoError(t, err)
 
 	// A different player cannot even confirm the character exists.
-	_, err := env.locations.AssignCharacter(ctx, otherPlayer, character.ID, &location.ID)
-	if !errors.Is(err, application.ErrNotFound) {
-		t.Fatalf("AssignCharacter foreign character = %v, want ErrNotFound", err)
-	}
+	_, err = env.locations.AssignCharacter(ctx, otherPlayer, character.ID, &location.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
 }

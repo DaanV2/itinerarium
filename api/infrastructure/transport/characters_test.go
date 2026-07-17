@@ -13,6 +13,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -81,9 +82,8 @@ func (e charactersTestEnv) doJSON(t *testing.T, method, path, token string, payl
 
 	var body bytes.Buffer
 	if payload != nil {
-		if err := json.NewEncoder(&body).Encode(payload); err != nil {
-			t.Fatalf("encoding request: %v", err)
-		}
+		err := json.NewEncoder(&body).Encode(payload)
+		require.NoError(t, err)
 	}
 
 	req := httptest.NewRequestWithContext(t.Context(), method, path, &body)
@@ -101,14 +101,14 @@ func TestCreateCharacter_RequiresAuth(t *testing.T) {
 	env := newCharactersTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodPost, "/api/characters", "", map[string]string{"name": "Aria"})
-	require.Equal(t, rec.Code, http.StatusUnauthorized)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
 func TestCreateCharacter_ForSelf(t *testing.T) {
 	env := newCharactersTestEnv(t)
 
 	rec := env.doJSON(t, http.MethodPost, "/api/characters", env.playerToken, map[string]string{"name": "Aria"})
-	require.Equal(t, rec.Code, http.StatusCreated)
+	require.Equal(t, http.StatusCreated, rec.Code)
 
 	var created struct {
 		ID             string `json:"id"`
@@ -117,35 +117,25 @@ func TestCreateCharacter_ForSelf(t *testing.T) {
 	}
 	err := json.Unmarshal(rec.Body.Bytes(), &created)
 	require.NoError(t, err)
-	if created.Name != "Aria" {
-		t.Fatalf("Name = %q, want Aria", created.Name)
-	}
-	if created.CurrentGameDay != 0 {
-		t.Fatalf("CurrentGameDay = %d, want 0", created.CurrentGameDay)
-	}
+	assert.Equal(t, "Aria", created.Name)
+	assert.Equal(t, 0, created.CurrentGameDay)
 }
 
 func TestCreateCharacter_AllowsMultiplePerUser(t *testing.T) {
 	env := newCharactersTestEnv(t)
 
 	first := env.doJSON(t, http.MethodPost, "/api/characters", env.playerToken, map[string]string{"name": "Aria"})
-	if first.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", first.Code, first.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, first.Code, first.Body.String())
 
 	second := env.doJSON(t, http.MethodPost, "/api/characters", env.playerToken, map[string]string{"name": "Beren"})
-	if second.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", second.Code, second.Body.String())
-	}
+	require.Equal(t, http.StatusCreated, second.Code, second.Body.String())
 
 	listRec := env.doJSON(t, http.MethodGet, "/api/characters", env.playerToken, nil)
 
 	var list []struct{ Name string }
 	err := json.Unmarshal(listRec.Body.Bytes(), &list)
 	require.NoError(t, err)
-	if len(list) != 2 {
-		t.Fatalf("expected 2 characters, got %d", len(list))
-	}
+	assert.Len(t, list, 2)
 }
 
 func TestListCharacters_PlayerSeesOnlyOwn(t *testing.T) {
@@ -159,9 +149,7 @@ func TestListCharacters_PlayerSeesOnlyOwn(t *testing.T) {
 	var list []struct{ Name string }
 	err := json.Unmarshal(rec.Body.Bytes(), &list)
 	require.NoError(t, err)
-	if len(list) != 1 {
-		t.Fatalf("expected 1 character, got %d", len(list))
-	}
+	assert.Len(t, list, 1)
 }
 
 func TestGetCharacter_HidesOtherOwnersCharacter(t *testing.T) {
@@ -174,7 +162,7 @@ func TestGetCharacter_HidesOtherOwnersCharacter(t *testing.T) {
 	require.NoError(t, err)
 
 	rec := env.doJSON(t, http.MethodGet, "/api/characters/"+created.ID, env.playerToken, nil)
-	require.Equal(t, rec.Code, http.StatusNotFound)
+	require.Equal(t, http.StatusNotFound, rec.Code)
 }
 
 func TestUpdateCharacter_PlayerCannotSetGameDay(t *testing.T) {
@@ -188,7 +176,7 @@ func TestUpdateCharacter_PlayerCannotSetGameDay(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPatch, "/api/characters/"+created.ID, env.playerToken,
 		map[string]int{"current_game_day": 5})
-	require.Equal(t, rec.Code, http.StatusForbidden)
+	require.Equal(t, http.StatusForbidden, rec.Code)
 }
 
 func TestUpdateCharacter_GMCanSetGameDay(t *testing.T) {
@@ -202,14 +190,12 @@ func TestUpdateCharacter_GMCanSetGameDay(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPatch, "/api/characters/"+created.ID, env.gmToken,
 		map[string]int{"current_game_day": 5})
-	require.Equal(t, rec.Code, http.StatusOK)
+	require.Equal(t, http.StatusOK, rec.Code)
 
 	var updated struct {
 		CurrentGameDay int `json:"current_game_day"`
 	}
 	err = json.Unmarshal(rec.Body.Bytes(), &updated)
 	require.NoError(t, err)
-	if updated.CurrentGameDay != 5 {
-		t.Fatalf("CurrentGameDay = %d, want 5", updated.CurrentGameDay)
-	}
+	assert.Equal(t, 5, updated.CurrentGameDay)
 }
