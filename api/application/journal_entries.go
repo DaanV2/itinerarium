@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
@@ -19,13 +20,18 @@ var ErrInvalidContent = errors.New("invalid content")
 type JournalEntryService struct {
 	entries    *repositories.JournalEntries
 	characters *repositories.Characters
+	documents  *DocumentService
+	repos      *repositories.KnowledgeRepositories
 }
 
 // NewJournalEntryService builds a JournalEntryService.
 func NewJournalEntryService(
-	entries *repositories.JournalEntries, characters *repositories.Characters,
+	entries *repositories.JournalEntries,
+	characters *repositories.Characters,
+	documents *DocumentService,
+	repos *repositories.KnowledgeRepositories,
 ) *JournalEntryService {
-	return &JournalEntryService{entries: entries, characters: characters}
+	return &JournalEntryService{entries: entries, characters: characters, documents: documents, repos: repos}
 }
 
 // requireCharacterAccess returns the character only if the requester owns it
@@ -128,4 +134,55 @@ func (s *JournalEntryService) Update(
 	}
 
 	return e, nil
+}
+
+// Convert copies a journal entry into a new document in the character's
+// personal repository (core domain rule 5): the document starts private,
+// revealed on game day 0, and the journal entry itself is left untouched —
+// this is a copy, not a move. Only the owning player or a GM may convert an
+// entry, same as reading it.
+func (s *JournalEntryService) Convert(
+	ctx context.Context, requester Requester, id string,
+) (*DocumentView, error) {
+	e, err := s.Get(ctx, requester, id)
+	if err != nil {
+		return nil, err
+	}
+
+	repo, err := s.repos.EnsureForCharacter(ctx, e.CharacterID)
+	if err != nil {
+		return nil, fmt.Errorf("ensuring character repository: %w", err)
+	}
+
+	sharedOnGameDay := 0
+	view, err := s.documents.Create(ctx, requester, repo.ID, &CreateDocumentInput{
+		Path:            "journal/" + e.ID,
+		Title:           journalEntryTitle(e.Content),
+		SharedOnGameDay: &sharedOnGameDay,
+		Markdown:        e.Content,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("converting journal entry to document: %w", err)
+	}
+
+	return view, nil
+}
+
+// journalEntryTitle derives a document title from a journal entry's first
+// non-blank line, falling back to a generic title when the entry has none
+// (e.g. it's pure frontmatter-shaped content).
+func journalEntryTitle(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			const maxLen = 80
+			if runes := []rune(line); len(runes) > maxLen {
+				line = strings.TrimSpace(string(runes[:maxLen]))
+			}
+
+			return line
+		}
+	}
+
+	return "Journal Entry"
 }

@@ -10,7 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestJournalEntriesEnv(t *testing.T) (*application.JournalEntryService, *application.CharacterService) {
+func newTestJournalEntriesEnv(
+	t *testing.T,
+) (*application.JournalEntryService, *application.CharacterService, *application.DocumentService) {
 	t.Helper()
 
 	db, err := persistence.New(persistence.WithInMemory())
@@ -21,14 +23,20 @@ func newTestJournalEntriesEnv(t *testing.T) (*application.JournalEntryService, *
 	users := repositories.NewUsers(db)
 	characters := repositories.NewCharacters(db)
 	entries := repositories.NewJournalEntries(db)
+	knowledgeRepos := repositories.NewKnowledgeRepositories(db)
+	groups := repositories.NewGroups(db)
 
-	characterSvc := application.NewCharacterService(characters, users, repositories.NewKnowledgeRepositories(db))
+	characterSvc := application.NewCharacterService(characters, users, knowledgeRepos)
+	repositoryService := application.NewRepositoryService(knowledgeRepos, groups, characters)
+	documentSvc := application.NewDocumentService(
+		repositories.NewDocuments(db), repositoryService, characters, groups, repositories.NewDocumentShares(db),
+	)
 
-	return application.NewJournalEntryService(entries, characters), characterSvc
+	return application.NewJournalEntryService(entries, characters, documentSvc, knowledgeRepos), characterSvc, documentSvc
 }
 
 func TestJournalEntryService_Create_StampsCurrentGameDay(t *testing.T) {
-	svc, characterSvc := newTestJournalEntriesEnv(t)
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
 	ctx := t.Context()
 
 	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
@@ -46,7 +54,7 @@ func TestJournalEntryService_Create_StampsCurrentGameDay(t *testing.T) {
 }
 
 func TestJournalEntryService_Create_RejectsEmptyContent(t *testing.T) {
-	svc, characterSvc := newTestJournalEntriesEnv(t)
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
 	ctx := t.Context()
 
 	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
@@ -57,7 +65,7 @@ func TestJournalEntryService_Create_RejectsEmptyContent(t *testing.T) {
 }
 
 func TestJournalEntryService_Create_OtherPlayerCannotWriteForForeignCharacter(t *testing.T) {
-	svc, characterSvc := newTestJournalEntriesEnv(t)
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
 	ctx := t.Context()
 
 	other := fakeRequester{id: "other-1", gm: false}
@@ -70,7 +78,7 @@ func TestJournalEntryService_Create_OtherPlayerCannotWriteForForeignCharacter(t 
 }
 
 func TestJournalEntryService_List_OwnerSeesOwnEntries(t *testing.T) {
-	svc, characterSvc := newTestJournalEntriesEnv(t)
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
 	ctx := t.Context()
 
 	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
@@ -85,7 +93,7 @@ func TestJournalEntryService_List_OwnerSeesOwnEntries(t *testing.T) {
 }
 
 func TestJournalEntryService_List_OtherPlayerHidden(t *testing.T) {
-	svc, characterSvc := newTestJournalEntriesEnv(t)
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
 	ctx := t.Context()
 
 	other := fakeRequester{id: "other-1", gm: false}
@@ -101,7 +109,7 @@ func TestJournalEntryService_List_OtherPlayerHidden(t *testing.T) {
 }
 
 func TestJournalEntryService_List_GMSeesAnyCharacter(t *testing.T) {
-	svc, characterSvc := newTestJournalEntriesEnv(t)
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
 	ctx := t.Context()
 
 	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
@@ -116,7 +124,7 @@ func TestJournalEntryService_List_GMSeesAnyCharacter(t *testing.T) {
 }
 
 func TestJournalEntryService_Get_OtherPlayerHidden(t *testing.T) {
-	svc, characterSvc := newTestJournalEntriesEnv(t)
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
 	ctx := t.Context()
 
 	other := fakeRequester{id: "other-1", gm: false}
@@ -132,7 +140,7 @@ func TestJournalEntryService_Get_OtherPlayerHidden(t *testing.T) {
 }
 
 func TestJournalEntryService_Update_OwnerCanEditContent(t *testing.T) {
-	svc, characterSvc := newTestJournalEntriesEnv(t)
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
 	ctx := t.Context()
 
 	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
@@ -148,7 +156,7 @@ func TestJournalEntryService_Update_OwnerCanEditContent(t *testing.T) {
 }
 
 func TestJournalEntryService_Update_OtherPlayerCannotEdit(t *testing.T) {
-	svc, characterSvc := newTestJournalEntriesEnv(t)
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
 	ctx := t.Context()
 
 	other := fakeRequester{id: "other-1", gm: false}
@@ -164,9 +172,85 @@ func TestJournalEntryService_Update_OtherPlayerCannotEdit(t *testing.T) {
 }
 
 func TestJournalEntryService_Get_UnknownEntry(t *testing.T) {
-	svc, _ := newTestJournalEntriesEnv(t)
+	svc, _, _ := newTestJournalEntriesEnv(t)
 	ctx := t.Context()
 
 	_, err := svc.Get(ctx, gmRequester, "does-not-exist")
+	require.ErrorIs(t, err, application.ErrNotFound)
+}
+
+func TestJournalEntryService_Convert_CopiesIntoCharacterRepository(t *testing.T) {
+	svc, characterSvc, documentSvc := newTestJournalEntriesEnv(t)
+	ctx := t.Context()
+
+	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
+	require.NoError(t, err)
+
+	e, err := svc.Create(ctx, playerRequester, c.ID, "Dear diary, today I met a dragon.")
+	require.NoError(t, err)
+
+	view, err := svc.Convert(ctx, playerRequester, e.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Dear diary, today I met a dragon.", view.Document.Sections[0].Content)
+	assert.Equal(t, "Dear diary, today I met a dragon.", view.Document.Title)
+
+	// The journal entry itself is untouched.
+	untouched, err := svc.Get(ctx, playerRequester, e.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "Dear diary, today I met a dragon.", untouched.Content)
+
+	// The document landed in the character's own repository, still visible to
+	// the owner.
+	got, err := documentSvc.Get(ctx, playerRequester, view.Document.ID)
+	require.NoError(t, err)
+	assert.Equal(t, view.Document.ID, got.Document.ID)
+}
+
+func TestJournalEntryService_Convert_OtherPlayerCannotConvert(t *testing.T) {
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
+	ctx := t.Context()
+
+	other := fakeRequester{id: "other-1", gm: false}
+
+	c, err := characterSvc.Create(ctx, other, "", "Beren")
+	require.NoError(t, err)
+
+	e, err := svc.Create(ctx, other, c.ID, "Secret entry")
+	require.NoError(t, err)
+
+	_, err = svc.Convert(ctx, playerRequester, e.ID)
+	require.ErrorIs(t, err, application.ErrNotFound)
+}
+
+func TestJournalEntryService_Convert_GMCanConvertForAnyCharacter(t *testing.T) {
+	svc, characterSvc, _ := newTestJournalEntriesEnv(t)
+	ctx := t.Context()
+
+	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
+	require.NoError(t, err)
+
+	e, err := svc.Create(ctx, playerRequester, c.ID, "Entry")
+	require.NoError(t, err)
+
+	view, err := svc.Convert(ctx, gmRequester, e.ID)
+	require.NoError(t, err)
+	assert.NotEmpty(t, view.Document.ID)
+}
+
+func TestJournalEntryService_Convert_OtherPlayerCannotSeeConvertedDocument(t *testing.T) {
+	svc, characterSvc, documentSvc := newTestJournalEntriesEnv(t)
+	ctx := t.Context()
+
+	c, err := characterSvc.Create(ctx, playerRequester, "", "Aria")
+	require.NoError(t, err)
+
+	e, err := svc.Create(ctx, playerRequester, c.ID, "Private thoughts")
+	require.NoError(t, err)
+
+	view, err := svc.Convert(ctx, playerRequester, e.ID)
+	require.NoError(t, err)
+
+	other := fakeRequester{id: "other-1", gm: false}
+	_, err = documentSvc.Get(ctx, other, view.Document.ID)
 	require.ErrorIs(t, err, application.ErrNotFound)
 }

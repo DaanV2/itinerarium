@@ -1,4 +1,4 @@
-import type { JournalEntry } from '$lib/types';
+import type { Document, JournalEntry } from '$lib/types';
 
 async function errorMessage(res: Response, fallback: string): Promise<string> {
 	const body: unknown = await res.json().catch(() => null);
@@ -65,4 +65,25 @@ export async function updateJournalEntry(
 	}
 
 	return (await res.json()) as JournalEntry;
+}
+
+/** Copies a journal entry into a new document in the character's personal
+ * repository. The document starts private; the journal entry itself is left
+ * untouched — this is a copy, not a move. */
+export async function convertJournalEntry(
+	characterId: string,
+	entryId: string,
+	token: string,
+	fetchFn: typeof fetch = fetch
+): Promise<Document> {
+	const res = await fetchFn(`/api/characters/${characterId}/journal/${entryId}/convert`, {
+		method: 'POST',
+		headers: { Authorization: `Bearer ${token}` }
+	});
+
+	if (!res.ok) {
+		throw new Error(await errorMessage(res, `failed to convert journal entry: ${res.status}`));
+	}
+
+	return (await res.json()) as Document;
 }

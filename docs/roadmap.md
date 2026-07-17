@@ -61,7 +61,7 @@ The alpha is done when a real campaign can run on it: accounts, characters, grou
 - [x] Editor shows reveal settings ("Revealed at game day X to …")
 - [x] Editor warning banner when editing an already-revealed document
 - [x] Journals: per-character entries stamped with game day, readable by owner + GM only
-- [ ] Journal page → document conversion (copy into character repository)
+- [x] Journal page → document conversion (copy into character repository)
 - [ ] Location description documents (same visibility/game-day rules)
 - [ ] Locations editable by anyone who can see them
 
