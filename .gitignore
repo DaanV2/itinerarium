@@ -4,6 +4,7 @@ data/
 *.db-journal
 *.db-wal
 *.db-shm
+*.out
 
 # Go
 api/itinerarium
