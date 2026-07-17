@@ -214,5 +214,7 @@ func membershipEntry(
 		EntityName:  group.Name,
 		Actor:       character.Name,
 		CharacterID: character.ID,
+		ScopeType:   models.ActivityScopeGroup,
+		ScopeID:     group.ID,
 	}
 }

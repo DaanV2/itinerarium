@@ -31,9 +31,18 @@ func ownerScope(query *gorm.DB, owner models.InventoryOwner) *gorm.DB {
 	}
 }
 
-// Create persists a new inventory item.
-func (r *InventoryItems) Create(ctx context.Context, item *models.InventoryItem) error {
-	err := r.db.DB().WithContext(ctx).Create(item).Error
+// Create persists a new inventory item, recording any given activity entries
+// in the same transaction.
+func (r *InventoryItems) Create(
+	ctx context.Context, item *models.InventoryItem, entries ...*models.ActivityEntry,
+) error {
+	err := r.db.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(item).Error; err != nil {
+			return err
+		}
+
+		return createEntries(tx, entries)
+	})
 	if err != nil {
 		return err
 	}
@@ -72,9 +81,18 @@ func (r *InventoryItems) ListByOwner(
 	return items, nil
 }
 
-// Update persists changes to an existing inventory item.
-func (r *InventoryItems) Update(ctx context.Context, item *models.InventoryItem) error {
-	err := r.db.DB().WithContext(ctx).Save(item).Error
+// Update persists changes to an existing inventory item, recording any given
+// activity entries in the same transaction.
+func (r *InventoryItems) Update(
+	ctx context.Context, item *models.InventoryItem, entries ...*models.ActivityEntry,
+) error {
+	err := r.db.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(item).Error; err != nil {
+			return err
+		}
+
+		return createEntries(tx, entries)
+	})
 	if err != nil {
 		return err
 	}
@@ -82,9 +100,18 @@ func (r *InventoryItems) Update(ctx context.Context, item *models.InventoryItem)
 	return nil
 }
 
-// Delete soft-deletes an inventory item.
-func (r *InventoryItems) Delete(ctx context.Context, item *models.InventoryItem) error {
-	err := r.db.DB().WithContext(ctx).Delete(item).Error
+// Delete soft-deletes an inventory item, recording any given activity entries
+// in the same transaction.
+func (r *InventoryItems) Delete(
+	ctx context.Context, item *models.InventoryItem, entries ...*models.ActivityEntry,
+) error {
+	err := r.db.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(item).Error; err != nil {
+			return err
+		}
+
+		return createEntries(tx, entries)
+	})
 	if err != nil {
 		return err
 	}
@@ -93,17 +120,23 @@ func (r *InventoryItems) Delete(ctx context.Context, item *models.InventoryItem)
 }
 
 // Move transfers quantity units of the source line into the target inventory
-// inside one transaction. The service layer has already validated access,
-// the quantity bound, and that source and target differ; this method owns the
-// mechanics: a target line with the same name and catalog reference absorbs
-// the moved units, otherwise the line is re-owned (full move) or split
-// (partial move). It returns the line now holding the moved units.
+// inside one transaction, recording any given activity entries in that same
+// transaction. The service layer has already validated access, the quantity
+// bound, and that source and target differ; this method owns the mechanics: a
+// target line with the same name and catalog reference absorbs the moved
+// units, otherwise the line is re-owned (full move) or split (partial move).
+// It returns the line now holding the moved units.
 func (r *InventoryItems) Move(
 	ctx context.Context, source *models.InventoryItem, target models.InventoryOwner, quantity int,
+	entries ...*models.ActivityEntry,
 ) (*models.InventoryItem, error) {
 	var result *models.InventoryItem
 
 	err := r.db.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := createEntries(tx, entries); err != nil {
+			return err
+		}
+
 		match, err := findMatch(tx, target, source)
 		if err != nil && !errors.Is(err, ErrNotFound) {
 			return err

@@ -37,7 +37,8 @@ itinerarium/
 | `LocationAccess` | A GM-managed grant giving one character or one group a location's single access level (view + modify, including its inventory). No grant = the location's existence is hidden. |
 | `Session`      | Links characters to a play event via a `many2many` participant list. Carries no game day of its own — advancing/rewinding a session moves each participant's own `Character.CurrentGameDay`, either for everyone at once or for one character catching up. GM-only: creation, editing, participant management, and game-day advances. |
 | `JournalEntry` | Belongs to a character, stamped with `game_day`. Readable by the owning player and GMs only. Can be converted (copied) into a `Document` in the character's private knowledge repository. |
-| `ActivityEntry` | Append-only event log. Stamped with `game_day`. Scoped to an entity (group, location, document). M2 records group join/leave events; M5 adds the per-character feed and an `announced` flag with explicit target characters or groups that bypasses normal entity-access rules (used for theft, destruction, and GM broadcasts). |
+| `ActivityEntry` | Append-only event log row, stamped with `game_day` (M5). Describes what changed (`entity_type`/`entity_id`/`entity_name`), who did it (`actor` — a character name or `"GM"`), and carries an access **scope** (`scope_type`/`scope_id`: `group`, `location`, or `repository`) that gates who may normally see it. Announced entries (`announced`, `announced_public`, plus `ActivityTarget` rows) instead reach their targets regardless of entity access. Entries are written in the **same transaction** as the change they describe, so history and state can never drift apart. |
+| `ActivityTarget` | One explicit recipient of an announced `ActivityEntry`: exactly one character or one group. |
 | `Location`     | Named plane or place (town, building, room, …). `plane` is a free-text label grouping locations into planes of existence. Has its own inventory and access-controlled visibility via `LocationAccess`. Characters and sessions can be associated with one. |
 
 ## Permission Model
@@ -98,9 +99,17 @@ Location inventories apply the same access-control check: if a character lacks a
 
 `POST /api/inventory/move` transfers `quantity` units of an inventory line into another inventory. The caller needs access to **both** ends: no source access means the item itself reads as `404`; no target access means the target does. Moving the full quantity re-owns the line; a partial quantity splits it; if the target already holds a line with the same name and catalog reference, the moved units merge into it. The whole move runs in one database transaction.
 
-Activity entries have two visibility paths:
-1. **Normal** — character has access to the source entity AND `current_game_day >= entry.game_day`
-2. **Announced** — entry has `announced: true` and the character (or one of their groups) is in the `announced_to` list; entity-access check is skipped. The `actor` field is stripped server-side for non-GM users — players see what happened and to what, but not who did it.
+### Activity log (M5)
+
+Every tracked change writes an `ActivityEntry` in the same transaction as the change itself: group membership (joined/left, since M2), group and location inventory lines (added/updated/removed, including both halves of a move), group money (updated), and documents (added/updated/removed — document events are scoped to their repository and stamped with the document's `shared_on_game_day`, so the entry surfaces exactly when the document does and an unrevealed document never leaks). Personal character inventories are private and produce no entries.
+
+**Game-day stamping.** A player's change is stamped with their acting character's `current_game_day` (their furthest-along character with access to the scope), so they always see their own events. A GM's change is stamped with the scope's "present day" — the highest `current_game_day` among characters with access — so characters still catching up see it once their own day arrives.
+
+**Feed visibility** (`GET /api/characters/{id}/activity`, owner + GM only) — an entry surfaces to a character when `current_game_day >= entry.game_day` AND one of:
+1. **Normal** — the entry's scope is accessible to the character: one of its groups, a location it can see, or a repository it can reach.
+2. **Announced** — the entry is announced publicly or targets the character or one of its **current** groups; entity access is skipped. The `actor` field is stripped server-side for non-GM requesters on announced entries — players see what happened and to what, but not who did it.
+
+GMs see all activity regardless of game day via `GET /api/activity` (announcement targets included). `POST /api/activity/announcements` (GM only) creates an announced entry with free-form entity fields — the thing announced may no longer exist (theft, destruction) — targeted at characters, groups, or everyone.
 
 ## Inventory & Currency
 
@@ -152,6 +161,7 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `POST /api/repositories/{id}/documents` | anyone who sees the repository | Create a document (structured `sections`, or raw `markdown` with optional YAML frontmatter) |
 | `GET /api/documents/{id}` | per document rule | Read one document; GM-only sections are stripped server-side for players (404 without access) |
 | `PATCH /api/documents/{id}` | anyone who sees the document | Replace metadata + the caller's visible sections (players can never touch GM-only sections or the reveal day) |
+| `DELETE /api/documents/{id}` | GM | Remove a document and its sections; the removal is logged as activity |
 | `POST /api/documents/{id}/share` | access to source (owner+GM) and target group repository | Move a document from a character repository into a group repository at a chosen `shared_on_game_day` |
 | `GET /api/documents/shared` | any authenticated | List documents directly shared with any of the caller's characters whose game day has been reached |
 | `GET\|POST /api/documents/{id}/shares` | GM | List / add a direct share of a document to one character, revealed at a chosen game day |
@@ -163,6 +173,9 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `POST /api/sessions/{id}/participants` | GM | Add a character to a session |
 | `DELETE /api/sessions/{id}/participants/{characterId}` | GM | Remove a character from a session |
 | `POST /api/sessions/{id}/game-day` | GM | Advance/rewind `game_day` for every participant (or one, via `character_id`) by a signed `delta` |
+| `GET /api/characters/{id}/activity` | owner + GM | The character's activity feed: game-day gated, scope-access gated, announced entries included, `actor` stripped on announced entries for players |
+| `GET /api/activity` | GM | The full campaign log, all game days, announcement targets included |
+| `POST /api/activity/announcements` | GM | Broadcast an announced entry to characters, groups, or everyone, surfacing at a chosen game day |
 
 ## Document Format
 

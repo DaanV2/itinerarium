@@ -9,6 +9,7 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
+	"github.com/google/uuid"
 )
 
 // ErrPathCollision is returned when a document is created at (or moved to) a
@@ -262,7 +263,14 @@ func (s *DocumentService) Create(
 		}
 	}
 
-	if err := s.documents.Create(ctx, doc); err != nil {
+	// Pre-assign the ID so the activity entry can reference the new document.
+	doc.ID = uuid.NewString()
+
+	entry, err := s.documentEntry(ctx, requester, repo, doc, models.ActivityActionAdded)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.documents.Create(ctx, doc, entry); err != nil {
 		return nil, fmt.Errorf("creating document: %w", err)
 	}
 
@@ -296,7 +304,12 @@ func (s *DocumentService) Update(
 	}
 
 	doc.Version++
-	if err := s.documents.Update(ctx, doc, sections); err != nil {
+
+	entry, err := s.documentEntry(ctx, requester, repo, doc, models.ActivityActionUpdated)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.documents.Update(ctx, doc, sections, entry); err != nil {
 		return nil, fmt.Errorf("updating document: %w", err)
 	}
 
@@ -354,7 +367,14 @@ func (s *DocumentService) ShareToGroup(
 	doc.RepositoryID = target.ID
 	doc.SharedOnGameDay = input.SharedOnGameDay
 	doc.Version++
-	if err := s.documents.Update(ctx, doc, doc.Sections); err != nil {
+
+	// Sharing lands the document in the group's repository — to members that
+	// is a new document, so the event is recorded as an addition there.
+	entry, err := s.documentEntry(ctx, requester, target, doc, models.ActivityActionAdded)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.documents.Update(ctx, doc, doc.Sections, entry); err != nil {
 		return nil, fmt.Errorf("sharing document: %w", err)
 	}
 
@@ -364,6 +384,53 @@ func (s *DocumentService) ShareToGroup(
 	}
 
 	return s.view(ctx, requester, target, doc)
+}
+
+// documentEntry builds the activity-log row for a document change (roadmap
+// M5). The entry is scoped to the repository that gates who may see the
+// document and stamped with the document's reveal day, so it surfaces in a
+// character's feed exactly when the document itself does — an entry about an
+// unrevealed document never leaks its existence (core domain rule 3). The
+// actor is "GM" for GM changes, otherwise the requester's furthest-along
+// character with access to the repository.
+func (s *DocumentService) documentEntry(
+	ctx context.Context, requester Requester, repo *models.Repository, doc *models.Document,
+	action models.ActivityAction,
+) (*models.ActivityEntry, error) {
+	actor := activityActorGM
+	if !requester.IsGM() {
+		characters, err := s.characters.ListByUser(ctx, requester.UserID())
+		if err != nil {
+			return nil, fmt.Errorf("listing requester characters: %w", err)
+		}
+
+		eligible, err := s.charactersWithRepoAccess(ctx, repo, characters)
+		if err != nil {
+			return nil, err
+		}
+
+		actor = ""
+		var best *models.Character
+		for i := range eligible {
+			if best == nil || eligible[i].CurrentGameDay > best.CurrentGameDay {
+				best = &eligible[i]
+			}
+		}
+		if best != nil {
+			actor = best.Name
+		}
+	}
+
+	return &models.ActivityEntry{
+		GameDay:    doc.SharedOnGameDay,
+		Action:     action,
+		EntityType: "document",
+		EntityID:   doc.ID,
+		EntityName: doc.Title,
+		Actor:      actor,
+		ScopeType:  models.ActivityScopeRepository,
+		ScopeID:    repo.ID,
+	}, nil
 }
 
 // getAccessible loads a document and enforces every read rule: repository
@@ -448,6 +515,36 @@ func (s *DocumentService) getViaDirectShare(
 	}
 
 	return doc, repo, nil
+}
+
+// Delete removes a document and its sections. GM only — open editing (core
+// domain rule 7) covers a document's content, not its existence. The removal
+// is recorded in the activity log in the same transaction, scoped to the
+// document's repository.
+func (s *DocumentService) Delete(ctx context.Context, requester Requester, id string) error {
+	if !requester.IsGM() {
+		return ErrForbidden
+	}
+
+	doc, err := s.documents.GetByID(ctx, id)
+	if err != nil {
+		return notFoundOr(err, "loading document")
+	}
+
+	repo, err := s.repositories.GetUnchecked(ctx, doc.RepositoryID)
+	if err != nil {
+		return err
+	}
+
+	entry, err := s.documentEntry(ctx, requester, repo, doc, models.ActivityActionRemoved)
+	if err != nil {
+		return err
+	}
+	if err := s.documents.Delete(ctx, doc, entry); err != nil {
+		return fmt.Errorf("deleting document: %w", err)
+	}
+
+	return nil
 }
 
 // ShareWithCharacter directly shares a document with one character, revealed

@@ -5,6 +5,7 @@
 	import { getCharacter } from '$lib/api/characters';
 	import { listLocations, setCharacterLocation, clearCharacterLocation } from '$lib/api/locations';
 	import { getAccessToken } from '$lib/auth-token';
+	import ActivityPanel from '$lib/components/ActivityPanel.svelte';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import InventoryPanel from '$lib/components/InventoryPanel.svelte';
 	import JournalPanel from '$lib/components/JournalPanel.svelte';
@@ -96,5 +97,6 @@
 		<InventoryPanel {owner} />
 		<MoneyPanel {owner} />
 		<JournalPanel {characterId} />
+		<ActivityPanel {characterId} />
 	{/if}
 </main>
