@@ -24,6 +24,8 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithSubRoute("/documents", documentsRouter(services)),
 		transport.WithSubRoute("/activity", activityRouter(services)),
 		transport.WithHandle("POST /inventory/move", transport.MoveInventoryItemHandler(services.Inventory)),
+		transport.WithHandle("GET /search", transport.SearchDocumentsHandler(services.Documents)),
+		transport.WithHandle("POST /import/obsidian", transport.ImportVaultHandler(services.VaultImport)),
 	)
 
 	opts := []transport.Option{

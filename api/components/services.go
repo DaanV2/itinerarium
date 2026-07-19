@@ -19,6 +19,7 @@ type Services struct {
 	Sessions     *application.SessionService
 	Repositories *application.RepositoryService
 	Documents    *application.DocumentService
+	VaultImport  *application.VaultImportService
 	Journals     *application.JournalEntryService
 	Activity     *application.ActivityService
 }
@@ -63,6 +64,9 @@ func NewServices(repos *Repositories, tokens *authentication.TokenService) *Serv
 		Sessions:     application.NewSessionService(repos.Sessions, characters),
 		Repositories: repositoryService,
 		Documents:    documentService,
+		VaultImport: application.NewVaultImportService(
+			documentService, repositoryService, repos.KnowledgeRepositories, repos.Groups, repos.Characters,
+		),
 		Journals: application.NewJournalEntryService(
 			repos.JournalEntries, repos.Characters, documentService, repos.KnowledgeRepositories,
 		),

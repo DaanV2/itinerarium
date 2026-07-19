@@ -93,9 +93,9 @@ The beta phase ends — and the product is 1.0 — only when every box below is 
 
 ### M6 — Search & Obsidian Import
 
-- [ ] Full-text search over titles, file names, tags, and content
-- [ ] Access filtering applied before results are returned (no leaks, no hit counts)
-- [ ] GM-only sections excluded from the player search index
-- [ ] GMs search across everything
-- [ ] Obsidian vault import: folders map to repository paths, frontmatter parsed
-- [ ] Import path-collision handling (warn, rename or continue)
+- [x] Full-text search over titles, file names, tags, and content (`GET /api/search?q=…`, SQL `LIKE`-based so it works on every supported database)
+- [x] Access filtering applied before results are returned (no leaks, no hit counts)
+- [x] GM-only sections excluded from the player search index *(no separate index — GM-only sections are excluded from the player content match and stripped from results)*
+- [x] GMs search across everything
+- [x] Obsidian vault import: folders map to repository paths, frontmatter parsed (`POST /api/import/obsidian`; frontmatter `repository` targets by name, other files go to the chosen default repository)
+- [x] Import path-collision handling (warn, rename or continue) *(per-file `collision` status; the import page offers rename-and-retry or import-anyway per file)*

@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
@@ -66,6 +67,84 @@ func (r *Documents) ListByRepository(ctx context.Context, repositoryID string) (
 	}
 
 	return docs, nil
+}
+
+// DocumentSearchScope limits a full-text search to the given repositories
+// plus the explicitly listed documents (a player's direct shares). A nil
+// scope searches every document — the GM view.
+type DocumentSearchScope struct {
+	RepositoryIDs []string
+	DocumentIDs   []string
+}
+
+// Search returns the documents (sections preloaded in order) whose title,
+// path, tags, or section content contains term, case-insensitively. When
+// includeGMOnly is false, GM-only sections are excluded from the content
+// match — a document reachable only through GM-only text is never returned.
+// The caller still applies game-day gating; this method only narrows to the
+// scope and the text match.
+func (r *Documents) Search(
+	ctx context.Context, term string, scope *DocumentSearchScope, includeGMOnly bool,
+) ([]models.Document, error) {
+	if scope != nil && len(scope.RepositoryIDs) == 0 && len(scope.DocumentIDs) == 0 {
+		return []models.Document{}, nil
+	}
+
+	pattern := "%" + escapeLike(strings.ToLower(term)) + "%"
+	db := r.db.DB().WithContext(ctx)
+
+	sectionMatch := `EXISTS (
+		SELECT 1 FROM document_sections s
+		WHERE s.document_id = documents.id AND s.deleted_at IS NULL
+		AND LOWER(s.content) LIKE ? ESCAPE '!'`
+	if !includeGMOnly {
+		sectionMatch += " AND s.gm_only = ?"
+	}
+	sectionMatch += ")"
+
+	textMatch := r.db.DB().
+		Where("LOWER(title) LIKE ? ESCAPE '!'", pattern).
+		Or("LOWER(path) LIKE ? ESCAPE '!'", pattern).
+		Or("LOWER(tags) LIKE ? ESCAPE '!'", pattern)
+	if includeGMOnly {
+		textMatch = textMatch.Or(sectionMatch, pattern)
+	} else {
+		textMatch = textMatch.Or(sectionMatch, pattern, false)
+	}
+
+	query := db.
+		Preload("Sections", func(db *gorm.DB) *gorm.DB { return db.Order("position") }).
+		Where(textMatch)
+	if scope != nil {
+		query = query.Where(searchScopeCondition(r.db.DB(), scope))
+	}
+
+	var docs []models.Document
+	if err := query.Order("path").Find(&docs).Error; err != nil {
+		return nil, err
+	}
+
+	return docs, nil
+}
+
+// searchScopeCondition builds the repository/document scope filter as one
+// grouped condition.
+func searchScopeCondition(db *gorm.DB, scope *DocumentSearchScope) *gorm.DB {
+	switch {
+	case len(scope.RepositoryIDs) > 0 && len(scope.DocumentIDs) > 0:
+		return db.Where("repository_id IN ?", scope.RepositoryIDs).Or("id IN ?", scope.DocumentIDs)
+	case len(scope.RepositoryIDs) > 0:
+		return db.Where("repository_id IN ?", scope.RepositoryIDs)
+	default:
+		return db.Where("id IN ?", scope.DocumentIDs)
+	}
+}
+
+// escapeLike escapes the LIKE wildcards (and the '!' escape character this
+// package uses) in a user-supplied search term, so "100%" matches the literal
+// text instead of everything starting with "100".
+func escapeLike(s string) string {
+	return strings.NewReplacer("!", "!!", "%", "!%", "_", "!_").Replace(s)
 }
 
 // ExistsAtPath reports whether another document (excluding excludeID, which
