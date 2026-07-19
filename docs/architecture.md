@@ -169,6 +169,7 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `DELETE /api/documents/{id}/shares/{shareId}` | GM | Revoke a direct share |
 | `GET\|POST /api/characters/{id}/journal` | owner + GM | List / add a character's journal entries. New entries are stamped with the character's current `current_game_day` |
 | `GET\|PATCH /api/characters/{id}/journal/{entryId}` | owner + GM | Read / edit a journal entry's content (404 without access; game day never changes after creation) |
+| `POST /api/characters/{id}/journal/{entryId}/convert` | owner + GM | Copy a journal entry into a new document, private in the character's own knowledge repository; the journal entry is left unchanged |
 | `GET\|POST /api/sessions` | GM | List / create sessions |
 | `GET\|PATCH /api/sessions/{id}` | GM | Read / edit a session |
 | `POST /api/sessions/{id}/participants` | GM | Add a character to a session |

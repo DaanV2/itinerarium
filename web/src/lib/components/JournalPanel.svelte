@@ -1,10 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { createJournalEntry, listJournalEntries, updateJournalEntry } from '$lib/api/journal';
+	import { resolve } from '$app/paths';
+	import {
+		convertJournalEntry,
+		createJournalEntry,
+		listJournalEntries,
+		updateJournalEntry
+	} from '$lib/api/journal';
 	import { getAccessToken } from '$lib/auth-token';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
-	import type { JournalEntry } from '$lib/types';
+	import type { Document, JournalEntry } from '$lib/types';
 
 	let { characterId }: { characterId: string } = $props();
 
@@ -18,6 +24,9 @@
 	let editingEntryId = $state('');
 	let editContent = $state('');
 	let editPending = $state(false);
+
+	let convertingEntryId = $state('');
+	let convertedDocuments = $state<Record<string, Document>>({});
 
 	async function loadAll() {
 		loading = true;
@@ -71,6 +80,19 @@
 			editPending = false;
 		}
 	}
+
+	async function handleConvert(entry: JournalEntry) {
+		error = '';
+		convertingEntryId = entry.id;
+		try {
+			const doc = await convertJournalEntry(characterId, entry.id, getAccessToken());
+			convertedDocuments = { ...convertedDocuments, [entry.id]: doc };
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Failed to convert journal entry to a document.';
+		} finally {
+			convertingEntryId = '';
+		}
+	}
 </script>
 
 <section>
@@ -97,6 +119,19 @@
 						{:else}
 							<p>{entry.content}</p>
 							<button type="button" onclick={() => startEdit(entry)}>Edit</button>
+							{#if convertedDocuments[entry.id]}
+								<a href={resolve('/documents/[id]', { id: convertedDocuments[entry.id].id })}>
+									View document
+								</a>
+							{:else}
+								<button
+									type="button"
+									onclick={() => handleConvert(entry)}
+									disabled={convertingEntryId === entry.id}
+								>
+									{convertingEntryId === entry.id ? 'Converting…' : 'Convert to document'}
+								</button>
+							{/if}
 						{/if}
 					</li>
 				{/each}
