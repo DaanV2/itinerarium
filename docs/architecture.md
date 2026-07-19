@@ -178,6 +178,8 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `GET /api/characters/{id}/activity` | owner + GM | The character's activity feed: game-day gated, scope-access gated, announced entries included, `actor` stripped on announced entries for players |
 | `GET /api/activity` | GM | The full campaign log, all game days, announcement targets included |
 | `POST /api/activity/announcements` | GM | Broadcast an announced entry to characters, groups, or everyone, surfacing at a chosen game day |
+| `GET /api/search?q=…` | any authenticated | Full-text search over the documents the caller may see (see [Search](#search)) |
+| `POST /api/import/obsidian` | any authenticated | Import a batch of Obsidian vault files as documents; per-file target repository access enforced (see [Obsidian vault import](#obsidian-vault-import)) |
 
 ## Document Format
 
@@ -207,8 +209,19 @@ This format is intentionally compatible with Obsidian so GMs can author document
 
 ## Search
 
-Full-text search over titles, file names, tags, and content (search backend TBD). Access rules are applied **before** results are returned:
+Full-text search over titles, file names (paths), tags, and section content — `GET /api/search?q=…` (M6). The backend is a case-insensitive SQL `LIKE` match (wildcards in the query are escaped, so `50%` matches literally) that works unchanged on every supported database; no separate index to maintain, results always reflect the current documents. Access rules are applied **before** results are returned:
 
-- Documents the character cannot see (wrong group, game day not reached) are excluded entirely — no titles, no hit counts
-- GM-only sections are excluded from the searchable content for non-GM users
+- The database query is already scoped to the caller's reachable repositories and reached direct shares, and the service re-checks the game-day gate per document — an inaccessible document is excluded entirely, no titles, no hit counts
+- GM-only sections are excluded from the searchable content for non-GM users, both from matching (a document reachable only through GM-only text is never returned) and from the returned sections
+- GMs search across everything, GM-only content included
 - Folder visibility follows the same rule: a folder appears only if it contains at least one accessible document
+
+Each result carries `matched_in` (which of title/path/tags/content matched) and a `snippet` around the first content match.
+
+## Obsidian vault import
+
+`POST /api/import/obsidian` (M6) imports a batch of `{path, markdown}` files. Each file becomes a document through the same creation path as hand-made documents, so every document rule applies: the vault's folder structure maps to the document `path` (a trailing `.md` is dropped), frontmatter sets title/tags/game day, and repository access is enforced per file.
+
+- The frontmatter `repository` key targets a repository by name (`general`, `template`, a group name, or a character name); files without one go to the request's default `repository_id`. A name that doesn't resolve **to a repository the caller may see** reads as "not found" — an existing-but-inaccessible repository is indistinguishable from a nonexistent one
+- Files are imported independently and reported per file (`imported` / `collision` / `error`) — one bad file never aborts the batch
+- A path collision is a warning, not a failure: the file comes back as `collision` and the client re-submits it with a new path (rename) or `allow_collision: true` (continue), mirroring the document editor's 409 behavior

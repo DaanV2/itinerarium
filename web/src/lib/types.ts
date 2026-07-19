@@ -255,3 +255,35 @@ export interface FolderTreeNode {
 	folders: FolderTreeNode[];
 	documents: DocumentSummary[];
 }
+
+/** Which document fields a search query was found in. */
+export type SearchMatchField = 'title' | 'path' | 'tags' | 'content';
+
+/** One full-text search hit. Results only ever contain documents the caller
+ * may currently see — the server filters access (and GM-only content for
+ * players) before anything is returned. `snippet` is a short excerpt around
+ * the first content match, empty when only metadata matched. */
+export interface SearchResult extends DocumentSummary {
+	matched_in: SearchMatchField[];
+	snippet?: string;
+}
+
+/** One markdown file sent to the Obsidian vault import. `path` is the
+ * vault-relative file path — folders map to the document path, a trailing
+ * `.md` is dropped server-side. */
+export interface VaultImportFile {
+	path: string;
+	markdown: string;
+	allow_collision?: boolean;
+}
+
+/** What happened to one imported vault file. `collision` is a warning, not a
+ * failure: re-submit the file with a new path (rename) or
+ * `allow_collision: true` (continue). */
+export interface VaultImportFileResult {
+	path: string;
+	status: 'imported' | 'collision' | 'error';
+	document_id?: string;
+	repository_id?: string;
+	error?: string;
+}

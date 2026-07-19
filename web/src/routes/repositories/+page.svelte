@@ -55,6 +55,10 @@
 <main class="main-page">
 	<h1>Repositories</h1>
 
+	<p>
+		<a href={resolve('/repositories/import')}>Import an Obsidian vault…</a>
+	</p>
+
 	<ErrorAlert message={error} />
 
 	{#if loading}

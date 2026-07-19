@@ -55,6 +55,7 @@ func newDocumentsTransportEnv(t *testing.T) documentsTransportEnv {
 	docSvc := application.NewDocumentService(
 		repositories.NewDocuments(db), repoSvc, characters, groups, repositories.NewDocumentShares(db),
 	)
+	vaultSvc := application.NewVaultImportService(docSvc, repoSvc, knowledgeRepos, groups, characters)
 	requireAuth := transport.RequireAuth(authSvc)
 
 	ctx := t.Context()
@@ -105,6 +106,8 @@ func newDocumentsTransportEnv(t *testing.T) documentsTransportEnv {
 		transport.WithHandle(
 			"DELETE /api/documents/{id}/shares/{shareId}", requireAuth(transport.RevokeDocumentShareHandler(docSvc)),
 		),
+		transport.WithHandle("GET /api/search", requireAuth(transport.SearchDocumentsHandler(docSvc))),
+		transport.WithHandle("POST /api/import/obsidian", requireAuth(transport.ImportVaultHandler(vaultSvc))),
 	)
 
 	return documentsTransportEnv{

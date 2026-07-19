@@ -41,6 +41,10 @@
 				aria-current={isActive('/repositories') ? 'page' : undefined}>Repositories</a
 			>
 		</li>
+		<li>
+			<a href={resolve('/search')} aria-current={isActive('/search') ? 'page' : undefined}>Search</a
+			>
+		</li>
 		{#if isgm}
 			<li>
 				<a
