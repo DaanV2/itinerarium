@@ -10,26 +10,60 @@ import (
 )
 
 type createLocationRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Plane       string `json:"plane,omitempty"`
+	Name  string `json:"name"`
+	Plane string `json:"plane,omitempty"`
+}
+
+type locationSectionInput struct {
+	ID      string `json:"id,omitempty"`
+	Content string `json:"content"`
+	GMOnly  bool   `json:"gm_only,omitempty"`
 }
 
 type updateLocationRequest struct {
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Plane       *string `json:"plane,omitempty"`
+	Name            *string                `json:"name,omitempty"`
+	Plane           *string                `json:"plane,omitempty"`
+	SharedOnGameDay *int                   `json:"shared_on_game_day,omitempty"`
+	Sections        []locationSectionInput `json:"sections"`
+}
+
+type locationSectionResponse struct {
+	ID      string `json:"id"`
+	Content string `json:"content"`
+	GMOnly  bool   `json:"gm_only"`
 }
 
 type locationResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Plane       string `json:"plane,omitempty"`
+	ID              string                    `json:"id"`
+	Name            string                    `json:"name"`
+	Plane           string                    `json:"plane,omitempty"`
+	SharedOnGameDay int                       `json:"shared_on_game_day"`
+	Revealed        bool                      `json:"revealed"`
+	Sections        []locationSectionResponse `json:"sections"`
 }
 
-func toLocationResponse(l *models.Location) locationResponse {
-	return locationResponse{ID: l.ID, Name: l.Name, Description: l.Description, Plane: l.Plane}
+type locationSummaryResponse struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Plane string `json:"plane,omitempty"`
+}
+
+func toLocationResponse(v *application.LocationView) locationResponse {
+	sections := make([]locationSectionResponse, len(v.Location.Sections))
+	for i := range v.Location.Sections {
+		sections[i] = locationSectionResponse{
+			ID: v.Location.Sections[i].ID, Content: v.Location.Sections[i].Content, GMOnly: v.Location.Sections[i].GMOnly,
+		}
+	}
+
+	return locationResponse{
+		ID: v.Location.ID, Name: v.Location.Name, Plane: v.Location.Plane,
+		SharedOnGameDay: v.Location.SharedOnGameDay, Revealed: v.Revealed, Sections: sections,
+	}
+}
+
+func toLocationSummaryResponse(l *models.Location) locationSummaryResponse {
+	return locationSummaryResponse{ID: l.ID, Name: l.Name, Plane: l.Plane}
 }
 
 type grantLocationAccessRequest struct {
@@ -65,7 +99,7 @@ func CreateLocationHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		location, err := svc.Create(r.Context(), requesterFrom(r), req.Name, req.Description, req.Plane)
+		location, err := svc.Create(r.Context(), requesterFrom(r), req.Name, req.Plane)
 		if err != nil {
 			writeLocationServiceError(w, err)
 
@@ -87,9 +121,9 @@ func ListLocationsHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		responses := make([]locationResponse, len(locations))
+		responses := make([]locationSummaryResponse, len(locations))
 		for i := range locations {
-			responses[i] = toLocationResponse(&locations[i])
+			responses[i] = toLocationSummaryResponse(&locations[i])
 		}
 
 		writeJSON(w, http.StatusOK, responses)
@@ -122,8 +156,18 @@ func UpdateLocationHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
+		var sections []application.LocationSectionInput
+		if req.Sections != nil {
+			sections = make([]application.LocationSectionInput, len(req.Sections))
+			for i := range req.Sections {
+				sections[i] = application.LocationSectionInput{
+					ID: req.Sections[i].ID, Content: req.Sections[i].Content, GMOnly: req.Sections[i].GMOnly,
+				}
+			}
+		}
+
 		location, err := svc.Update(
-			r.Context(), requesterFrom(r), r.PathValue("id"), req.Name, req.Description, req.Plane,
+			r.Context(), requesterFrom(r), r.PathValue("id"), req.Name, req.Plane, req.SharedOnGameDay, sections,
 		)
 		if err != nil {
 			writeLocationServiceError(w, err)
@@ -239,7 +283,9 @@ func writeLocationServiceError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, application.ErrAlreadyGranted):
 		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, application.ErrInvalidName), errors.Is(err, application.ErrInvalidGrant):
+	case errors.Is(err, application.ErrInvalidName),
+		errors.Is(err, application.ErrInvalidGrant),
+		errors.Is(err, application.ErrInvalidLocation):
 		writeError(w, http.StatusBadRequest, err.Error())
 	default:
 		writeError(w, http.StatusInternalServerError, "processing request")

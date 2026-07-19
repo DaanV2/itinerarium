@@ -17,10 +17,11 @@ import (
 )
 
 type locationHTTPTestEnv struct {
-	router      *transport.Router
-	gmToken     string
-	playerToken string
-	characterID string
+	router           *transport.Router
+	gmToken          string
+	playerToken      string
+	otherPlayerToken string
+	characterID      string
 }
 
 func newLocationHTTPTestEnv(t *testing.T) locationHTTPTestEnv {
@@ -50,7 +51,8 @@ func newLocationHTTPTestEnv(t *testing.T) locationHTTPTestEnv {
 	ctx := t.Context()
 	gm := &models.User{Email: "gm@example.com", PasswordHash: "hash", Role: models.RoleGM}
 	player := &models.User{Email: "player@example.com", PasswordHash: "hash", Role: models.RolePlayer}
-	for _, u := range []*models.User{gm, player} {
+	otherPlayer := &models.User{Email: "other@example.com", PasswordHash: "hash", Role: models.RolePlayer}
+	for _, u := range []*models.User{gm, player, otherPlayer} {
 		require.NoError(t, users.Create(ctx, u), "Create user")
 	}
 
@@ -74,10 +76,11 @@ func newLocationHTTPTestEnv(t *testing.T) locationHTTPTestEnv {
 	)
 
 	return locationHTTPTestEnv{
-		router:      router,
-		gmToken:     issueToken(t, tokens, gm.ID),
-		playerToken: issueToken(t, tokens, player.ID),
-		characterID: character.ID,
+		router:           router,
+		gmToken:          issueToken(t, tokens, gm.ID),
+		playerToken:      issueToken(t, tokens, player.ID),
+		otherPlayerToken: issueToken(t, tokens, otherPlayer.ID),
+		characterID:      character.ID,
 	}
 }
 
@@ -164,4 +167,67 @@ func TestLocations_GrantThenVisibleAndAssignable(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(assignRec.Body.Bytes(), &character), "decoding character")
 	require.Equal(t, locationID, character.LocationID)
+}
+
+func TestLocations_PlayerWithAccessCanEditDescription(t *testing.T) {
+	env := newLocationHTTPTestEnv(t)
+	locationID := env.createLocation(t, "The Tavern")
+
+	grantRec := env.doJSON(t, http.MethodPost, "/api/locations/"+locationID+"/access", env.gmToken,
+		map[string]any{"character_id": env.characterID})
+	require.Equal(t, http.StatusCreated, grantRec.Code, "grant body: %s", grantRec.Body.String())
+
+	// A player without access is not-found, never forbidden…
+	deniedRec := env.doJSON(t, http.MethodPatch, "/api/locations/"+locationID, env.otherPlayerToken,
+		map[string]any{"name": "Should not apply"})
+	require.Equal(t, http.StatusNotFound, deniedRec.Code, "denied edit body: %s", deniedRec.Body.String())
+
+	// …but the granted player can edit both the name and the description.
+	editRec := env.doJSON(t, http.MethodPatch, "/api/locations/"+locationID, env.playerToken,
+		map[string]any{
+			"name":     "The Rusty Tavern",
+			"sections": []map[string]any{{"content": "Smells of stale ale."}},
+		})
+	require.Equal(t, http.StatusOK, editRec.Code, "edit body: %s", editRec.Body.String())
+
+	var updated struct {
+		Name     string `json:"name"`
+		Sections []struct {
+			Content string `json:"content"`
+			GMOnly  bool   `json:"gm_only"`
+		} `json:"sections"`
+	}
+	require.NoError(t, json.Unmarshal(editRec.Body.Bytes(), &updated), "decoding location")
+	require.Equal(t, "The Rusty Tavern", updated.Name)
+	require.Len(t, updated.Sections, 1)
+	require.Equal(t, "Smells of stale ale.", updated.Sections[0].Content)
+}
+
+func TestLocations_GMOnlySectionStrippedForPlayers(t *testing.T) {
+	env := newLocationHTTPTestEnv(t)
+	locationID := env.createLocation(t, "The Tavern")
+
+	grantRec := env.doJSON(t, http.MethodPost, "/api/locations/"+locationID+"/access", env.gmToken,
+		map[string]any{"character_id": env.characterID})
+	require.Equal(t, http.StatusCreated, grantRec.Code, "grant body: %s", grantRec.Body.String())
+
+	editRec := env.doJSON(t, http.MethodPatch, "/api/locations/"+locationID, env.gmToken,
+		map[string]any{"sections": []map[string]any{
+			{"content": "A cosy tavern by the docks."},
+			{"content": "The barkeep is a Guild informant.", "gm_only": true},
+		}})
+	require.Equal(t, http.StatusOK, editRec.Code, "edit body: %s", editRec.Body.String())
+
+	getRec := env.doJSON(t, http.MethodGet, "/api/locations/"+locationID, env.playerToken, nil)
+	require.Equal(t, http.StatusOK, getRec.Code, "get body: %s", getRec.Body.String())
+
+	var got struct {
+		Sections []struct {
+			Content string `json:"content"`
+			GMOnly  bool   `json:"gm_only"`
+		} `json:"sections"`
+	}
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &got), "decoding location")
+	require.Len(t, got.Sections, 1, "GM-only section leaked to a player")
+	require.Equal(t, "A cosy tavern by the docks.", got.Sections[0].Content)
 }

@@ -58,13 +58,31 @@ export interface Group {
 	members: GroupMember[];
 }
 
-/** A place or plane. Players only ever receive locations they can access —
- * an inaccessible location is absent from lists and 404s on direct reads. */
-export interface Location {
+/** A place or plane, as returned in lists (no description). Players only
+ * ever receive locations they can access — an inaccessible location is
+ * absent from lists and 404s on direct reads. */
+export interface LocationSummary {
 	id: string;
 	name: string;
-	description?: string;
 	plane?: string;
+}
+
+/** One block of a location's description. `gm_only` sections are stripped
+ * server-side before a player response is built, exactly like a document
+ * section. */
+export interface LocationSection {
+	id: string;
+	content: string;
+	gm_only: boolean;
+}
+
+/** A full location. The description (`sections`) is gated by
+ * `shared_on_game_day` the same way a document is — `revealed` reports
+ * whether any character with access has reached it. */
+export interface Location extends LocationSummary {
+	shared_on_game_day: number;
+	revealed: boolean;
+	sections: LocationSection[];
 }
 
 /** A GM-managed grant giving one character or one group access to a

@@ -198,12 +198,12 @@ func TestActivityService_Feed_LocationScopeRequiresAccess(t *testing.T) {
 	otherRequester := fakeRequester{id: "player-2", gm: false}
 	denied := env.newCharacter(t, otherRequester, "Beren", 5)
 
-	location, err := env.locations.Create(ctx, gmRequester, "The Vault", "", "")
+	location, err := env.locations.Create(ctx, gmRequester, "The Vault", "")
 	require.NoError(t, err)
-	_, err = env.locations.GrantAccess(ctx, gmRequester, location.ID, &granted.ID, nil)
+	_, err = env.locations.GrantAccess(ctx, gmRequester, location.Location.ID, &granted.ID, nil)
 	require.NoError(t, err)
 
-	_, err = env.inventory.AddItem(ctx, gmRequester, locOwner(location.ID), "Gold Idol", nil, 1, "")
+	_, err = env.inventory.AddItem(ctx, gmRequester, locOwner(location.Location.ID), "Gold Idol", nil, 1, "")
 	require.NoError(t, err)
 
 	assert.NotNil(t, findEntry(env.feed(t, playerRequester, granted.ID), models.ActivityActionAdded, "Gold Idol"),

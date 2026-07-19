@@ -12,6 +12,7 @@ func allModels() []any {
 		&models.User{},
 		&models.RevokedToken{},
 		&models.Location{},
+		&models.LocationSection{},
 		&models.LocationAccess{},
 		&models.Character{},
 		&models.Currency{},
