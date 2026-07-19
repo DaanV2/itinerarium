@@ -17,6 +17,26 @@ var ErrInvalidGrant = errors.New("grant must target exactly one character or gro
 // exists.
 var ErrAlreadyGranted = errors.New("access already granted")
 
+// ErrInvalidLocation is returned when a location description payload is
+// malformed — a section reference that doesn't resolve.
+var ErrInvalidLocation = errors.New("invalid location")
+
+// LocationSectionInput is one description section in an update payload. ID is
+// empty for new sections and references an existing section otherwise.
+type LocationSectionInput struct {
+	ID      string
+	Content string
+	GMOnly  bool
+}
+
+// LocationView pairs a location (sections already stripped to what the
+// requester may see) with whether its description counts as revealed — i.e.
+// at least one character with location access has reached SharedOnGameDay.
+type LocationView struct {
+	Location *models.Location
+	Revealed bool
+}
+
 // LocationService manages locations and their access grants. Locations have a
 // single access level — view + modify — granted per-character or via group
 // membership; GMs always see everything. Without a grant a location's
@@ -49,8 +69,8 @@ func NewLocationService(
 
 // Create adds a new location. GM only.
 func (s *LocationService) Create(
-	ctx context.Context, requester Requester, name, description, plane string,
-) (*models.Location, error) {
+	ctx context.Context, requester Requester, name, plane string,
+) (*LocationView, error) {
 	if !requester.IsGM() {
 		return nil, ErrForbidden
 	}
@@ -58,12 +78,12 @@ func (s *LocationService) Create(
 		return nil, ErrInvalidName
 	}
 
-	location := &models.Location{Name: name, Description: description, Plane: plane}
+	location := &models.Location{Name: name, Plane: plane}
 	if err := s.locations.Create(ctx, location); err != nil {
 		return nil, fmt.Errorf("creating location: %w", err)
 	}
 
-	return location, nil
+	return s.view(ctx, requester, location)
 }
 
 // List returns every location for a GM, and only the accessible ones for a
@@ -96,9 +116,22 @@ func (s *LocationService) List(ctx context.Context, requester Requester) ([]mode
 	return locations, nil
 }
 
-// Get returns a location only if the requester may see it — otherwise
-// ErrNotFound, never ErrForbidden.
-func (s *LocationService) Get(ctx context.Context, requester Requester, id string) (*models.Location, error) {
+// Get returns a location with the description sections the requester may
+// see — otherwise ErrNotFound, never ErrForbidden.
+func (s *LocationService) Get(ctx context.Context, requester Requester, id string) (*LocationView, error) {
+	location, err := s.getAccessible(ctx, requester, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.view(ctx, requester, location)
+}
+
+// getAccessible loads a location with its full (unfiltered) sections, only if
+// the requester may see it — otherwise ErrNotFound, never ErrForbidden.
+func (s *LocationService) getAccessible(
+	ctx context.Context, requester Requester, id string,
+) (*models.Location, error) {
 	location, err := s.locations.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, repositories.ErrNotFound) {
@@ -128,12 +161,17 @@ func (s *LocationService) Get(ctx context.Context, requester Requester, id strin
 	return location, nil
 }
 
-// Update edits a location's name, description, and/or plane. Anyone who can
-// see the location can edit it.
+// Update edits a location's name, plane, and/or description. Anyone who can
+// see the location can edit it (core domain rule 7); a nil Sections leaves
+// the description untouched, only a GM may change SharedOnGameDay, and a
+// player's section edits can never touch GM-only rows (core domain rule 2) —
+// when every existing section is GM-only, a player's edit lands as new
+// player-visible sections alongside them, exactly like documents.
 func (s *LocationService) Update(
-	ctx context.Context, requester Requester, id string, name, description, plane *string,
-) (*models.Location, error) {
-	location, err := s.Get(ctx, requester, id)
+	ctx context.Context, requester Requester, id string,
+	name, plane *string, sharedOnGameDay *int, sections []LocationSectionInput,
+) (*LocationView, error) {
+	location, err := s.getAccessible(ctx, requester, id)
 	if err != nil {
 		return nil, err
 	}
@@ -145,18 +183,35 @@ func (s *LocationService) Update(
 
 		location.Name = *name
 	}
-	if description != nil {
-		location.Description = *description
-	}
 	if plane != nil {
 		location.Plane = *plane
 	}
+	if sharedOnGameDay != nil {
+		if !requester.IsGM() {
+			return nil, fmt.Errorf("%w: only a GM can change the reveal day", ErrForbidden)
+		}
 
-	if err := s.locations.Update(ctx, location); err != nil {
+		location.SharedOnGameDay = *sharedOnGameDay
+	}
+
+	newSections := location.Sections
+	if sections != nil {
+		newSections, err = mergeLocationSections(requester, location.Sections, sections)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := s.locations.Update(ctx, location, newSections); err != nil {
 		return nil, fmt.Errorf("updating location: %w", err)
 	}
 
-	return location, nil
+	location, err = s.locations.GetByID(ctx, location.ID)
+	if err != nil {
+		return nil, fmt.Errorf("reloading location: %w", err)
+	}
+
+	return s.view(ctx, requester, location)
 }
 
 // GrantAccess gives a character or group (exactly one) access to a location.
@@ -397,6 +452,187 @@ func (s *LocationService) requesterScope(
 	}
 
 	return characterIDs, groupIDs, nil
+}
+
+// view strips GM-only sections for players and gates the whole description
+// block by SharedOnGameDay, resolving the revealed flag along the way — the
+// last stop before a location leaves the service layer.
+func (s *LocationService) view(
+	ctx context.Context, requester Requester, location *models.Location,
+) (*LocationView, error) {
+	revealed, err := s.revealed(ctx, location)
+	if err != nil {
+		return nil, err
+	}
+
+	if requester.IsGM() {
+		return &LocationView{Location: location, Revealed: revealed}, nil
+	}
+
+	day, ok, err := s.requesterGameDay(ctx, requester, location.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	visible := make([]models.LocationSection, 0, len(location.Sections))
+	if ok && location.SharedOnGameDay <= day {
+		for i := range location.Sections {
+			if !location.Sections[i].GMOnly {
+				visible = append(visible, location.Sections[i])
+			}
+		}
+	}
+	location.Sections = visible
+
+	return &LocationView{Location: location, Revealed: revealed}, nil
+}
+
+// revealed reports whether any character with access to the location has
+// reached SharedOnGameDay.
+func (s *LocationService) revealed(ctx context.Context, location *models.Location) (bool, error) {
+	frontier, err := s.FrontierGameDay(ctx, location.ID)
+	if err != nil {
+		return false, err
+	}
+
+	return frontier >= location.SharedOnGameDay, nil
+}
+
+// requesterGameDay resolves the highest current_game_day among the
+// requester's own characters that can reach the location, directly or
+// through a granted group. ok is false when none of them can reach it at
+// all.
+func (s *LocationService) requesterGameDay(
+	ctx context.Context, requester Requester, locationID string,
+) (day int, ok bool, err error) {
+	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	if err != nil {
+		return 0, false, fmt.Errorf("listing requester characters: %w", err)
+	}
+
+	grants, err := s.accesses.ListByLocation(ctx, locationID)
+	if err != nil {
+		return 0, false, fmt.Errorf("listing grants: %w", err)
+	}
+
+	directChars := make(map[string]bool, len(grants))
+	directGroups := make(map[string]bool, len(grants))
+	for i := range grants {
+		if grants[i].CharacterID != nil {
+			directChars[*grants[i].CharacterID] = true
+		}
+		if grants[i].GroupID != nil {
+			directGroups[*grants[i].GroupID] = true
+		}
+	}
+
+	for i := range characters {
+		eligible, err := s.characterEligible(ctx, characters[i].ID, directChars, directGroups)
+		if err != nil {
+			return 0, false, err
+		}
+		if eligible && (!ok || characters[i].CurrentGameDay > day) {
+			day, ok = characters[i].CurrentGameDay, true
+		}
+	}
+
+	return day, ok, nil
+}
+
+// characterEligible reports whether one character reaches the location
+// through a direct grant or a granted group.
+func (s *LocationService) characterEligible(
+	ctx context.Context, characterID string, directChars, directGroups map[string]bool,
+) (bool, error) {
+	if directChars[characterID] {
+		return true, nil
+	}
+	if len(directGroups) == 0 {
+		return false, nil
+	}
+
+	groupIDs, err := s.groups.GroupIDsForCharacters(ctx, []string{characterID})
+	if err != nil {
+		return false, fmt.Errorf("resolving character groups: %w", err)
+	}
+
+	for _, gid := range groupIDs {
+		if directGroups[gid] {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// mergeLocationSections applies a description edit: a GM may freely rebuild
+// the section list, while a player's edit keeps GM-only rows exactly where
+// they are and can only touch visible ones (core domain rule 7).
+func mergeLocationSections(
+	requester Requester, existing []models.LocationSection, inputs []LocationSectionInput,
+) ([]models.LocationSection, error) {
+	byID := make(map[string]models.LocationSection, len(existing))
+	for i := range existing {
+		byID[existing[i].ID] = existing[i]
+	}
+
+	if requester.IsGM() {
+		return mergeLocationSectionsGM(byID, inputs)
+	}
+
+	return mergeLocationSectionsPlayer(existing, inputs)
+}
+
+// mergeLocationSectionsGM rebuilds the section list in the submitted order.
+func mergeLocationSectionsGM(
+	byID map[string]models.LocationSection, inputs []LocationSectionInput,
+) ([]models.LocationSection, error) {
+	final := make([]models.LocationSection, 0, len(inputs))
+	for _, input := range inputs {
+		if input.ID == "" {
+			final = append(final, models.LocationSection{GMOnly: input.GMOnly, Content: input.Content})
+
+			continue
+		}
+
+		sec, found := byID[input.ID]
+		if !found {
+			return nil, fmt.Errorf("%w: unknown section %q", ErrInvalidLocation, input.ID)
+		}
+
+		sec.Content = input.Content
+		sec.GMOnly = input.GMOnly
+		final = append(final, sec)
+	}
+
+	return final, nil
+}
+
+// mergeLocationSectionsPlayer keeps GM-only rows exactly where they are and
+// replaces the visible rows with the submitted ones. Visible rows missing
+// from the payload are deleted; submitted rows without an ID are appended. A
+// section reference that isn't a visible row of this location reads as
+// unknown — a stripped GM-only ID is indistinguishable from garbage, so
+// nothing leaks.
+func mergeLocationSectionsPlayer(
+	existing []models.LocationSection, inputs []LocationSectionInput,
+) ([]models.LocationSection, error) {
+	edits := make([]sectionEdit, len(inputs))
+	for i, in := range inputs {
+		edits[i] = sectionEdit(in)
+	}
+
+	return mergeVisibleSections(
+		existing, edits, ErrInvalidLocation,
+		func(s models.LocationSection) string { return s.ID },
+		func(s models.LocationSection) bool { return s.GMOnly },
+		func(s models.LocationSection, content string) models.LocationSection {
+			s.Content = content
+
+			return s
+		},
+		func(content string) models.LocationSection { return models.LocationSection{Content: content} },
+	)
 }
 
 // notFoundOr maps a repository ErrNotFound to the service-level ErrNotFound

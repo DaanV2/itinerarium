@@ -17,7 +17,14 @@
 	import GmOnly from '$lib/components/GmOnly.svelte';
 	import InventoryPanel from '$lib/components/InventoryPanel.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
-	import type { Character, Group, InventoryOwnerRef, Location, LocationAccess } from '$lib/types';
+	import type {
+		Character,
+		Group,
+		InventoryOwnerRef,
+		Location,
+		LocationAccess,
+		LocationSection
+	} from '$lib/types';
 
 	const locationId = page.params.id ?? '';
 	const owner: InventoryOwnerRef = { kind: 'location', id: locationId };
@@ -27,10 +34,13 @@
 	let loading = $state(true);
 	let error = $state('');
 
-	// Edit form — anyone who can see the location can edit it.
+	// Edit form — anyone who can see the location can edit it. The
+	// description follows the same game-day/GM-only rules as a document.
+	let editing = $state(false);
 	let editName = $state('');
 	let editPlane = $state('');
-	let editDescription = $state('');
+	let editSharedOnGameDay = $state(0);
+	let editSections = $state<LocationSection[]>([]);
 	let saving = $state(false);
 
 	// GM-only access management.
@@ -55,9 +65,6 @@
 		const token = getAccessToken();
 		try {
 			location = await getLocation(locationId, token);
-			editName = location.name;
-			editPlane = location.plane ?? '';
-			editDescription = location.description ?? '';
 
 			if (gm) {
 				[grants, allCharacters, allGroups] = await Promise.all([
@@ -76,6 +83,27 @@
 
 	onMount(loadAll);
 
+	function startEditing() {
+		if (!location) return;
+		editName = location.name;
+		editPlane = location.plane ?? '';
+		editSharedOnGameDay = location.shared_on_game_day;
+		editSections = location.sections.map((s) => ({ ...s }));
+		editing = true;
+	}
+
+	function cancelEditing() {
+		editing = false;
+	}
+
+	function addSection() {
+		editSections = [...editSections, { id: '', content: '', gm_only: false }];
+	}
+
+	function removeSection(index: number) {
+		editSections = editSections.filter((_, i) => i !== index);
+	}
+
 	async function handleSave(event: SubmitEvent) {
 		event.preventDefault();
 		error = '';
@@ -83,9 +111,15 @@
 		try {
 			location = await updateLocation(
 				locationId,
-				{ name: editName, plane: editPlane, description: editDescription },
+				{
+					name: editName,
+					plane: editPlane,
+					shared_on_game_day: editSharedOnGameDay,
+					sections: editSections
+				},
 				getAccessToken()
 			);
+			editing = false;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to save location.';
 		} finally {
@@ -132,26 +166,65 @@
 		<p>Loading…</p>
 	{:else if !location}
 		<p>Location not found.</p>
+	{:else if editing}
+		<h1>{location.name}</h1>
+
+		<form onsubmit={handleSave}>
+			<FormField id="edit-name" label="Name" type="text" required bind:value={editName} />
+			<FormField id="edit-plane" label="Plane" type="text" bind:value={editPlane} />
+			{#if gm}
+				<label>
+					Description revealed at game day
+					<input type="number" min="0" bind:value={editSharedOnGameDay} />
+				</label>
+			{/if}
+
+			<div class="sections">
+				{#each editSections as section, i (section.id || `new-${i}`)}
+					<section class="loc-section" class:gm-only={section.gm_only}>
+						<p class="section-banner">{section.gm_only ? 'GM only' : 'Visible to players'}</p>
+						<textarea class="section-content" bind:value={editSections[i].content} rows="4"
+						></textarea>
+						<div class="section-actions">
+							{#if gm}
+								<label class="gm-only-toggle">
+									<input type="checkbox" bind:checked={editSections[i].gm_only} />
+									GM only
+								</label>
+							{/if}
+							<button type="button" onclick={() => removeSection(i)}>Remove section</button>
+						</div>
+					</section>
+				{/each}
+			</div>
+
+			<button type="button" onclick={addSection}>Add description section</button>
+
+			<div class="edit-actions">
+				<button type="button" onclick={cancelEditing} disabled={saving}>Cancel</button>
+				<SubmitButton pending={saving} label="Save" pendingLabel="Saving…" />
+			</div>
+		</form>
 	{:else}
 		<h1>{location.name}</h1>
 		{#if location.plane}<p>Plane: {location.plane}</p>{/if}
-		{#if location.description}<p>{location.description}</p>{/if}
 
-		<section>
-			<h2>Edit</h2>
-			<form onsubmit={handleSave}>
-				<FormField id="edit-name" label="Name" type="text" required bind:value={editName} />
-				<FormField id="edit-plane" label="Plane" type="text" bind:value={editPlane} />
-				<FormField
-					id="edit-description"
-					label="Description"
-					type="text"
-					bind:value={editDescription}
-				/>
+		{#if gm}
+			<p class="reveal-banner">
+				Description revealed at game day {location.shared_on_game_day}.
+			</p>
+		{/if}
 
-				<SubmitButton pending={saving} label="Save" pendingLabel="Saving…" />
-			</form>
-		</section>
+		<div class="sections">
+			{#each location.sections as section (section.id)}
+				<section class="loc-section" class:gm-only={section.gm_only}>
+					<p class="section-banner">{section.gm_only ? 'GM only' : 'Visible to players'}</p>
+					<p class="section-content">{section.content}</p>
+				</section>
+			{/each}
+		</div>
+
+		<button type="button" onclick={startEditing}>Edit</button>
 
 		<GmOnly>
 			<section>
@@ -199,3 +272,86 @@
 		<InventoryPanel {owner} />
 	{/if}
 </main>
+
+<style>
+	.reveal-banner {
+		background-color: rgba(59, 130, 246, 0.1);
+		border: 1px solid rgba(59, 130, 246, 0.4);
+		border-radius: 5px;
+		padding: 0.6rem 0.9rem;
+		font-size: 0.875rem;
+		margin-top: 0.5rem;
+	}
+
+	.sections {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		margin-top: 1rem;
+	}
+
+	.loc-section {
+		border: 1px solid #ccc;
+		border-radius: 5px;
+		overflow: hidden;
+	}
+
+	.loc-section.gm-only {
+		border: 1px dashed rgba(34, 197, 94, 0.6);
+	}
+
+	.section-banner {
+		margin: 0;
+		padding: 0.3rem 0.75rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		background-color: rgba(128, 128, 128, 0.12);
+		color: rgba(128, 128, 128, 1);
+	}
+
+	.gm-only .section-banner {
+		background-color: rgba(34, 197, 94, 0.15);
+		color: rgba(21, 128, 61, 1);
+	}
+
+	.section-content {
+		margin: 0;
+		width: 100%;
+		box-sizing: border-box;
+		border: none;
+		padding: 0.75rem;
+		font: inherit;
+		white-space: pre-wrap;
+		resize: vertical;
+	}
+
+	.section-actions {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 0.5rem 0.75rem;
+		border-top: 1px solid rgba(128, 128, 128, 0.2);
+	}
+
+	.gm-only-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+
+	label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		margin-top: 0.75rem;
+		font-size: 0.875rem;
+	}
+
+	.edit-actions {
+		display: flex;
+		gap: 0.5rem;
+		margin-top: 1rem;
+	}
+</style>

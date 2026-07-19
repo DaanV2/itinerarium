@@ -987,50 +987,22 @@ func mergeSectionsGM(
 func mergeSectionsPlayer(
 	existing []models.DocumentSection, inputs []DocumentSectionInput,
 ) ([]models.DocumentSection, error) {
-	visibleByID := make(map[string]struct{}, len(existing))
-	for i := range existing {
-		if !existing[i].GMOnly {
-			visibleByID[existing[i].ID] = struct{}{}
-		}
+	edits := make([]sectionEdit, len(inputs))
+	for i, in := range inputs {
+		edits[i] = sectionEdit(in)
 	}
 
-	submitted := make(map[string]DocumentSectionInput, len(inputs))
-	var appended []DocumentSectionInput
-	for _, input := range inputs {
-		if input.GMOnly {
-			return nil, fmt.Errorf("%w: only a GM can mark sections GM-only", ErrForbidden)
-		}
-		if input.ID == "" {
-			appended = append(appended, input)
+	return mergeVisibleSections(
+		existing, edits, ErrInvalidDocument,
+		func(s models.DocumentSection) string { return s.ID },
+		func(s models.DocumentSection) bool { return s.GMOnly },
+		func(s models.DocumentSection, content string) models.DocumentSection {
+			s.Content = content
 
-			continue
-		}
-		if _, visible := visibleByID[input.ID]; !visible {
-			return nil, fmt.Errorf("%w: unknown section %q", ErrInvalidDocument, input.ID)
-		}
-
-		submitted[input.ID] = input
-	}
-
-	final := make([]models.DocumentSection, 0, len(existing)+len(appended))
-	for i := range existing {
-		sec := existing[i]
-		if sec.GMOnly {
-			final = append(final, sec)
-
-			continue
-		}
-		if input, kept := submitted[sec.ID]; kept {
-			sec.Content = input.Content
-			final = append(final, sec)
-		}
-	}
-
-	for _, input := range appended {
-		final = append(final, models.DocumentSection{Content: input.Content})
-	}
-
-	return final, nil
+			return s
+		},
+		func(content string) models.DocumentSection { return models.DocumentSection{Content: content} },
+	)
 }
 
 // normalizePath cleans a document path into slash-separated non-empty

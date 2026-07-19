@@ -71,12 +71,12 @@ func (e ownerInventoryTestEnv) memberGroup(t *testing.T, characterID string) *mo
 func (e ownerInventoryTestEnv) grantedLocation(t *testing.T, characterID string) *models.Location {
 	t.Helper()
 
-	location, err := e.locations.Create(t.Context(), gmRequester, "The Vault", "", "Material")
+	location, err := e.locations.Create(t.Context(), gmRequester, "The Vault", "Material")
 	require.NoError(t, err)
-	_, err = e.locations.GrantAccess(t.Context(), gmRequester, location.ID, &characterID, nil)
+	_, err = e.locations.GrantAccess(t.Context(), gmRequester, location.Location.ID, &characterID, nil)
 	require.NoError(t, err)
 
-	return location
+	return location.Location
 }
 
 func TestInventoryService_GroupInventory_MembersOnly(t *testing.T) {

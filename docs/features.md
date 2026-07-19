@@ -126,6 +126,6 @@ The actor field is GM-only on announced entries, so players know *that* somethin
 - Supports multi-plane campaigns out of the box
 - Each location can have its own **inventory** (item list + quantity), similar to groups — e.g. a character's house storing gear
 - Location inventories have **access control**: a single access level grants both view and modify; characters without access cannot see the inventory exists
-- Locations can have an associated description document, subject to the same visibility and game-day rules as other documents
+- A location's description is a set of sections, subject to the same GM-only stripping and game-day gating as knowledge documents — a `gm_only` section never reaches players, and the whole description reveals once a character with access reaches its `shared_on_game_day`
 - **Locations are editable by players**, same rule as knowledge: anyone who can see a location can edit its description and details
 - Access can be granted per-character or via group membership; GMs always have full visibility

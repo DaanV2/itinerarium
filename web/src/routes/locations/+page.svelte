@@ -7,16 +7,16 @@
 	import FormField from '$lib/components/FormField.svelte';
 	import GmOnly from '$lib/components/GmOnly.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
-	import type { Location } from '$lib/types';
+	import type { LocationSummary } from '$lib/types';
 
-	let locations = $state<Location[]>([]);
+	let locations = $state<LocationSummary[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 
-	// Create form (GM only — the API rejects players with 403).
+	// Create form (GM only — the API rejects players with 403). The
+	// description is added afterward from the location's own page.
 	let name = $state('');
 	let plane = $state('');
-	let description = $state('');
 	let submitting = $state(false);
 
 	async function loadLocations() {
@@ -38,13 +38,9 @@
 		error = '';
 		submitting = true;
 		try {
-			await createLocation(
-				{ name, plane: plane || undefined, description: description || undefined },
-				getAccessToken()
-			);
+			await createLocation({ name, plane: plane || undefined }, getAccessToken());
 			name = '';
 			plane = '';
-			description = '';
 			await loadLocations();
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to create location.';
@@ -67,12 +63,6 @@
 			<form onsubmit={handleCreate}>
 				<FormField id="location-name" label="Name" type="text" required bind:value={name} />
 				<FormField id="location-plane" label="Plane" type="text" bind:value={plane} />
-				<FormField
-					id="location-description"
-					label="Description"
-					type="text"
-					bind:value={description}
-				/>
 
 				<SubmitButton pending={submitting} label="Create location" pendingLabel="Creating…" />
 			</form>

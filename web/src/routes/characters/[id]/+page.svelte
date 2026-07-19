@@ -10,14 +10,14 @@
 	import InventoryPanel from '$lib/components/InventoryPanel.svelte';
 	import JournalPanel from '$lib/components/JournalPanel.svelte';
 	import MoneyPanel from '$lib/components/MoneyPanel.svelte';
-	import type { Character, InventoryOwnerRef, Location } from '$lib/types';
+	import type { Character, InventoryOwnerRef, LocationSummary } from '$lib/types';
 
 	// Always present for this route; `?? ''` keeps the type a plain string.
 	const characterId = page.params.id ?? '';
 	const owner: InventoryOwnerRef = { kind: 'character', id: characterId };
 
 	let character = $state<Character | null>(null);
-	let locations = $state<Location[]>([]);
+	let locations = $state<LocationSummary[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 

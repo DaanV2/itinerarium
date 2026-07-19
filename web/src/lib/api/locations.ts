@@ -1,4 +1,4 @@
-import type { Character, Location, LocationAccess } from '$lib/types';
+import type { Character, Location, LocationAccess, LocationSummary } from '$lib/types';
 
 async function errorMessage(res: Response, fallback: string): Promise<string> {
 	const body: unknown = await res.json().catch(() => null);
@@ -12,7 +12,7 @@ async function errorMessage(res: Response, fallback: string): Promise<string> {
 export async function listLocations(
 	token: string,
 	fetchFn: typeof fetch = fetch
-): Promise<Location[]> {
+): Promise<LocationSummary[]> {
 	const res = await fetchFn('/api/locations', {
 		headers: { Authorization: `Bearer ${token}` }
 	});
@@ -21,7 +21,7 @@ export async function listLocations(
 		throw new Error(await errorMessage(res, `failed to list locations: ${res.status}`));
 	}
 
-	return (await res.json()) as Location[];
+	return (await res.json()) as LocationSummary[];
 }
 
 /** Fetches one location. A 404 may simply mean "no access" — surface it as
@@ -44,7 +44,7 @@ export async function getLocation(
 
 /** Creates a location. GM only. */
 export async function createLocation(
-	input: { name: string; description?: string; plane?: string },
+	input: { name: string; plane?: string },
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<Location> {
@@ -61,10 +61,26 @@ export async function createLocation(
 	return (await res.json()) as Location;
 }
 
-/** Edits a location — anyone who can see it can edit it. */
+/** One description-section edit in an update payload. Omit `id` for a new
+ * section; only a GM may set `gm_only`. */
+export interface LocationSectionInput {
+	id?: string;
+	content: string;
+	gm_only?: boolean;
+}
+
+/** Edits a location — anyone who can see it can edit it. `sections`, when
+ * given, replaces the caller's visible description sections (players can
+ * never touch GM-only ones); omit it to leave the description untouched.
+ * Only a GM may set `shared_on_game_day`. */
 export async function updateLocation(
 	id: string,
-	input: { name?: string; description?: string; plane?: string },
+	input: {
+		name?: string;
+		plane?: string;
+		shared_on_game_day?: number;
+		sections?: LocationSectionInput[];
+	},
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<Location> {
