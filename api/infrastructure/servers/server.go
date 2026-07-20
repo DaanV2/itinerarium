@@ -61,3 +61,9 @@ func (s *Server) ListenAndServe() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.srv.Shutdown(ctx)
 }
+
+// Handler reports the configured root handler.
+func Handler(s *Server) http.Handler { return s.srv.Handler }
+
+// ReadHeaderTimeout reports the configured read-header timeout.
+func ReadHeaderTimeout(s *Server) time.Duration { return s.srv.ReadHeaderTimeout }

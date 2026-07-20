@@ -14,6 +14,6 @@ func TestOptionsApply(t *testing.T) {
 		servers.WithHandler(http.NewServeMux()),
 	)
 	require.Equal(t, ":9999", s.Addr())
-	require.NotNil(t, servers.HandlerOf(s))
-	require.InDelta(t, 10, servers.ReadHeaderTimeoutOf(s).Seconds(), 0)
+	require.NotNil(t, servers.Handler(s))
+	require.InDelta(t, 10, servers.ReadHeaderTimeout(s).Seconds(), 0)
 }
