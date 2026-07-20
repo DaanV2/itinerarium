@@ -101,7 +101,7 @@ func (s *ActivityService) feedFilter(
 ) (*repositories.FeedFilter, error) {
 	characterIDs := []string{character.ID}
 
-	groupIDs, err := s.groups.GroupIDsForCharacters(ctx, characterIDs)
+	groupIDs, err := cachedGroupIDsForCharacters(ctx, s.groups, characterIDs)
 	if err != nil {
 		return nil, fmt.Errorf("resolving character groups: %w", err)
 	}

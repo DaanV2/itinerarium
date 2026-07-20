@@ -125,6 +125,24 @@ func (r *KnowledgeRepositories) List(ctx context.Context) ([]models.Repository, 
 	return repos, nil
 }
 
+// ListByIDs returns the repositories with the given IDs — the batch
+// counterpart to GetByID, so a caller holding a set of repository IDs avoids a
+// query per repository. An empty ID list returns no rows.
+func (r *KnowledgeRepositories) ListByIDs(ctx context.Context, ids []string) ([]models.Repository, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var repos []models.Repository
+
+	err := r.db.DB().WithContext(ctx).Where("id IN ?", ids).Find(&repos).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return repos, nil
+}
+
 // ListVisible returns the general/template repositories plus the group and
 // character repositories reachable through the given IDs. Either slice may
 // be empty.

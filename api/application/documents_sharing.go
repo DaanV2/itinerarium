@@ -2,11 +2,9 @@ package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
-	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 )
 
 // ShareToGroup moves a document out of a character's private repository into
@@ -152,7 +150,7 @@ func (s *DocumentService) RevokeShare(ctx context.Context, requester Requester, 
 // requester's characters whose game day has been reached, with sections
 // stripped to what the requester may see.
 func (s *DocumentService) ListSharedWithMe(ctx context.Context, requester Requester) ([]DocumentView, error) {
-	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	characters, err := requesterCharacters(ctx, s.characters, requester)
 	if err != nil {
 		return nil, fmt.Errorf("listing requester characters: %w", err)
 	}
@@ -169,8 +167,11 @@ func (s *DocumentService) ListSharedWithMe(ctx context.Context, requester Reques
 		return nil, fmt.Errorf("listing shares: %w", err)
 	}
 
+	// Collect the unique documents reached through a share, preserving the
+	// order they first appear in — the response order the per-share loop
+	// produced before batching.
 	seen := make(map[string]struct{}, len(shares))
-	views := make([]DocumentView, 0, len(shares))
+	docIDs := make([]string, 0, len(shares))
 	for i := range shares {
 		share := &shares[i]
 		if dayByCharacter[share.CharacterID] < share.SharedOnGameDay {
@@ -179,20 +180,49 @@ func (s *DocumentService) ListSharedWithMe(ctx context.Context, requester Reques
 		if _, dup := seen[share.DocumentID]; dup {
 			continue
 		}
+
 		seen[share.DocumentID] = struct{}{}
+		docIDs = append(docIDs, share.DocumentID)
+	}
 
-		doc, err := s.documents.GetByID(ctx, share.DocumentID)
-		if err != nil {
-			if errors.Is(err, repositories.ErrNotFound) {
-				continue
-			}
+	return s.viewSharedDocuments(ctx, requester, docIDs)
+}
 
-			return nil, fmt.Errorf("loading shared document: %w", err)
+// viewSharedDocuments batch-loads the given documents and their repositories —
+// two queries instead of the pair the previous per-share loop issued for every
+// share (roadmap M8) — and builds a view for each, in the order the IDs were
+// given. A document that no longer exists is skipped, matching the earlier
+// per-document ErrNotFound handling.
+func (s *DocumentService) viewSharedDocuments(
+	ctx context.Context, requester Requester, docIDs []string,
+) ([]DocumentView, error) {
+	docs, err := s.documents.ListByIDs(ctx, docIDs)
+	if err != nil {
+		return nil, fmt.Errorf("loading shared documents: %w", err)
+	}
+
+	docByID := make(map[string]*models.Document, len(docs))
+	repoIDs := make([]string, 0, len(docs))
+	for i := range docs {
+		docByID[docs[i].ID] = &docs[i]
+		repoIDs = append(repoIDs, docs[i].RepositoryID)
+	}
+
+	repoByID, err := s.repositories.GetManyUnchecked(ctx, repoIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	views := make([]DocumentView, 0, len(docIDs))
+	for _, id := range docIDs {
+		doc, ok := docByID[id]
+		if !ok {
+			continue
 		}
 
-		repo, err := s.repositories.GetUnchecked(ctx, doc.RepositoryID)
-		if err != nil {
-			return nil, err
+		repo, ok := repoByID[doc.RepositoryID]
+		if !ok {
+			continue
 		}
 
 		view, err := s.view(ctx, requester, repo, doc)

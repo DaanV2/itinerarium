@@ -82,6 +82,27 @@ func (s *RepositoryService) GetUnchecked(ctx context.Context, id string) (*model
 	return repo, nil
 }
 
+// GetManyUnchecked loads the repositories with the given IDs without enforcing
+// the visibility rule, returning them keyed by ID — the batch counterpart to
+// GetUnchecked. Used when access to the underlying documents has already been
+// established (e.g. through direct shares) and the caller needs each
+// document's repository without a query apiece (roadmap M8).
+func (s *RepositoryService) GetManyUnchecked(
+	ctx context.Context, ids []string,
+) (map[string]*models.Repository, error) {
+	repos, err := s.repos.ListByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("loading repositories: %w", err)
+	}
+
+	byID := make(map[string]*models.Repository, len(repos))
+	for i := range repos {
+		byID[repos[i].ID] = &repos[i]
+	}
+
+	return byID, nil
+}
+
 // List returns every repository for a GM, and the general/template
 // singletons plus the requester's own character and group repositories for a
 // player.
@@ -149,7 +170,7 @@ func (s *RepositoryService) accessible(ctx context.Context, requester Requester,
 func (s *RepositoryService) requesterScope(
 	ctx context.Context, requester Requester,
 ) (characterIDs, groupIDs []string, err error) {
-	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	characters, err := requesterCharacters(ctx, s.characters, requester)
 	if err != nil {
 		return nil, nil, fmt.Errorf("listing requester characters: %w", err)
 	}
@@ -159,7 +180,7 @@ func (s *RepositoryService) requesterScope(
 		characterIDs[i] = characters[i].ID
 	}
 
-	groupIDs, err = s.groups.GroupIDsForCharacters(ctx, characterIDs)
+	groupIDs, err = cachedGroupIDsForCharacters(ctx, s.groups, characterIDs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolving requester groups: %w", err)
 	}

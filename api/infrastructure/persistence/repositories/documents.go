@@ -69,6 +69,27 @@ func (r *Documents) ListByRepository(ctx context.Context, repositoryID string) (
 	return docs, nil
 }
 
+// ListByIDs returns the documents with the given IDs, each with its sections
+// preloaded in order — the batch counterpart to GetByID, so a caller holding a
+// set of document IDs avoids a query per document. An empty ID list returns no
+// rows.
+func (r *Documents) ListByIDs(ctx context.Context, ids []string) ([]models.Document, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	var docs []models.Document
+
+	err := r.db.DB().WithContext(ctx).
+		Preload("Sections", func(db *gorm.DB) *gorm.DB { return db.Order("position") }).
+		Where("id IN ?", ids).Order("path").Find(&docs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return docs, nil
+}
+
 // DocumentSearchScope limits a full-text search to the given repositories
 // plus the explicitly listed documents (a player's direct shares). A nil
 // scope searches every document — the GM view.
