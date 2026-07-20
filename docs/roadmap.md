@@ -1,101 +1,82 @@
 # Roadmap
 
-Every item below maps to a feature in [features.md](features.md). A milestone is done when all its boxes are checked; a release phase (alpha, beta) ends only when all its milestones are done or the remaining items have been explicitly moved to the backlog.
+Every item below maps to a feature in [features.md](features.md) or to a concrete code change in the repo. A milestone is done when all its boxes are checked; a phase ends only when all its milestones are done or the remaining items have been explicitly moved to the [backlog](backlog.md).
 
-## Alpha (M0–M4)
+**Where we are:** the feature milestones **M0–M6** (alpha + beta) all shipped — a real campaign can run on Itinerarium end to end. The current phase is **Hardening & Sustainability (M7–M11)**: no new user-facing features, focused on maintainability, performance, security, and upgrade durability so the codebase stays cheap to change. New feature ideas live in [backlog.md](backlog.md) and are not scheduled until this phase closes.
 
-The alpha is done when a real campaign can run on it: accounts, characters, groups, knowledge with game-day gating, and sessions.
+## Guiding constraints for this phase
 
-### M0 — Foundation
+These are refactors, not rewrites. Every item here must:
 
-- [x] Repo scaffold: `api/` (Go, mechanus layout) and `web/` (SvelteKit + TypeScript)
-- [x] Viper config: flags → env vars → YAML → defaults
-- [x] SQLite + GORM with shared `Model` base (UUID, timestamps, soft delete), `AutoMigrate`
-- [x] RS512 JWT auth with JTI revocation; keys auto-generated on first start
-- [x] Docker deployment: one image, one binary — the SvelteKit SPA is embedded in the Go server via `go:embed` (`embedweb` build tag) *(verified without Docker, unavailable on the dev machine, by running the embedded-build binary directly and exercising the UI + API on one port)*
-- [x] First-run setup wizard creating the initial GM account (web wizard + `itinerarium init` CLI for headless deployments)
-- [x] Graceful shutdown lifecycle (mechanus pattern)
-- [x] Create Github Workflows, with testing included
+- **Preserve behavior.** Except the security-hardening milestone (M10), no change should alter an API response a client can observe. The security invariants in the root [CLAUDE.md](../CLAUDE.md) (game-day gating, repository access, hidden-means-404, GM-only stripping, rewind) are non-negotiable — a refactor that weakens one is a bug, not a simplification.
+- **Keep the tests green and the negative tests intact.** The negative tests in `development.md` are the safety net that lets us move code confidently — never delete one to make a refactor pass; if a refactor makes one fail, the refactor is wrong.
+- **Ship one milestone item per branch.** Don't bundle a DRY cleanup with a behavior change; a reviewer should be able to confirm "no behavior change" at a glance.
+- **Not add a dependency without a reason a reviewer would accept** (root `CLAUDE.md`).
 
-### M1 — Users, Characters & Locations
+---
 
-- [x] GM creates accounts (player or GM rank) and hands out credentials
-- [x] GM resets passwords via temporary password from the admin panel (no SMTP)
-- [x] Login with email + password
-- [x] Multiple characters per user account
-- [x] Character `current_game_day` field
-- [x] Personal inventory (item list + quantity) per character
-- [x] Personal money (per currency) per character
-- [x] Currency catalog from JSON/YAML with conversion ratios
-- [x] Currency calculator API: convert/add amounts across currencies, and simplify a total into the fewest denominations
-- [x] Item catalog from JSON/YAML; free-text custom items always allowed
-- [x] Locations: name + description, multi-plane support
-- [x] Characters can be associated with a location
+## Shipped — Alpha & Beta (M0–M6)
 
-### M2 — Groups & Inventories
+Feature-complete for 1.0. Summary; the full checked list is in the git history (see the `M0`–`M6` merge commits) and every capability is described in [features.md](features.md) and [architecture.md](architecture.md).
 
-- [x] Groups with `type` (`organization` / `family` / `other`) — identical mechanics
-- [x] Characters join and leave groups
-- [x] Join/leave events recorded with game-day stamp (surfaces in activity log in M5)
-- [x] Shared group inventory (item list + quantity)
-- [x] Shared group money (per currency)
-- [x] Location inventories
-- [x] Location inventory access control: single level (view + modify), granted per-character or via group; no access = existence hidden
-- [x] Item movement between character / group / location inventories
+- **M0 — Foundation:** repo scaffold, Viper config, SQLite + GORM base model, RS512 JWT auth with JTI revocation, single-binary embedded-SPA Docker deploy, first-run setup wizard + `init` CLI, graceful shutdown, CI.
+- **M1 — Users, Characters & Locations:** GM-managed accounts, per-character game day, personal inventory/money, currency + item catalogs, currency calculator, locations with planes.
+- **M2 — Groups & Inventories:** unified group model, membership with game-day-stamped activity, shared group inventory/money, location inventories with access control, item movement.
+- **M3 — Knowledge:** repositories + folder tree, markdown documents with GM-only sections, game-day gating, direct + group shares, open editing with path-collision and concurrent-edit warnings, journals and journal→document conversion, location-description documents.
+- **M4 — Sessions & Game Day:** sessions with participants, per-session and per-character game-day advance/rewind, visibility recalculated on rewind.
+- **M5 — Activity Log & Announcements:** append-only game-day-stamped activity feed, scope-gated visibility, announcements that bypass entity access but strip actor for players.
+- **M6 — Search & Obsidian Import:** access-filtered full-text `LIKE` search, GM-only content excluded for players, Obsidian vault import with per-file collision handling.
 
-### M3 — Knowledge
+---
 
-- [x] Repositories: general, template, one per group, one per character
-- [x] Folder tree per repository, alphabetical sorting
-- [x] Folders hidden when they contain no accessible documents
-- [x] Markdown documents with YAML frontmatter (`title`, `tags`, `repository`, `game_day`)
-- [x] GM-only sections, stripped server-side for players
-- [x] Section-boundary banners in the reader (GM/player sections clearly marked)
-- [x] Game-day gating: document visible when `current_game_day >= shared_on_game_day`
-- [x] Direct document shares to specific characters on a game day
-- [x] Sharing from a character repository to a group repository on a game day
-- [x] Open editing: anyone who can see a document can edit it
-- [x] Path-collision warning within a repository (rename or continue) *(API warns with 409 `path_collision` on create/move/share operations)*
-- [x] Concurrent-edit warning before overwriting *(API warns with 409 `concurrent_edit` on stale `version`; editor offers reload or overwrite)*
-- [x] Player edit on an all-GM-only document creates a new player-visible section
-- [x] Editor shows reveal settings ("Revealed at game day X to …")
-- [x] Editor warning banner when editing an already-revealed document
-- [x] Journals: per-character entries stamped with game day, readable by owner + GM only
-- [x] Journal page → document conversion (copy into character repository)
-- [x] Location description documents (same visibility/game-day rules)
-- [x] Locations editable by anyone who can see them
+## Hardening & Sustainability (M7–M11)
 
-### M4 — Sessions & Game Day
+### M7 — Backend maintainability & DRY
 
-- [x] Sessions with character participants
-- [x] GM advances/rewinds game day for all session participants at once
-- [x] GM advances/rewinds game day per individual character (catch-up)
-- [x] Visibility recalculates correctly after rewind (documents/entries disappear again) *(gating is computed per request, so a rewind recalculates by construction; covered by rewind tests on both documents and activity entries)*
+The service and transport layers are clean but carry a few duplicated shapes worth collapsing before they multiply.
 
-## Beta (M5–M6)
+- [ ] **One service-error → HTTP mapper.** 14 near-identical `write<Entity>ServiceError` functions in `infrastructure/transport/` each hand-map the same sentinel → status pattern. Give service sentinel errors an associated HTTP status (and optional machine code, as `path_collision` / `concurrent_edit` already do) and collapse to a single `writeServiceError(w, err)`. Per-entity validation errors map to `400` through the same mechanism.
+- [ ] **Extract a shared game-day visibility gate.** `DocumentService` and `LocationService` (and partly `search.go`) each re-implement "the furthest-along character of the requester that can reach this thing" and "has any character with access reached the reveal day" against different access sources (repository type vs. location grants). Extract one gate abstraction parameterised by the access-source lookup, the way `sections.go`'s generic `mergeVisibleSections` already unifies the section-merge rule across documents and locations. This is the highest-leverage item: it is exactly the security-critical logic, so having it in one audited place is a security win as well as a DRY one.
+- [ ] **Split `application/documents.go` (≈1040 lines).** One file owns read, create, update, share-to-group, delete, direct shares, folder-tree building, gating, and section merging. Split along those seams (e.g. `documents.go`, `documents_sharing.go`, `documents_gating.go`) with no logic change.
+- [ ] **Comment/structure sweep.** Fix the detached `writeDocumentServiceError` doc comment (it currently sits above `DeleteDocumentHandler` in `transport/documents.go`) and grep for other doc comments that drifted off their function during past edits.
+- [ ] **Guard the composition root and CLI.** `components/` (config→db→auth→repos→services→router wiring) and `cmd/` (serve/init) have no tests, so a wiring regression only surfaces at runtime — the exact code the M7–M8 refactors move things through. Add a smoke test that `BuildServer(ctx)` wires a working server against an in-memory DB, and a test for `init` bootstrapping the first GM (and refusing once an account exists). This is the structural counterpart to the DRY work: the refactors need a net under the wiring layer, not just the service layer.
 
-The beta phase ends — and the product is 1.0 — only when every box below is checked or explicitly moved to [backlog.md](backlog.md).
+### M8 — Backend performance
 
-### M5 — Activity Log & Announcements
+The gating logic is correct but re-queries more than it needs to inside a single request.
 
-- [x] Append-only `ActivityEntry` model stamped with game day
-- [x] Per-character activity feed, gated by `current_game_day` and entity access (`GET /api/characters/{id}/activity`)
-- [x] GMs see all activity regardless of game day (`GET /api/activity`)
-- [x] Tracked: group membership (joined / left)
-- [x] Tracked: group inventory (item added / quantity changed / removed)
-- [x] Tracked: location inventory (same, only visible with location access)
-- [x] Tracked: documents (added / updated / removed) *(removal required a removal path: `DELETE /api/documents/{id}`, GM only)*
-- [x] Tracked: group money (balance changed)
-- [x] Actions include `destroyed` and `stolen`
-- [x] Announcements: GM targets specific characters, a group, or public, surfacing at a chosen game day
-- [x] Announced entries bypass entity access but never reveal entity content
-- [x] `actor` field stripped server-side for players on announced entries
+- [ ] **Load the requester's characters once per request.** A single document read calls `characters.ListByUser` up to four times (`getAccessible` → `getViaDirectShare`, `view`, `effectiveGameDay`, `documentEntry`). Resolve the requester's characters (and their group memberships) once and thread that context through the gate from M7.
+- [ ] **Remove the N+1 in `ListSharedWithMe`.** It issues a `GetByID` document load and a `GetUnchecked` repository load per share in a loop — batch-load the documents and repositories by id set instead.
+- [ ] **Audit every list endpoint for N+1** (documents, activity feed, search already precomputes `dayByRepo` — use it as the model). Add a lightweight per-request access cache if the gate needs one.
+- [ ] Add a couple of representative benchmarks or query-count assertions so a future regression is caught, not re-discovered.
 
-### M6 — Search & Obsidian Import
+### M9 — Frontend maintainability
 
-- [x] Full-text search over titles, file names, tags, and content (`GET /api/search?q=…`, SQL `LIKE`-based so it works on every supported database)
-- [x] Access filtering applied before results are returned (no leaks, no hit counts)
-- [x] GM-only sections excluded from the player search index *(no separate index — GM-only sections are excluded from the player content match and stripped from results)*
-- [x] GMs search across everything
-- [x] Obsidian vault import: folders map to repository paths, frontmatter parsed (`POST /api/import/obsidian`; frontmatter `repository` targets by name, other files go to the chosen default repository)
-- [x] Import path-collision handling (warn, rename or continue) *(per-file `collision` status; the import page offers rename-and-retry or import-anyway per file)*
+The API layer and route pages carry the mirror image of the backend's duplication.
+
+- [ ] **A single API client.** `errorMessage`/`errorBody` are copy-pasted into 12 files under `lib/api/`, and the bearer-header + `fetchFn` plumbing repeats ~55 times. Extract `lib/api/client.ts` — one `apiFetch` that injects the token, parses the `{error, code}` body, and throws a typed `ApiError` (with `status` + `code`) that `DocumentConflictError` and friends extend. Each endpoint wrapper becomes a few lines.
+- [ ] **Thin out the large route pages.** `routes/locations/[id]`, `routes/documents/[id]`, and `routes/repositories/import` (≈340–360 lines each) mix fetch orchestration, editor state, and markup. Extend the pattern the repo already uses well (`activity-view.ts`, `inventory-view.ts`, `document-reveal.ts`): pull the logic into tested `.ts` modules so the `.svelte` file is mostly template.
+- [ ] **Delete scaffolding.** Remove `lib/vitest-examples/` (the `greet` placeholder) now that real specs exist.
+
+### M10 — Security hardening
+
+Itinerarium is self-hosted and may be exposed to the internet. The invariants are enforced; the surface around them is not yet hardened. This is the one milestone that intentionally changes observable behavior.
+
+- [ ] **Login/reset rate limiting.** Add per-account and per-IP throttling + backoff on `/api/login` and the GM password-reset path; no unauthenticated endpoint should allow unbounded attempts.
+- [ ] **Request body size limits.** Wrap request decoding in `http.MaxBytesReader` (import and document/section payloads are the largest) so a single request can't exhaust memory.
+- [ ] **Security-header middleware.** Add `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, a minimal CSP appropriate for the embedded SPA, and HSTS when served behind TLS — alongside the existing `Logging` middleware, which is currently the only one.
+- [ ] **Fresh invariant review.** Re-run the negative-test checklist against the refactored M7 gate; add tests for any path the consolidation touched. Consider running the repo's `/security-review` over the diff of this phase.
+- [ ] **Repo-hygiene for a security-shaped product.** Add a **`SECURITY.md`** with a vulnerability-disclosure path — the whole product is a server-side permission system, so an invited, documented report channel matters more here than for a typical tool. Add an **`.editorconfig`** (LF line endings, matching the committed style) to blunt the recurring CRLF/`autocrlf` friction the `CLAUDE.md` files warn about. `CONTRIBUTING.md` / `CODEOWNERS` are optional — `docs/development.md` + `docs/onboarding.md` already cover the contributor story.
+
+### M11 — Schema & contract durability
+
+Two long-term maintenance risks for a product users upgrade in place.
+
+- [ ] **Versioned migrations.** Schema evolution currently rides on `AutoMigrate` plus an ad-hoc `backfillActivityScopes` in `migrations.go`. `AutoMigrate` never drops or renames columns and can't express data backfills cleanly, so in-place upgrades drift. Adopt an explicit ordered migration list (e.g. `gormigrate`), keep `AutoMigrate` only as the dev/fresh-install fast path, and fold the existing backfill into a numbered migration. Decide and document the strategy in `architecture.md` / `deployment.md`.
+- [ ] **An API contract to stop drift.** The ~50-route API is described only in prose in `architecture.md`, and the TypeScript types in `web/src/lib/types.ts` are hand-mirrored from the Go handlers. Publish an OpenAPI description (generated or maintained) and a check that the client types match it, so a handler change that outruns the client is caught in CI.
+
+---
+
+## Exit criteria
+
+This phase is done — and the codebase is ready for post-1.0 feature work from [backlog.md](backlog.md) — when every box above is checked or explicitly deferred to the backlog, `just verify` is green, and the security invariants still hold with their negative tests intact.
