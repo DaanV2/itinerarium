@@ -2,9 +2,11 @@ package transport
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 // serviceErrorStatus maps an application ErrorKind to its HTTP status. It is the
@@ -38,23 +40,23 @@ func serviceErrorStatus(kind application.ErrorKind) int {
 func writeServiceError(w http.ResponseWriter, err error) {
 	var se *application.ServiceError
 	if !errors.As(err, &se) {
-		writeError(w, http.StatusInternalServerError, "processing request")
+		xhttp.WriteError(w, http.StatusInternalServerError, fmt.Errorf("processing request: %w", err))
 
 		return
 	}
 
 	status := serviceErrorStatus(se.Kind())
 	if status == http.StatusInternalServerError {
-		writeError(w, http.StatusInternalServerError, "processing request")
+		xhttp.WriteError(w, http.StatusInternalServerError, fmt.Errorf("processing request: %w", err))
 
 		return
 	}
 
 	if code := se.Code(); code != "" {
-		writeJSON(w, status, map[string]string{"error": err.Error(), "code": code})
+		xhttp.WriteJSON(w, status, map[string]string{"error": err.Error(), "code": code})
 
 		return
 	}
 
-	writeError(w, status, err.Error())
+	xhttp.WriteError(w, status, fmt.Errorf("processing request: %w", err))
 }

@@ -2,11 +2,13 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type activityTargetResponse struct {
@@ -80,7 +82,7 @@ func GetCharacterActivityHandler(svc *application.ActivityService) http.Handler 
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toActivityEntryResponses(entries))
+		xhttp.WriteJSON(w, http.StatusOK, toActivityEntryResponses(entries))
 	})
 }
 
@@ -95,7 +97,7 @@ func ListActivityHandler(svc *application.ActivityService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toActivityEntryResponses(entries))
+		xhttp.WriteJSON(w, http.StatusOK, toActivityEntryResponses(entries))
 	})
 }
 
@@ -116,7 +118,7 @@ func AnnounceActivityHandler(svc *application.ActivityService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req announceActivityRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -137,6 +139,6 @@ func AnnounceActivityHandler(svc *application.ActivityService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toActivityEntryResponse(entry))
+		xhttp.WriteJSON(w, http.StatusCreated, toActivityEntryResponse(entry))
 	})
 }

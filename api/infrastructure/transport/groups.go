@@ -2,10 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type createGroupRequest struct {
@@ -55,7 +57,7 @@ func CreateGroupHandler(svc *application.GroupService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req createGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -67,7 +69,7 @@ func CreateGroupHandler(svc *application.GroupService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toGroupResponse(group))
+		xhttp.WriteJSON(w, http.StatusCreated, toGroupResponse(group))
 	})
 }
 
@@ -87,7 +89,7 @@ func ListGroupsHandler(svc *application.GroupService) http.Handler {
 			responses[i] = toGroupResponse(&groups[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -102,7 +104,7 @@ func GetGroupHandler(svc *application.GroupService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toGroupResponse(group))
+		xhttp.WriteJSON(w, http.StatusOK, toGroupResponse(group))
 	})
 }
 
@@ -112,7 +114,7 @@ func UpdateGroupHandler(svc *application.GroupService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req updateGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -124,7 +126,7 @@ func UpdateGroupHandler(svc *application.GroupService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toGroupResponse(group))
+		xhttp.WriteJSON(w, http.StatusOK, toGroupResponse(group))
 	})
 }
 
@@ -134,7 +136,7 @@ func JoinGroupHandler(svc *application.GroupService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req joinGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}

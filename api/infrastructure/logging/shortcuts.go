@@ -6,6 +6,11 @@ import (
 	"github.com/charmbracelet/log"
 )
 
+// Default returns the default logger. The default logger comes with timestamp enabled.
+func Default() *log.Logger {
+	return log.Default()
+}
+
 // With returns the context logger (see [From]) with the given key-value
 // pairs attached.
 func With(ctx context.Context, keyvals ...any) *log.Logger {

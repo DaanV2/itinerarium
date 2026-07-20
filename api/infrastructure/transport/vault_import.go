@@ -2,9 +2,11 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type importVaultFileRequest struct {
@@ -38,7 +40,7 @@ func ImportVaultHandler(svc *application.VaultImportService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req importVaultRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -66,6 +68,6 @@ func ImportVaultHandler(svc *application.VaultImportService) http.Handler {
 			}
 		}
 
-		writeJSON(w, http.StatusOK, importVaultResponse{Results: responses})
+		xhttp.WriteJSON(w, http.StatusOK, importVaultResponse{Results: responses})
 	})
 }

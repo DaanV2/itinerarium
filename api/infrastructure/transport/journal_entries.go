@@ -2,10 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type createJournalEntryRequest struct {
@@ -33,7 +35,7 @@ func CreateJournalEntryHandler(svc *application.JournalEntryService) http.Handle
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req createJournalEntryRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -45,7 +47,7 @@ func CreateJournalEntryHandler(svc *application.JournalEntryService) http.Handle
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toJournalEntryResponse(e))
+		xhttp.WriteJSON(w, http.StatusCreated, toJournalEntryResponse(e))
 	})
 }
 
@@ -65,7 +67,7 @@ func ListJournalEntriesHandler(svc *application.JournalEntryService) http.Handle
 			responses[i] = toJournalEntryResponse(&entries[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -80,7 +82,7 @@ func GetJournalEntryHandler(svc *application.JournalEntryService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toJournalEntryResponse(e))
+		xhttp.WriteJSON(w, http.StatusOK, toJournalEntryResponse(e))
 	})
 }
 
@@ -90,7 +92,7 @@ func UpdateJournalEntryHandler(svc *application.JournalEntryService) http.Handle
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req updateJournalEntryRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -102,7 +104,7 @@ func UpdateJournalEntryHandler(svc *application.JournalEntryService) http.Handle
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toJournalEntryResponse(e))
+		xhttp.WriteJSON(w, http.StatusOK, toJournalEntryResponse(e))
 	})
 }
 
@@ -118,6 +120,6 @@ func ConvertJournalEntryHandler(svc *application.JournalEntryService) http.Handl
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toDocumentResponse(view))
+		xhttp.WriteJSON(w, http.StatusCreated, toDocumentResponse(view))
 	})
 }

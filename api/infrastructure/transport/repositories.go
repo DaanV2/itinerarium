@@ -5,6 +5,7 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type repositoryResponse struct {
@@ -36,7 +37,7 @@ func ListRepositoriesHandler(svc *application.RepositoryService) http.Handler {
 			responses[i] = toRepositoryResponse(&repos[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -51,6 +52,6 @@ func GetRepositoryHandler(svc *application.RepositoryService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toRepositoryResponse(repo))
+		xhttp.WriteJSON(w, http.StatusOK, toRepositoryResponse(repo))
 	})
 }

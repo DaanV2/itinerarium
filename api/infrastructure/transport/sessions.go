@@ -2,10 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type createSessionRequest struct {
@@ -58,7 +60,7 @@ func CreateSessionHandler(svc *application.SessionService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req createSessionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -70,7 +72,7 @@ func CreateSessionHandler(svc *application.SessionService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toSessionResponse(session))
+		xhttp.WriteJSON(w, http.StatusCreated, toSessionResponse(session))
 	})
 }
 
@@ -90,7 +92,7 @@ func ListSessionsHandler(svc *application.SessionService) http.Handler {
 			responses[i] = toSessionResponse(&sessions[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -105,7 +107,7 @@ func GetSessionHandler(svc *application.SessionService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toSessionResponse(session))
+		xhttp.WriteJSON(w, http.StatusOK, toSessionResponse(session))
 	})
 }
 
@@ -115,7 +117,7 @@ func UpdateSessionHandler(svc *application.SessionService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req updateSessionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -127,7 +129,7 @@ func UpdateSessionHandler(svc *application.SessionService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toSessionResponse(session))
+		xhttp.WriteJSON(w, http.StatusOK, toSessionResponse(session))
 	})
 }
 
@@ -137,7 +139,7 @@ func AddSessionParticipantHandler(svc *application.SessionService) http.Handler 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req addSessionParticipantRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -175,7 +177,7 @@ func AdvanceSessionGameDayHandler(svc *application.SessionService) http.Handler 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req advanceGameDayRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -187,6 +189,6 @@ func AdvanceSessionGameDayHandler(svc *application.SessionService) http.Handler 
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toSessionResponse(session))
+		xhttp.WriteJSON(w, http.StatusOK, toSessionResponse(session))
 	})
 }

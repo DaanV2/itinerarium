@@ -3,9 +3,11 @@ package transport
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type setupStatusResponse struct {
@@ -28,12 +30,12 @@ func SetupStatusHandler(svc *application.SetupService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		needsSetup, err := svc.NeedsSetup(r.Context())
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "checking setup status")
+			xhttp.WriteError(w, http.StatusInternalServerError, fmt.Errorf("checking setup status: %w", err))
 
 			return
 		}
 
-		writeJSON(w, http.StatusOK, setupStatusResponse{NeedsSetup: needsSetup})
+		xhttp.WriteJSON(w, http.StatusOK, setupStatusResponse{NeedsSetup: needsSetup})
 	})
 }
 
@@ -44,7 +46,7 @@ func CreateInitialGMHandler(svc *application.SetupService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req setupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -56,17 +58,17 @@ func CreateInitialGMHandler(svc *application.SetupService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, setupResponse{ID: user.ID, Email: user.Email, AccessToken: token})
+		xhttp.WriteJSON(w, http.StatusCreated, setupResponse{ID: user.ID, Email: user.Email, AccessToken: token})
 	})
 }
 
 func writeSetupError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, application.ErrAlreadySetUp):
-		writeError(w, http.StatusConflict, err.Error())
+		xhttp.WriteError(w, http.StatusConflict, fmt.Errorf("setup already complete: %w", err))
 	case errors.Is(err, application.ErrInvalidEmail), errors.Is(err, application.ErrInvalidPassword):
-		writeError(w, http.StatusBadRequest, err.Error())
+		xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request: %w", err))
 	default:
-		writeError(w, http.StatusInternalServerError, "creating account")
+		xhttp.WriteError(w, http.StatusInternalServerError, fmt.Errorf("creating account: %w", err))
 	}
 }

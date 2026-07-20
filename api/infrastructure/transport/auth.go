@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type contextKey int
@@ -33,7 +35,7 @@ func LoginHandler(svc *application.AuthService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -45,7 +47,7 @@ func LoginHandler(svc *application.AuthService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, loginResponse{
+		xhttp.WriteJSON(w, http.StatusOK, loginResponse{
 			ID: user.ID, Email: user.Email, Role: user.Role, AccessToken: token,
 		})
 	})
@@ -54,9 +56,9 @@ func LoginHandler(svc *application.AuthService) http.Handler {
 func writeLoginError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, application.ErrInvalidCredentials):
-		writeError(w, http.StatusUnauthorized, err.Error())
+		xhttp.WriteErrorMsg(w, http.StatusUnauthorized, "invalid credentials")
 	default:
-		writeError(w, http.StatusInternalServerError, "logging in")
+		xhttp.WriteError(w, http.StatusInternalServerError, fmt.Errorf("logging in: %w", err))
 	}
 }
 
@@ -66,16 +68,16 @@ func writeLoginError(w http.ResponseWriter, err error) {
 func RequireAuth(auth *application.AuthService) Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token := bearerToken(r)
+			token := getBearerToken(r)
 			if token == "" {
-				writeError(w, http.StatusUnauthorized, "missing bearer token")
+				xhttp.WriteError(w, http.StatusUnauthorized, errors.New("missing bearer token"))
 
 				return
 			}
 
 			requester, err := auth.Authenticate(r.Context(), token)
 			if err != nil {
-				writeError(w, http.StatusUnauthorized, "invalid or expired token")
+				xhttp.WriteError(w, http.StatusUnauthorized, fmt.Errorf("invalid or expired token: %w", err))
 
 				return
 			}
@@ -89,13 +91,11 @@ func RequireAuth(auth *application.AuthService) Middleware {
 	}
 }
 
-func bearerToken(r *http.Request) string {
+// getBearerToken extracts the bearer token from the Authorization header, if present.
+func getBearerToken(r *http.Request) string {
 	const prefix = "Bearer "
 
 	header := r.Header.Get("Authorization")
-	if !strings.HasPrefix(header, prefix) {
-		return ""
-	}
 
 	return strings.TrimPrefix(header, prefix)
 }

@@ -2,10 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 // OwnerExtractor derives the addressed inventory owner from the request path.
@@ -107,7 +109,7 @@ func ListInventoryHandler(svc *application.InventoryService, owner OwnerExtracto
 			responses[i] = toInventoryItemResponse(&items[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -117,7 +119,7 @@ func AddInventoryItemHandler(svc *application.InventoryService, owner OwnerExtra
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req addInventoryItemRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -132,7 +134,7 @@ func AddInventoryItemHandler(svc *application.InventoryService, owner OwnerExtra
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toInventoryItemResponse(item))
+		xhttp.WriteJSON(w, http.StatusCreated, toInventoryItemResponse(item))
 	})
 }
 
@@ -142,7 +144,7 @@ func UpdateInventoryItemHandler(svc *application.InventoryService, owner OwnerEx
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req updateInventoryItemRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -157,7 +159,7 @@ func UpdateInventoryItemHandler(svc *application.InventoryService, owner OwnerEx
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toInventoryItemResponse(item))
+		xhttp.WriteJSON(w, http.StatusOK, toInventoryItemResponse(item))
 	})
 }
 
@@ -183,7 +185,7 @@ func MoveInventoryItemHandler(svc *application.InventoryService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req moveInventoryItemRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -201,7 +203,7 @@ func MoveInventoryItemHandler(svc *application.InventoryService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toInventoryItemResponse(item))
+		xhttp.WriteJSON(w, http.StatusOK, toInventoryItemResponse(item))
 	})
 }
 
@@ -221,7 +223,7 @@ func ListMoneyHandler(svc *application.InventoryService, owner OwnerExtractor) h
 			responses[i] = toMoneyBalanceResponse(&balances[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -231,7 +233,7 @@ func SetMoneyHandler(svc *application.InventoryService, owner OwnerExtractor) ht
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req setMoneyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -245,6 +247,6 @@ func SetMoneyHandler(svc *application.InventoryService, owner OwnerExtractor) ht
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toMoneyBalanceResponse(balance))
+		xhttp.WriteJSON(w, http.StatusOK, toMoneyBalanceResponse(balance))
 	})
 }

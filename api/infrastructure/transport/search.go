@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type searchResultResponse struct {
@@ -34,6 +35,6 @@ func SearchDocumentsHandler(svc *application.DocumentService) http.Handler {
 			}
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }

@@ -2,10 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type createCurrencyRequest struct {
@@ -58,7 +60,7 @@ func ListCurrenciesHandler(svc *application.CatalogService) http.Handler {
 			responses[i] = toCurrencyResponse(&currencies[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -68,7 +70,7 @@ func CreateCurrencyHandler(svc *application.CatalogService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req createCurrencyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -80,7 +82,7 @@ func CreateCurrencyHandler(svc *application.CatalogService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toCurrencyResponse(c))
+		xhttp.WriteJSON(w, http.StatusCreated, toCurrencyResponse(c))
 	})
 }
 
@@ -100,7 +102,7 @@ func ListItemDefinitionsHandler(svc *application.CatalogService) http.Handler {
 			responses[i] = toItemDefinitionResponse(&defs[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -110,7 +112,7 @@ func CreateItemDefinitionHandler(svc *application.CatalogService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req createItemDefinitionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -122,7 +124,7 @@ func CreateItemDefinitionHandler(svc *application.CatalogService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toItemDefinitionResponse(d))
+		xhttp.WriteJSON(w, http.StatusCreated, toItemDefinitionResponse(d))
 	})
 }
 
@@ -161,7 +163,7 @@ func ConvertCurrencyHandler(svc *application.CatalogService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req convertCurrencyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -173,7 +175,7 @@ func ConvertCurrencyHandler(svc *application.CatalogService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, convertCurrencyResponse{
+		xhttp.WriteJSON(w, http.StatusOK, convertCurrencyResponse{
 			Currency:  toCurrencyResponse(&result.Currency),
 			Whole:     result.Whole,
 			Remainder: result.Remainder,
@@ -198,7 +200,7 @@ func SimplifyCurrencyHandler(svc *application.CatalogService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req simplifyCurrencyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -215,6 +217,6 @@ func SimplifyCurrencyHandler(svc *application.CatalogService) http.Handler {
 			responses[i] = simplifiedAmountResponse{Currency: toCurrencyResponse(&breakdown[i].Currency), Amount: breakdown[i].Amount}
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }

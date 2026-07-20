@@ -2,10 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type createAccountRequest struct {
@@ -31,7 +33,7 @@ func CreateAccountHandler(svc *application.UserService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req createAccountRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -43,7 +45,7 @@ func CreateAccountHandler(svc *application.UserService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, accountResponse{
+		xhttp.WriteJSON(w, http.StatusCreated, accountResponse{
 			ID: user.ID, Email: user.Email, Role: user.Role, TemporaryPassword: password,
 		})
 	})
@@ -65,7 +67,7 @@ func ListAccountsHandler(svc *application.UserService) http.Handler {
 			accounts[i] = accountResponse{ID: users[i].ID, Email: users[i].Email, Role: users[i].Role}
 		}
 
-		writeJSON(w, http.StatusOK, accounts)
+		xhttp.WriteJSON(w, http.StatusOK, accounts)
 	})
 }
 
@@ -81,6 +83,6 @@ func ResetPasswordHandler(svc *application.UserService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, resetPasswordResponse{TemporaryPassword: password})
+		xhttp.WriteJSON(w, http.StatusOK, resetPasswordResponse{TemporaryPassword: password})
 	})
 }

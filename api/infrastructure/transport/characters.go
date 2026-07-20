@@ -2,10 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type createCharacterRequest struct {
@@ -38,7 +40,7 @@ func CreateCharacterHandler(svc *application.CharacterService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req createCharacterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -50,7 +52,7 @@ func CreateCharacterHandler(svc *application.CharacterService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toCharacterResponse(c))
+		xhttp.WriteJSON(w, http.StatusCreated, toCharacterResponse(c))
 	})
 }
 
@@ -70,7 +72,7 @@ func ListCharactersHandler(svc *application.CharacterService) http.Handler {
 			responses[i] = toCharacterResponse(&characters[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -85,7 +87,7 @@ func GetCharacterHandler(svc *application.CharacterService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toCharacterResponse(c))
+		xhttp.WriteJSON(w, http.StatusOK, toCharacterResponse(c))
 	})
 }
 
@@ -95,7 +97,7 @@ func UpdateCharacterHandler(svc *application.CharacterService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req updateCharacterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -107,6 +109,6 @@ func UpdateCharacterHandler(svc *application.CharacterService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toCharacterResponse(c))
+		xhttp.WriteJSON(w, http.StatusOK, toCharacterResponse(c))
 	})
 }

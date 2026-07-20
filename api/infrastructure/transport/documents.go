@@ -2,10 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type documentSectionPayload struct {
@@ -120,7 +122,7 @@ func ListDocumentsHandler(svc *application.DocumentService) http.Handler {
 			responses[i] = toDocumentListItemResponse(&docs[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -152,7 +154,7 @@ func GetDocumentFolderTreeHandler(svc *application.DocumentService) http.Handler
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toFolderTreeResponse(tree))
+		xhttp.WriteJSON(w, http.StatusOK, toFolderTreeResponse(tree))
 	})
 }
 
@@ -162,7 +164,7 @@ func CreateDocumentHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req createDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -182,7 +184,7 @@ func CreateDocumentHandler(svc *application.DocumentService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toDocumentResponse(view))
+		xhttp.WriteJSON(w, http.StatusCreated, toDocumentResponse(view))
 	})
 }
 
@@ -197,7 +199,7 @@ func GetDocumentHandler(svc *application.DocumentService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toDocumentResponse(view))
+		xhttp.WriteJSON(w, http.StatusOK, toDocumentResponse(view))
 	})
 }
 
@@ -207,7 +209,7 @@ func UpdateDocumentHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req updateDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -228,7 +230,7 @@ func UpdateDocumentHandler(svc *application.DocumentService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toDocumentResponse(view))
+		xhttp.WriteJSON(w, http.StatusOK, toDocumentResponse(view))
 	})
 }
 
@@ -239,7 +241,7 @@ func ShareDocumentHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req shareDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -255,7 +257,7 @@ func ShareDocumentHandler(svc *application.DocumentService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toDocumentResponse(view))
+		xhttp.WriteJSON(w, http.StatusOK, toDocumentResponse(view))
 	})
 }
 
@@ -283,8 +285,14 @@ func toDocumentShareResponse(s *models.DocumentShare) documentShareResponse {
 func ShareDocumentWithCharacterHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req shareDocumentWithCharacterRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.CharacterID == "" {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+
+			return
+		}
+
+		if req.CharacterID == "" {
+			xhttp.WriteErrorMsg(w, http.StatusBadRequest, "invalid request body: missing character_id")
 
 			return
 		}
@@ -298,7 +306,7 @@ func ShareDocumentWithCharacterHandler(svc *application.DocumentService) http.Ha
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toDocumentShareResponse(share))
+		xhttp.WriteJSON(w, http.StatusCreated, toDocumentShareResponse(share))
 	})
 }
 
@@ -318,7 +326,7 @@ func ListDocumentSharesHandler(svc *application.DocumentService) http.Handler {
 			responses[i] = toDocumentShareResponse(&shares[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -354,7 +362,7 @@ func ListSharedDocumentsHandler(svc *application.DocumentService) http.Handler {
 			responses[i] = toDocumentResponse(&views[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 

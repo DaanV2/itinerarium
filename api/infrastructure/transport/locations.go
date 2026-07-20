@@ -2,10 +2,12 @@ package transport
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
 )
 
 type createLocationRequest struct {
@@ -93,7 +95,7 @@ func CreateLocationHandler(svc *application.LocationService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req createLocationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -105,7 +107,7 @@ func CreateLocationHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toLocationResponse(location))
+		xhttp.WriteJSON(w, http.StatusCreated, toLocationResponse(location))
 	})
 }
 
@@ -125,7 +127,7 @@ func ListLocationsHandler(svc *application.LocationService) http.Handler {
 			responses[i] = toLocationSummaryResponse(&locations[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -140,7 +142,7 @@ func GetLocationHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toLocationResponse(location))
+		xhttp.WriteJSON(w, http.StatusOK, toLocationResponse(location))
 	})
 }
 
@@ -150,7 +152,7 @@ func UpdateLocationHandler(svc *application.LocationService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req updateLocationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -174,7 +176,7 @@ func UpdateLocationHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toLocationResponse(location))
+		xhttp.WriteJSON(w, http.StatusOK, toLocationResponse(location))
 	})
 }
 
@@ -184,7 +186,7 @@ func GrantLocationAccessHandler(svc *application.LocationService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req grantLocationAccessRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -198,7 +200,7 @@ func GrantLocationAccessHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		writeJSON(w, http.StatusCreated, toLocationAccessResponse(grant))
+		xhttp.WriteJSON(w, http.StatusCreated, toLocationAccessResponse(grant))
 	})
 }
 
@@ -218,7 +220,7 @@ func ListLocationAccessHandler(svc *application.LocationService) http.Handler {
 			responses[i] = toLocationAccessResponse(&grants[i])
 		}
 
-		writeJSON(w, http.StatusOK, responses)
+		xhttp.WriteJSON(w, http.StatusOK, responses)
 	})
 }
 
@@ -243,7 +245,7 @@ func SetCharacterLocationHandler(svc *application.LocationService) http.Handler 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req setCharacterLocationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LocationID == "" {
-			writeError(w, http.StatusBadRequest, "invalid request body")
+			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -255,7 +257,7 @@ func SetCharacterLocationHandler(svc *application.LocationService) http.Handler 
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toCharacterResponse(character))
+		xhttp.WriteJSON(w, http.StatusOK, toCharacterResponse(character))
 	})
 }
 
@@ -270,6 +272,6 @@ func ClearCharacterLocationHandler(svc *application.LocationService) http.Handle
 			return
 		}
 
-		writeJSON(w, http.StatusOK, toCharacterResponse(character))
+		xhttp.WriteJSON(w, http.StatusOK, toCharacterResponse(character))
 	})
 }
