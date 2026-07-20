@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -66,7 +65,7 @@ func CreateSessionHandler(svc *application.SessionService) http.Handler {
 
 		session, err := svc.Create(r.Context(), requesterFrom(r), req.Name, req.Description)
 		if err != nil {
-			writeSessionServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -81,7 +80,7 @@ func ListSessionsHandler(svc *application.SessionService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sessions, err := svc.List(r.Context(), requesterFrom(r))
 		if err != nil {
-			writeSessionServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -101,7 +100,7 @@ func GetSessionHandler(svc *application.SessionService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeSessionServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -123,7 +122,7 @@ func UpdateSessionHandler(svc *application.SessionService) http.Handler {
 
 		session, err := svc.Update(r.Context(), requesterFrom(r), r.PathValue("id"), req.Name, req.Description)
 		if err != nil {
-			writeSessionServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -145,7 +144,7 @@ func AddSessionParticipantHandler(svc *application.SessionService) http.Handler 
 
 		err := svc.AddParticipant(r.Context(), requesterFrom(r), r.PathValue("id"), req.CharacterID)
 		if err != nil {
-			writeSessionServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -160,7 +159,7 @@ func RemoveSessionParticipantHandler(svc *application.SessionService) http.Handl
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := svc.RemoveParticipant(r.Context(), requesterFrom(r), r.PathValue("id"), r.PathValue("characterId"))
 		if err != nil {
-			writeSessionServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -183,26 +182,11 @@ func AdvanceSessionGameDayHandler(svc *application.SessionService) http.Handler 
 
 		session, err := svc.AdvanceGameDay(r.Context(), requesterFrom(r), r.PathValue("id"), req.Delta, req.CharacterID)
 		if err != nil {
-			writeSessionServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		writeJSON(w, http.StatusOK, toSessionResponse(session))
 	})
-}
-
-func writeSessionServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrForbidden):
-		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, application.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, application.ErrAlreadyParticipant), errors.Is(err, application.ErrNotParticipant):
-		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, application.ErrInvalidName), errors.Is(err, application.ErrInvalidGameDay):
-		writeError(w, http.StatusBadRequest, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }

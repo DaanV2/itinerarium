@@ -11,11 +11,11 @@ import (
 
 // ErrInvalidName is returned when a character is created or renamed with an
 // empty name.
-var ErrInvalidName = errors.New("invalid name")
+var ErrInvalidName = serviceErr(KindValidation, "invalid name")
 
 // ErrInvalidGameDay is returned when current_game_day is set to a negative
 // value.
-var ErrInvalidGameDay = errors.New("invalid game day")
+var ErrInvalidGameDay = serviceErr(KindValidation, "invalid game day")
 
 // CharacterService manages player characters. A user account may own
 // multiple characters; only a GM may create a character on behalf of another

@@ -11,15 +11,15 @@ import (
 
 // ErrInvalidGrant is returned when a location grant does not target exactly
 // one character or group.
-var ErrInvalidGrant = errors.New("grant must target exactly one character or group")
+var ErrInvalidGrant = serviceErr(KindValidation, "grant must target exactly one character or group")
 
 // ErrAlreadyGranted is returned when an identical location grant already
 // exists.
-var ErrAlreadyGranted = errors.New("access already granted")
+var ErrAlreadyGranted = serviceErr(KindConflict, "access already granted")
 
 // ErrInvalidLocation is returned when a location description payload is
 // malformed — a section reference that doesn't resolve.
-var ErrInvalidLocation = errors.New("invalid location")
+var ErrInvalidLocation = serviceErr(KindValidation, "invalid location")
 
 // LocationSectionInput is one description section in an update payload. ID is
 // empty for new sections and references an existing section otherwise.
@@ -460,7 +460,7 @@ func (s *LocationService) requesterScope(
 func (s *LocationService) view(
 	ctx context.Context, requester Requester, location *models.Location,
 ) (*LocationView, error) {
-	revealed, err := s.revealed(ctx, location)
+	revealed, err := s.locationAccess(location.ID).revealed(ctx, location.SharedOnGameDay)
 	if err != nil {
 		return nil, err
 	}
@@ -487,15 +487,58 @@ func (s *LocationService) view(
 	return &LocationView{Location: location, Revealed: revealed}, nil
 }
 
-// revealed reports whether any character with access to the location has
-// reached SharedOnGameDay.
-func (s *LocationService) revealed(ctx context.Context, location *models.Location) (bool, error) {
-	frontier, err := s.FrontierGameDay(ctx, location.ID)
+// locationAccessSource adapts a location's grant-based visibility to the shared
+// accessSource so locations share one visibility gate with documents (gate.go).
+type locationAccessSource struct {
+	svc        *LocationService
+	locationID string
+}
+
+func (a locationAccessSource) charactersWithAccess(
+	ctx context.Context, characters []models.Character,
+) ([]models.Character, error) {
+	grants, err := a.svc.accesses.ListByLocation(ctx, a.locationID)
+	if err != nil {
+		return nil, fmt.Errorf("listing grants: %w", err)
+	}
+
+	directChars := make(map[string]bool, len(grants))
+	directGroups := make(map[string]bool, len(grants))
+	for i := range grants {
+		if grants[i].CharacterID != nil {
+			directChars[*grants[i].CharacterID] = true
+		}
+		if grants[i].GroupID != nil {
+			directGroups[*grants[i].GroupID] = true
+		}
+	}
+
+	eligible := make([]models.Character, 0, len(characters))
+	for i := range characters {
+		ok, err := a.svc.characterEligible(ctx, characters[i].ID, directChars, directGroups)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			eligible = append(eligible, characters[i])
+		}
+	}
+
+	return eligible, nil
+}
+
+func (a locationAccessSource) revealed(ctx context.Context, sharedOnGameDay int) (bool, error) {
+	frontier, err := a.svc.FrontierGameDay(ctx, a.locationID)
 	if err != nil {
 		return false, err
 	}
 
-	return frontier >= location.SharedOnGameDay, nil
+	return frontier >= sharedOnGameDay, nil
+}
+
+// locationAccess builds the accessSource for one location.
+func (s *LocationService) locationAccess(locationID string) accessSource {
+	return locationAccessSource{svc: s, locationID: locationID}
 }
 
 // requesterGameDay resolves the highest current_game_day among the
@@ -510,33 +553,7 @@ func (s *LocationService) requesterGameDay(
 		return 0, false, fmt.Errorf("listing requester characters: %w", err)
 	}
 
-	grants, err := s.accesses.ListByLocation(ctx, locationID)
-	if err != nil {
-		return 0, false, fmt.Errorf("listing grants: %w", err)
-	}
-
-	directChars := make(map[string]bool, len(grants))
-	directGroups := make(map[string]bool, len(grants))
-	for i := range grants {
-		if grants[i].CharacterID != nil {
-			directChars[*grants[i].CharacterID] = true
-		}
-		if grants[i].GroupID != nil {
-			directGroups[*grants[i].GroupID] = true
-		}
-	}
-
-	for i := range characters {
-		eligible, err := s.characterEligible(ctx, characters[i].ID, directChars, directGroups)
-		if err != nil {
-			return 0, false, err
-		}
-		if eligible && (!ok || characters[i].CurrentGameDay > day) {
-			day, ok = characters[i].CurrentGameDay, true
-		}
-	}
-
-	return day, ok, nil
+	return requesterDay(ctx, s.locationAccess(locationID), characters)
 }
 
 // characterEligible reports whether one character reaches the location

@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -16,11 +15,11 @@ const minPasswordLength = 8
 var (
 	// ErrAlreadySetUp is returned once any account exists — the first-run
 	// wizard runs exactly once per installation.
-	ErrAlreadySetUp = errors.New("setup already completed")
+	ErrAlreadySetUp = serviceErr(KindConflict, "setup already completed")
 	// ErrInvalidEmail is returned for an empty or obviously malformed email.
-	ErrInvalidEmail = errors.New("invalid email")
+	ErrInvalidEmail = serviceErr(KindValidation, "invalid email")
 	// ErrInvalidPassword is returned when the password is too short.
-	ErrInvalidPassword = fmt.Errorf("password must be at least %d characters", minPasswordLength)
+	ErrInvalidPassword = serviceErr(KindValidation, fmt.Sprintf("password must be at least %d characters", minPasswordLength))
 )
 
 // SetupService bootstraps a fresh installation with its first (GM) account.

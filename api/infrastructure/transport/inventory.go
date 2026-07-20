@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -98,7 +97,7 @@ func ListInventoryHandler(svc *application.InventoryService, owner OwnerExtracto
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		items, err := svc.ListInventory(r.Context(), requesterFrom(r), owner(r))
 		if err != nil {
-			writeInventoryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -128,7 +127,7 @@ func AddInventoryItemHandler(svc *application.InventoryService, owner OwnerExtra
 			req.Name, req.ItemDefinitionID, req.Quantity, req.Description,
 		)
 		if err != nil {
-			writeInventoryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -153,7 +152,7 @@ func UpdateInventoryItemHandler(svc *application.InventoryService, owner OwnerEx
 			req.Name, req.Quantity, req.Description,
 		)
 		if err != nil {
-			writeInventoryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -168,7 +167,7 @@ func RemoveInventoryItemHandler(svc *application.InventoryService, owner OwnerEx
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := svc.RemoveItem(r.Context(), requesterFrom(r), owner(r), r.PathValue("itemId"))
 		if err != nil {
-			writeInventoryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -197,7 +196,7 @@ func MoveInventoryItemHandler(svc *application.InventoryService) http.Handler {
 
 		item, err := svc.MoveItem(r.Context(), requesterFrom(r), req.ItemID, target, req.Quantity)
 		if err != nil {
-			writeInventoryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -212,7 +211,7 @@ func ListMoneyHandler(svc *application.InventoryService, owner OwnerExtractor) h
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		balances, err := svc.ListMoney(r.Context(), requesterFrom(r), owner(r))
 		if err != nil {
-			writeInventoryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -241,30 +240,11 @@ func SetMoneyHandler(svc *application.InventoryService, owner OwnerExtractor) ht
 			r.Context(), requesterFrom(r), owner(r), r.PathValue("currencyId"), req.Amount,
 		)
 		if err != nil {
-			writeInventoryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		writeJSON(w, http.StatusOK, toMoneyBalanceResponse(balance))
 	})
-}
-
-func writeInventoryServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrForbidden):
-		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, application.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, application.ErrInvalidName),
-		errors.Is(err, application.ErrInvalidQuantity),
-		errors.Is(err, application.ErrInvalidAmount),
-		errors.Is(err, application.ErrUnknownItemDefinition),
-		errors.Is(err, application.ErrUnknownCurrency),
-		errors.Is(err, application.ErrInvalidOwner),
-		errors.Is(err, application.ErrSameInventory):
-		writeError(w, http.StatusBadRequest, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }

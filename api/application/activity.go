@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
@@ -11,7 +10,7 @@ import (
 
 // ErrInvalidAnnouncement is returned when an announcement is malformed: an
 // unknown action, no entity name, a negative game day, or no target at all.
-var ErrInvalidAnnouncement = errors.New("invalid announcement")
+var ErrInvalidAnnouncement = serviceErr(KindValidation, "invalid announcement")
 
 // AnnounceInput carries a GM announcement: an event pushed to specific
 // characters, groups, or everyone, surfacing at GameDay regardless of entity

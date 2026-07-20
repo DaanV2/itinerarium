@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -51,14 +50,7 @@ func ImportVaultHandler(svc *application.VaultImportService) http.Handler {
 
 		results, err := svc.Import(r.Context(), requesterFrom(r), req.RepositoryID, files)
 		if err != nil {
-			switch {
-			case errors.Is(err, application.ErrInvalidImport):
-				writeError(w, http.StatusBadRequest, err.Error())
-			case errors.Is(err, application.ErrNotFound):
-				writeError(w, http.StatusNotFound, err.Error())
-			default:
-				writeError(w, http.StatusInternalServerError, "processing request")
-			}
+			writeServiceError(w, err)
 
 			return
 		}

@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
@@ -76,7 +75,7 @@ func GetCharacterActivityHandler(svc *application.ActivityService) http.Handler 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		entries, err := svc.Feed(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeActivityServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -91,7 +90,7 @@ func ListActivityHandler(svc *application.ActivityService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		entries, err := svc.ListAll(r.Context(), requesterFrom(r))
 		if err != nil {
-			writeActivityServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -133,24 +132,11 @@ func AnnounceActivityHandler(svc *application.ActivityService) http.Handler {
 			GroupIDs:     req.GroupIDs,
 		})
 		if err != nil {
-			writeActivityServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		writeJSON(w, http.StatusCreated, toActivityEntryResponse(entry))
 	})
-}
-
-func writeActivityServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrForbidden):
-		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, application.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, application.ErrInvalidAnnouncement):
-		writeError(w, http.StatusBadRequest, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }

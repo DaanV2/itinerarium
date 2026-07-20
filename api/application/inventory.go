@@ -13,27 +13,27 @@ import (
 
 // ErrInvalidQuantity is returned when an inventory quantity is below 1, or a
 // move asks for more units than the source line holds.
-var ErrInvalidQuantity = errors.New("invalid quantity")
+var ErrInvalidQuantity = serviceErr(KindValidation, "invalid quantity")
 
 // ErrInvalidAmount is returned when a money amount is negative.
-var ErrInvalidAmount = errors.New("invalid amount")
+var ErrInvalidAmount = serviceErr(KindValidation, "invalid amount")
 
 // ErrUnknownItemDefinition is returned when an inventory item references a
 // catalog definition that does not exist.
-var ErrUnknownItemDefinition = errors.New("unknown item definition")
+var ErrUnknownItemDefinition = serviceErr(KindValidation, "unknown item definition")
 
 // ErrUnknownCurrency is returned when a balance references a currency that is
 // not in the catalog.
-var ErrUnknownCurrency = errors.New("unknown currency")
+var ErrUnknownCurrency = serviceErr(KindValidation, "unknown currency")
 
 // ErrInvalidOwner is returned when an inventory owner does not identify
 // exactly one character, group, or location — or names a kind the operation
 // does not support (locations hold items, not money).
-var ErrInvalidOwner = errors.New("invalid inventory owner")
+var ErrInvalidOwner = serviceErr(KindValidation, "invalid inventory owner")
 
 // ErrSameInventory is returned when a move targets the inventory the item is
 // already in.
-var ErrSameInventory = errors.New("cannot move within the same inventory")
+var ErrSameInventory = serviceErr(KindValidation, "cannot move within the same inventory")
 
 // InventoryService manages the inventories and money of characters, groups,
 // and locations, plus item movement between them. Every method resolves

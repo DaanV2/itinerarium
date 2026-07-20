@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -101,7 +100,7 @@ func CreateLocationHandler(svc *application.LocationService) http.Handler {
 
 		location, err := svc.Create(r.Context(), requesterFrom(r), req.Name, req.Plane)
 		if err != nil {
-			writeLocationServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -116,7 +115,7 @@ func ListLocationsHandler(svc *application.LocationService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		locations, err := svc.List(r.Context(), requesterFrom(r))
 		if err != nil {
-			writeLocationServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -136,7 +135,7 @@ func GetLocationHandler(svc *application.LocationService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		location, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeLocationServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -170,7 +169,7 @@ func UpdateLocationHandler(svc *application.LocationService) http.Handler {
 			r.Context(), requesterFrom(r), r.PathValue("id"), req.Name, req.Plane, req.SharedOnGameDay, sections,
 		)
 		if err != nil {
-			writeLocationServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -194,7 +193,7 @@ func GrantLocationAccessHandler(svc *application.LocationService) http.Handler {
 			r.Context(), requesterFrom(r), r.PathValue("id"), req.CharacterID, req.GroupID,
 		)
 		if err != nil {
-			writeLocationServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -209,7 +208,7 @@ func ListLocationAccessHandler(svc *application.LocationService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		grants, err := svc.ListAccess(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeLocationServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -229,7 +228,7 @@ func RevokeLocationAccessHandler(svc *application.LocationService) http.Handler 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := svc.RevokeAccess(r.Context(), requesterFrom(r), r.PathValue("id"), r.PathValue("accessId"))
 		if err != nil {
-			writeLocationServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -251,7 +250,7 @@ func SetCharacterLocationHandler(svc *application.LocationService) http.Handler 
 
 		character, err := svc.AssignCharacter(r.Context(), requesterFrom(r), r.PathValue("id"), &req.LocationID)
 		if err != nil {
-			writeLocationServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -266,28 +265,11 @@ func ClearCharacterLocationHandler(svc *application.LocationService) http.Handle
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		character, err := svc.AssignCharacter(r.Context(), requesterFrom(r), r.PathValue("id"), nil)
 		if err != nil {
-			writeLocationServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		writeJSON(w, http.StatusOK, toCharacterResponse(character))
 	})
-}
-
-func writeLocationServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrForbidden):
-		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, application.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, application.ErrAlreadyGranted):
-		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, application.ErrInvalidName),
-		errors.Is(err, application.ErrInvalidGrant),
-		errors.Is(err, application.ErrInvalidLocation):
-		writeError(w, http.StatusBadRequest, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }

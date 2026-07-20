@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -63,7 +62,7 @@ func CreateGroupHandler(svc *application.GroupService) http.Handler {
 
 		group, err := svc.Create(r.Context(), requesterFrom(r), req.Name, req.Type, req.Description)
 		if err != nil {
-			writeGroupServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -78,7 +77,7 @@ func ListGroupsHandler(svc *application.GroupService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		groups, err := svc.List(r.Context(), requesterFrom(r))
 		if err != nil {
-			writeGroupServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -98,7 +97,7 @@ func GetGroupHandler(svc *application.GroupService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		group, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeGroupServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -120,7 +119,7 @@ func UpdateGroupHandler(svc *application.GroupService) http.Handler {
 
 		group, err := svc.Update(r.Context(), requesterFrom(r), r.PathValue("id"), req.Name, req.Type, req.Description)
 		if err != nil {
-			writeGroupServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -141,7 +140,7 @@ func JoinGroupHandler(svc *application.GroupService) http.Handler {
 		}
 
 		if err := svc.Join(r.Context(), requesterFrom(r), r.PathValue("id"), req.CharacterID); err != nil {
-			writeGroupServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -156,26 +155,11 @@ func LeaveGroupHandler(svc *application.GroupService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := svc.Leave(r.Context(), requesterFrom(r), r.PathValue("id"), r.PathValue("characterId"))
 		if err != nil {
-			writeGroupServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		w.WriteHeader(http.StatusNoContent)
 	})
-}
-
-func writeGroupServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrForbidden):
-		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, application.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, application.ErrAlreadyMember), errors.Is(err, application.ErrNotMember):
-		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, application.ErrInvalidName), errors.Is(err, application.ErrInvalidGroupType):
-		writeError(w, http.StatusBadRequest, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }

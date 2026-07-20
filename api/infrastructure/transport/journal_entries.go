@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -41,7 +40,7 @@ func CreateJournalEntryHandler(svc *application.JournalEntryService) http.Handle
 
 		e, err := svc.Create(r.Context(), requesterFrom(r), r.PathValue("id"), req.Content)
 		if err != nil {
-			writeJournalEntryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -56,7 +55,7 @@ func ListJournalEntriesHandler(svc *application.JournalEntryService) http.Handle
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		entries, err := svc.List(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeJournalEntryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -76,7 +75,7 @@ func GetJournalEntryHandler(svc *application.JournalEntryService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		e, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("entryId"))
 		if err != nil {
-			writeJournalEntryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -98,7 +97,7 @@ func UpdateJournalEntryHandler(svc *application.JournalEntryService) http.Handle
 
 		e, err := svc.Update(r.Context(), requesterFrom(r), r.PathValue("entryId"), req.Content)
 		if err != nil {
-			writeJournalEntryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -114,28 +113,11 @@ func ConvertJournalEntryHandler(svc *application.JournalEntryService) http.Handl
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		view, err := svc.Convert(r.Context(), requesterFrom(r), r.PathValue("entryId"))
 		if err != nil {
-			writeJournalEntryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		writeJSON(w, http.StatusCreated, toDocumentResponse(view))
 	})
-}
-
-func writeJournalEntryServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, application.ErrInvalidContent):
-		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, application.ErrPathCollision):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "path_collision"})
-	case errors.Is(err, application.ErrInvalidDocument):
-		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, application.ErrForbidden):
-		writeError(w, http.StatusForbidden, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }

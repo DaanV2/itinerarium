@@ -12,7 +12,7 @@ import (
 
 // ErrInvalidImport is returned when an import request as a whole is malformed
 // (no files, or no way to resolve a target repository).
-var ErrInvalidImport = errors.New("invalid import")
+var ErrInvalidImport = serviceErr(KindValidation, "invalid import")
 
 // Per-file import outcomes. A collision is a warning, not a failure: the
 // client re-submits the file with a new path (rename) or AllowCollision set

@@ -11,15 +11,15 @@ import (
 
 // ErrInvalidGroupType is returned when a group is created or updated with a
 // type outside organization/family/other.
-var ErrInvalidGroupType = errors.New("invalid group type")
+var ErrInvalidGroupType = serviceErr(KindValidation, "invalid group type")
 
 // ErrAlreadyMember is returned when a character joins a group it is already a
 // member of.
-var ErrAlreadyMember = errors.New("character is already a member")
+var ErrAlreadyMember = serviceErr(KindConflict, "character is already a member")
 
 // ErrNotMember is returned when a character leaves a group it is not a member
 // of.
-var ErrNotMember = errors.New("character is not a member")
+var ErrNotMember = serviceErr(KindConflict, "character is not a member")
 
 // GroupService manages groups and their membership. Groups themselves are
 // campaign structure: their existence and member lists are visible to every

@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -12,7 +11,7 @@ import (
 )
 
 // ErrInvalidQuery is returned when a search request carries no query text.
-var ErrInvalidQuery = errors.New("search query is required")
+var ErrInvalidQuery = serviceErr(KindValidation, "search query is required")
 
 // Search match fields — which part of a document the query text was found in.
 const (
@@ -132,15 +131,10 @@ func (s *DocumentService) searchScope(
 		if err != nil {
 			return nil, nil, err
 		}
-		if len(eligible) == 0 {
-			continue
-		}
 
-		day := eligible[0].CurrentGameDay
-		for j := range eligible[1:] {
-			if eligible[j+1].CurrentGameDay > day {
-				day = eligible[j+1].CurrentGameDay
-			}
+		day, ok := furthestGameDay(eligible)
+		if !ok {
+			continue
 		}
 
 		gate.dayByRepo[repos[i].ID] = day

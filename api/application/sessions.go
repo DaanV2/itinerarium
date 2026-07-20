@@ -11,11 +11,11 @@ import (
 
 // ErrAlreadyParticipant is returned when a character is added to a session it
 // already participates in.
-var ErrAlreadyParticipant = errors.New("character already participates in session")
+var ErrAlreadyParticipant = serviceErr(KindConflict, "character already participates in session")
 
 // ErrNotParticipant is returned when a character is removed from — or a game
 // day advance is targeted at — a session it does not participate in.
-var ErrNotParticipant = errors.New("character does not participate in session")
+var ErrNotParticipant = serviceErr(KindConflict, "character does not participate in session")
 
 // SessionService manages play sessions and the characters that take part in
 // them. Sessions are a GM operational tool: only a GM creates, edits, or

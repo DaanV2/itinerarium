@@ -1,7 +1,6 @@
 package transport
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -27,7 +26,7 @@ func ListRepositoriesHandler(svc *application.RepositoryService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		repos, err := svc.List(r.Context(), requesterFrom(r))
 		if err != nil {
-			writeRepositoryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -47,20 +46,11 @@ func GetRepositoryHandler(svc *application.RepositoryService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		repo, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeRepositoryServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		writeJSON(w, http.StatusOK, toRepositoryResponse(repo))
 	})
-}
-
-func writeRepositoryServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }
