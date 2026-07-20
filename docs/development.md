@@ -15,6 +15,18 @@ How to pick up and finish a feature. Written so any contributor (human or agent)
 - Respect milestone order: don't build M3 knowledge features on models that M1 hasn't created yet. If a dependency is missing, build the minimal version of the dependency first and note it.
 - If a feature seems to conflict with [architecture.md](architecture.md), architecture.md wins; if it's genuinely ambiguous, stop and ask rather than guessing.
 
+> **Current phase is Hardening & Sustainability (M7–M11).** The feature milestones (M0–M6) shipped; the open roadmap items are refactors and hardening, not new features. Read the next section before starting one — the workflow is slightly different.
+
+## Refactoring / cooldown work (M7–M11)
+
+Behavior-preserving change has one extra rule and one relaxed one:
+
+- **The negative tests are the contract.** Except for the security-hardening milestone (M10), a refactor must not change any API response a client can observe. The negative tests in the table below are how you prove that — run the full suite before and after, and never delete or weaken one to make a refactor pass. If a refactor makes a negative test fail, the refactor is wrong.
+- **You may touch code across a milestone, but keep the branch single-purpose.** A DRY cleanup (e.g. collapsing the 14 error mappers into one) and a genuine behavior change never belong in the same branch — a reviewer should be able to confirm "no behavior change" at a glance.
+- **The frontend rule is unchanged:** if consolidating the API client (`lib/api/client.ts`) surfaces a field the client shouldn't have, that's an API bug to report, not something to filter client-side.
+
+The [roadmap](roadmap.md) spells out each item and why it's worth doing; `architecture.md` stays the source of truth for the domain — none of these refactors change the domain model, so leave it alone unless M11's migration/contract work forces a note.
+
 ## Feature workflow
 
 1. **Locate the rules.** Find the feature in [features.md](features.md) and any matching core domain rule in the root `CLAUDE.md`. Those rules are requirements, not suggestions.

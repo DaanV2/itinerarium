@@ -1,6 +1,6 @@
 # Backlog / Open Ideas
 
-Ideas noted during planning that are not yet designed or committed to.
+Ideas noted during planning that are not yet designed or committed to. These are **post-1.0 feature ideas** — they are not scheduled until the current Hardening & Sustainability phase ([roadmap.md](roadmap.md), M7–M11) closes. Maintainability, performance, and security work is tracked on the roadmap, not here.
 
 - **Image/map attachments** — documents currently are markdown-only; attaching maps, portraits, and handouts would be a natural extension
 - **Manual document ordering** — folders/documents sort alphabetically for now; pinning or drag-to-reorder could come later
