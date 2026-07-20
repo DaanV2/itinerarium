@@ -20,11 +20,11 @@ const temporaryPasswordBytes = 15
 
 // ErrInvalidRole is returned when an account is created with a role other
 // than gm or player.
-var ErrInvalidRole = errors.New("invalid role")
+var ErrInvalidRole = serviceErr(KindValidation, "invalid role")
 
 // ErrEmailTaken is returned when creating an account with an email already
 // in use.
-var ErrEmailTaken = errors.New("email already in use")
+var ErrEmailTaken = serviceErr(KindConflict, "email already in use")
 
 // UserService manages accounts on behalf of a GM: creation and password
 // resets. Both actions are GM-only — there is no self-registration and no

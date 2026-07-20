@@ -1,7 +1,6 @@
 package transport
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -21,13 +20,7 @@ func SearchDocumentsHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		results, err := svc.Search(r.Context(), requesterFrom(r), r.URL.Query().Get("q"))
 		if err != nil {
-			if errors.Is(err, application.ErrInvalidQuery) {
-				writeError(w, http.StatusBadRequest, err.Error())
-
-				return
-			}
-
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}

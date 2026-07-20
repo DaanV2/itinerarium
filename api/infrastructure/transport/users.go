@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -39,7 +38,7 @@ func CreateAccountHandler(svc *application.UserService) http.Handler {
 
 		user, password, err := svc.CreateAccount(r.Context(), requesterFrom(r), req.Email, req.Role)
 		if err != nil {
-			writeUserServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -56,7 +55,7 @@ func ListAccountsHandler(svc *application.UserService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		users, err := svc.ListAccounts(r.Context(), requesterFrom(r))
 		if err != nil {
-			writeUserServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -77,26 +76,11 @@ func ResetPasswordHandler(svc *application.UserService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		password, err := svc.ResetPassword(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeUserServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		writeJSON(w, http.StatusOK, resetPasswordResponse{TemporaryPassword: password})
 	})
-}
-
-func writeUserServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrForbidden):
-		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, application.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, application.ErrEmailTaken):
-		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, application.ErrInvalidEmail), errors.Is(err, application.ErrInvalidRole):
-		writeError(w, http.StatusBadRequest, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }

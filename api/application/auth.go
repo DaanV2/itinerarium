@@ -13,7 +13,7 @@ import (
 // ErrInvalidCredentials is returned when a login attempt has an unknown
 // email or a wrong password. Both cases take this same path so the response
 // never reveals whether an email is registered.
-var ErrInvalidCredentials = errors.New("invalid email or password")
+var ErrInvalidCredentials = serviceErr(KindUnauthenticated, "invalid email or password")
 
 // AuthService authenticates requests by validating access tokens and loading
 // the Requester they identify.

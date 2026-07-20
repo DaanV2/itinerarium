@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -46,7 +45,7 @@ func CreateCharacterHandler(svc *application.CharacterService) http.Handler {
 
 		c, err := svc.Create(r.Context(), requesterFrom(r), req.UserID, req.Name)
 		if err != nil {
-			writeCharacterServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -61,7 +60,7 @@ func ListCharactersHandler(svc *application.CharacterService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		characters, err := svc.List(r.Context(), requesterFrom(r))
 		if err != nil {
-			writeCharacterServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -81,7 +80,7 @@ func GetCharacterHandler(svc *application.CharacterService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeCharacterServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -103,24 +102,11 @@ func UpdateCharacterHandler(svc *application.CharacterService) http.Handler {
 
 		c, err := svc.Update(r.Context(), requesterFrom(r), r.PathValue("id"), req.Name, req.CurrentGameDay)
 		if err != nil {
-			writeCharacterServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		writeJSON(w, http.StatusOK, toCharacterResponse(c))
 	})
-}
-
-func writeCharacterServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrForbidden):
-		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, application.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, application.ErrInvalidName), errors.Is(err, application.ErrInvalidGameDay):
-		writeError(w, http.StatusBadRequest, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }

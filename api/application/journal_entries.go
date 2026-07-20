@@ -12,7 +12,7 @@ import (
 
 // ErrInvalidContent is returned when a journal entry is created or edited
 // with empty content.
-var ErrInvalidContent = errors.New("invalid content")
+var ErrInvalidContent = serviceErr(KindValidation, "invalid content")
 
 // JournalEntryService manages per-character journal entries. Entries are
 // stamped with the character's current_game_day at creation and are readable

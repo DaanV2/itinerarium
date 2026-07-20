@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -49,7 +48,7 @@ func ListCurrenciesHandler(svc *application.CatalogService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		currencies, err := svc.ListCurrencies(r.Context())
 		if err != nil {
-			writeCatalogServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -76,7 +75,7 @@ func CreateCurrencyHandler(svc *application.CatalogService) http.Handler {
 
 		c, err := svc.CreateCurrency(r.Context(), requesterFrom(r), req.Code, req.Name, req.Ratio)
 		if err != nil {
-			writeCatalogServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -91,7 +90,7 @@ func ListItemDefinitionsHandler(svc *application.CatalogService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defs, err := svc.ListItemDefinitions(r.Context())
 		if err != nil {
-			writeCatalogServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -118,29 +117,13 @@ func CreateItemDefinitionHandler(svc *application.CatalogService) http.Handler {
 
 		d, err := svc.CreateItemDefinition(r.Context(), requesterFrom(r), req.Name, req.Description, req.Category)
 		if err != nil {
-			writeCatalogServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		writeJSON(w, http.StatusCreated, toItemDefinitionResponse(d))
 	})
-}
-
-func writeCatalogServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrForbidden):
-		writeError(w, http.StatusForbidden, err.Error())
-	case errors.Is(err, application.ErrCurrencyExists), errors.Is(err, application.ErrItemDefinitionExists):
-		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, application.ErrInvalidCurrency), errors.Is(err, application.ErrInvalidName),
-		errors.Is(err, application.ErrInvalidAmount), errors.Is(err, application.ErrNoAmounts):
-		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, application.ErrUnknownCurrency):
-		writeError(w, http.StatusNotFound, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }
 
 type currencyAmountRequest struct {
@@ -185,7 +168,7 @@ func ConvertCurrencyHandler(svc *application.CatalogService) http.Handler {
 
 		result, err := svc.Convert(r.Context(), toCurrencyAmounts(req.Amounts), req.To)
 		if err != nil {
-			writeCatalogServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -222,7 +205,7 @@ func SimplifyCurrencyHandler(svc *application.CatalogService) http.Handler {
 
 		breakdown, err := svc.Simplify(r.Context(), toCurrencyAmounts(req.Amounts))
 		if err != nil {
-			writeCatalogServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}

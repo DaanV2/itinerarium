@@ -14,19 +14,19 @@ import (
 
 // ErrInvalidCurrency is returned when a currency is created with an empty code
 // or a ratio below 1.
-var ErrInvalidCurrency = errors.New("invalid currency")
+var ErrInvalidCurrency = serviceErr(KindValidation, "invalid currency")
 
 // ErrCurrencyExists is returned when creating a currency whose code is already
 // in use.
-var ErrCurrencyExists = errors.New("currency code already in use")
+var ErrCurrencyExists = serviceErr(KindConflict, "currency code already in use")
 
 // ErrItemDefinitionExists is returned when creating a catalog item whose name
 // is already in use.
-var ErrItemDefinitionExists = errors.New("item definition name already in use")
+var ErrItemDefinitionExists = serviceErr(KindConflict, "item definition name already in use")
 
 // ErrNoAmounts is returned when a conversion/simplification request carries
 // no currency amounts to work with.
-var ErrNoAmounts = errors.New("no amounts given")
+var ErrNoAmounts = serviceErr(KindValidation, "no amounts given")
 
 // CatalogService owns the GM-defined currency and item catalogs. Currencies
 // carry conversion ratios; item definitions are a convenience for players and
@@ -163,7 +163,9 @@ func (s *CatalogService) resolveCurrency(ctx context.Context, idOrCode string) (
 	c, err := s.currencies.GetByCode(ctx, idOrCode)
 	if err != nil {
 		if errors.Is(err, repositories.ErrNotFound) {
-			return nil, ErrUnknownCurrency
+			// In the catalog, an unknown currency is a lookup miss (404); the
+			// same sentinel is a 400 when referenced by an inventory write.
+			return nil, withKind(KindNotFound, ErrUnknownCurrency)
 		}
 
 		return nil, fmt.Errorf("loading currency: %w", err)

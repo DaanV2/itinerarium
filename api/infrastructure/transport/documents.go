@@ -2,7 +2,6 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	"github.com/DaanV2/itinerarium/api/application"
@@ -111,7 +110,7 @@ func ListDocumentsHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		docs, err := svc.ListByRepository(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -148,7 +147,7 @@ func GetDocumentFolderTreeHandler(svc *application.DocumentService) http.Handler
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tree, err := svc.FolderTree(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -178,7 +177,7 @@ func CreateDocumentHandler(svc *application.DocumentService) http.Handler {
 			AllowCollision:  req.AllowCollision,
 		})
 		if err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -193,7 +192,7 @@ func GetDocumentHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		view, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -224,7 +223,7 @@ func UpdateDocumentHandler(svc *application.DocumentService) http.Handler {
 			AllowCollision:  req.AllowCollision,
 		})
 		if err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -251,7 +250,7 @@ func ShareDocumentHandler(svc *application.DocumentService) http.Handler {
 			AllowCollision:     req.AllowCollision,
 		})
 		if err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -294,7 +293,7 @@ func ShareDocumentWithCharacterHandler(svc *application.DocumentService) http.Ha
 			r.Context(), requesterFrom(r), r.PathValue("id"), req.CharacterID, req.SharedOnGameDay,
 		)
 		if err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -309,7 +308,7 @@ func ListDocumentSharesHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		shares, err := svc.ListShares(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -329,7 +328,7 @@ func RevokeDocumentShareHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		err := svc.RevokeShare(r.Context(), requesterFrom(r), r.PathValue("id"), r.PathValue("shareId"))
 		if err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -345,7 +344,7 @@ func ListSharedDocumentsHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		views, err := svc.ListSharedWithMe(r.Context(), requesterFrom(r))
 		if err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
@@ -359,38 +358,16 @@ func ListSharedDocumentsHandler(svc *application.DocumentService) http.Handler {
 	})
 }
 
-// writeDocumentServiceError maps DocumentService errors onto HTTP. The two
-// editor warnings ride on 409 with a machine-readable code so the client can
-// offer "rename or continue" / "overwrite anyway".
 // DeleteDocumentHandler removes a document and its sections. GM only; the
 // removal is recorded in the activity log. Must be wrapped in RequireAuth.
 func DeleteDocumentHandler(svc *application.DocumentService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := svc.Delete(r.Context(), requesterFrom(r), r.PathValue("id")); err != nil {
-			writeDocumentServiceError(w, err)
+			writeServiceError(w, err)
 
 			return
 		}
 
 		w.WriteHeader(http.StatusNoContent)
 	})
-}
-
-func writeDocumentServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, application.ErrNotFound):
-		writeError(w, http.StatusNotFound, err.Error())
-	case errors.Is(err, application.ErrPathCollision):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "path_collision"})
-	case errors.Is(err, application.ErrConcurrentEdit):
-		writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error(), "code": "concurrent_edit"})
-	case errors.Is(err, application.ErrAlreadyShared):
-		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, application.ErrInvalidDocument):
-		writeError(w, http.StatusBadRequest, err.Error())
-	case errors.Is(err, application.ErrForbidden):
-		writeError(w, http.StatusForbidden, err.Error())
-	default:
-		writeError(w, http.StatusInternalServerError, "processing request")
-	}
 }
