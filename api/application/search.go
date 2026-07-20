@@ -113,7 +113,7 @@ func (g *searchGate) visible(doc *models.Document) bool {
 func (s *DocumentService) searchScope(
 	ctx context.Context, requester Requester,
 ) (*repositories.DocumentSearchScope, *searchGate, error) {
-	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	characters, err := requesterCharacters(ctx, s.characters, requester)
 	if err != nil {
 		return nil, nil, fmt.Errorf("listing requester characters: %w", err)
 	}

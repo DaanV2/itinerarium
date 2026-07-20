@@ -45,10 +45,10 @@ The service and transport layers are clean but carry a few duplicated shapes wor
 
 The gating logic is correct but re-queries more than it needs to inside a single request.
 
-- [ ] **Load the requester's characters once per request.** A single document read calls `characters.ListByUser` up to four times (`getAccessible` → `getViaDirectShare`, `view`, `effectiveGameDay`, `documentEntry`). Resolve the requester's characters (and their group memberships) once and thread that context through the gate from M7.
-- [ ] **Remove the N+1 in `ListSharedWithMe`.** It issues a `GetByID` document load and a `GetUnchecked` repository load per share in a loop — batch-load the documents and repositories by id set instead.
-- [ ] **Audit every list endpoint for N+1** (documents, activity feed, search already precomputes `dayByRepo` — use it as the model). Add a lightweight per-request access cache if the gate needs one.
-- [ ] Add a couple of representative benchmarks or query-count assertions so a future regression is caught, not re-discovered.
+- [x] **Load the requester's characters once per request.** A single document read calls `characters.ListByUser` up to four times (`getAccessible` → `getViaDirectShare`, `view`, `effectiveGameDay`, `documentEntry`). Resolve the requester's characters (and their group memberships) once and thread that context through the gate from M7. Done via a per-request cache (`application/request_cache.go`) installed by `RequireAuth` and read by the gating helpers (`requesterCharacters`, `cachedGroupIDsForCharacters`, `cachedGroup`); absent the cache the helpers fall through to the database, so behavior is identical either way.
+- [x] **Remove the N+1 in `ListSharedWithMe`.** It issues a `GetByID` document load and a `GetUnchecked` repository load per share in a loop — batch-load the documents and repositories by id set instead. Now two batch loads (`Documents.ListByIDs`, `RepositoryService.GetManyUnchecked`) regardless of share count.
+- [x] **Audit every list endpoint for N+1** (documents, activity feed, search already precomputes `dayByRepo` — use it as the model). Add a lightweight per-request access cache if the gate needs one. All `ListByUser` / `GroupIDsForCharacters` / `groups.GetByID` gating lookups now route through the per-request cache, which also collapses the per-group-repo group loads inside `search.go`'s `searchScope`.
+- [x] Add a couple of representative benchmarks or query-count assertions so a future regression is caught, not re-discovered. See `application/performance_test.go`: one asserts the requester's characters load exactly once per document update, the other that `ListSharedWithMe`'s query count is constant in the number of shared documents.
 
 ### M9 — Frontend maintainability
 

@@ -56,7 +56,7 @@ func (s *DocumentService) getAccessible(
 func (s *DocumentService) getViaDirectShare(
 	ctx context.Context, requester Requester, doc *models.Document,
 ) (*models.Document, *models.Repository, error) {
-	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	characters, err := requesterCharacters(ctx, s.characters, requester)
 	if err != nil {
 		return nil, nil, fmt.Errorf("listing requester characters: %w", err)
 	}
@@ -111,7 +111,7 @@ func (s *DocumentService) revealed(
 			return false, nil
 		}
 
-		group, err := s.groups.GetByID(ctx, *repo.GroupID)
+		group, err := cachedGroup(ctx, s.groups, *repo.GroupID)
 		if err != nil {
 			return false, fmt.Errorf("loading group: %w", err)
 		}
@@ -167,7 +167,7 @@ func (s *DocumentService) repoAccess(repo *models.Repository) accessSource {
 func (s *DocumentService) effectiveGameDay(
 	ctx context.Context, requester Requester, repo *models.Repository,
 ) (day int, ok bool, err error) {
-	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	characters, err := requesterCharacters(ctx, s.characters, requester)
 	if err != nil {
 		return 0, false, fmt.Errorf("listing requester characters: %w", err)
 	}
@@ -200,7 +200,7 @@ func (s *DocumentService) charactersWithRepoAccess(
 			return nil, nil
 		}
 
-		group, err := s.groups.GetByID(ctx, *repo.GroupID)
+		group, err := cachedGroup(ctx, s.groups, *repo.GroupID)
 		if err != nil {
 			return nil, fmt.Errorf("loading group: %w", err)
 		}

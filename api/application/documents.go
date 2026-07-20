@@ -334,7 +334,7 @@ func (s *DocumentService) documentEntry(
 ) (*models.ActivityEntry, error) {
 	actor := activityActorGM
 	if !requester.IsGM() {
-		characters, err := s.characters.ListByUser(ctx, requester.UserID())
+		characters, err := requesterCharacters(ctx, s.characters, requester)
 		if err != nil {
 			return nil, fmt.Errorf("listing requester characters: %w", err)
 		}

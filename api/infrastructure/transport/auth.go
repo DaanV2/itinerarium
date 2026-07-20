@@ -80,7 +80,10 @@ func RequireAuth(auth *application.AuthService) Middleware {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), requesterContextKey, requester)
+			// Install the per-request gating cache so a single request resolves
+			// the requester's characters and group memberships once (roadmap M8).
+			ctx := application.WithRequestCache(r.Context())
+			ctx = context.WithValue(ctx, requesterContextKey, requester)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

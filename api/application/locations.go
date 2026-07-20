@@ -395,7 +395,7 @@ func (s *LocationService) grantFrontier(ctx context.Context, grant *models.Locat
 		return 0, nil
 	}
 
-	group, err := s.groups.GetByID(ctx, *grant.GroupID)
+	group, err := cachedGroup(ctx, s.groups, *grant.GroupID)
 	if err != nil {
 		if errors.Is(err, repositories.ErrNotFound) {
 			return 0, nil
@@ -418,7 +418,7 @@ func (s *LocationService) grantFrontier(ctx context.Context, grant *models.Locat
 // location, directly or through one of its groups. Used when associating a
 // character with a location.
 func (s *LocationService) AccessibleToCharacter(ctx context.Context, characterID, locationID string) (bool, error) {
-	groupIDs, err := s.groups.GroupIDsForCharacters(ctx, []string{characterID})
+	groupIDs, err := cachedGroupIDsForCharacters(ctx, s.groups, []string{characterID})
 	if err != nil {
 		return false, fmt.Errorf("resolving character groups: %w", err)
 	}
@@ -436,7 +436,7 @@ func (s *LocationService) AccessibleToCharacter(ctx context.Context, characterID
 func (s *LocationService) requesterScope(
 	ctx context.Context, requester Requester,
 ) (characterIDs, groupIDs []string, err error) {
-	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	characters, err := requesterCharacters(ctx, s.characters, requester)
 	if err != nil {
 		return nil, nil, fmt.Errorf("listing requester characters: %w", err)
 	}
@@ -446,7 +446,7 @@ func (s *LocationService) requesterScope(
 		characterIDs[i] = characters[i].ID
 	}
 
-	groupIDs, err = s.groups.GroupIDsForCharacters(ctx, characterIDs)
+	groupIDs, err = cachedGroupIDsForCharacters(ctx, s.groups, characterIDs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolving requester groups: %w", err)
 	}
@@ -548,7 +548,7 @@ func (s *LocationService) locationAccess(locationID string) accessSource {
 func (s *LocationService) requesterGameDay(
 	ctx context.Context, requester Requester, locationID string,
 ) (day int, ok bool, err error) {
-	characters, err := s.characters.ListByUser(ctx, requester.UserID())
+	characters, err := requesterCharacters(ctx, s.characters, requester)
 	if err != nil {
 		return 0, false, fmt.Errorf("listing requester characters: %w", err)
 	}
@@ -568,7 +568,7 @@ func (s *LocationService) characterEligible(
 		return false, nil
 	}
 
-	groupIDs, err := s.groups.GroupIDsForCharacters(ctx, []string{characterID})
+	groupIDs, err := cachedGroupIDsForCharacters(ctx, s.groups, []string{characterID})
 	if err != nil {
 		return false, fmt.Errorf("resolving character groups: %w", err)
 	}
