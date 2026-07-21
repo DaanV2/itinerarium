@@ -3,15 +3,14 @@
 	import { resolve } from '$app/paths';
 	import { createCharacter, listCharacters } from '$lib/api/characters';
 	import { getAccessToken } from '$lib/auth-token';
+	import CreateModal from '$lib/components/CreateModal.svelte';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
-	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import type { Character } from '$lib/types';
 
 	let characters = $state<Character[]>([]);
 	let loading = $state(true);
 	let name = $state('');
-	let submitting = $state(false);
 	let error = $state('');
 
 	async function loadCharacters() {
@@ -28,20 +27,10 @@
 
 	onMount(loadCharacters);
 
-	async function handleCreate(event: SubmitEvent) {
-		event.preventDefault();
-		error = '';
-		submitting = true;
-
-		try {
-			await createCharacter(name, getAccessToken());
-			name = '';
-			await loadCharacters();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to create character.';
-		} finally {
-			submitting = false;
-		}
+	async function handleCreate() {
+		await createCharacter(name, getAccessToken());
+		name = '';
+		await loadCharacters();
 	}
 </script>
 
@@ -56,12 +45,9 @@
 	<ErrorAlert message={error} />
 
 	<section>
-		<h2>Create character</h2>
-		<form onsubmit={handleCreate}>
+		<CreateModal triggerLabel="Create character" pendingLabel="Creating…" onSubmit={handleCreate}>
 			<FormField id="name" label="Name" type="text" required bind:value={name} />
-
-			<SubmitButton pending={submitting} label="Create character" pendingLabel="Creating…" />
-		</form>
+		</CreateModal>
 	</section>
 
 	<section>

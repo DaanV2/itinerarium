@@ -3,10 +3,10 @@
 	import { resolve } from '$app/paths';
 	import { createGroup, listGroups } from '$lib/api/groups';
 	import { getAccessToken } from '$lib/auth-token';
+	import CreateModal from '$lib/components/CreateModal.svelte';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
 	import GmOnly from '$lib/components/GmOnly.svelte';
-	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import type { Group, GroupType } from '$lib/types';
 
 	let groups = $state<Group[]>([]);
@@ -17,7 +17,6 @@
 	let name = $state('');
 	let type = $state<GroupType>('organization');
 	let description = $state('');
-	let submitting = $state(false);
 
 	async function loadGroups() {
 		loading = true;
@@ -33,21 +32,12 @@
 
 	onMount(loadGroups);
 
-	async function handleCreate(event: SubmitEvent) {
-		event.preventDefault();
-		error = '';
-		submitting = true;
-		try {
-			await createGroup({ name, type, description: description || undefined }, getAccessToken());
-			name = '';
-			type = 'organization';
-			description = '';
-			await loadGroups();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to create group.';
-		} finally {
-			submitting = false;
-		}
+	async function handleCreate() {
+		await createGroup({ name, type, description: description || undefined }, getAccessToken());
+		name = '';
+		type = 'organization';
+		description = '';
+		await loadGroups();
 	}
 </script>
 
@@ -60,8 +50,7 @@
 
 	<GmOnly>
 		<section>
-			<h2>Create group</h2>
-			<form onsubmit={handleCreate}>
+			<CreateModal triggerLabel="Create group" pendingLabel="Creating…" onSubmit={handleCreate}>
 				<FormField id="group-name" label="Name" type="text" required bind:value={name} />
 
 				<label for="group-type">Type</label>
@@ -77,9 +66,7 @@
 					type="text"
 					bind:value={description}
 				/>
-
-				<SubmitButton pending={submitting} label="Create group" pendingLabel="Creating…" />
-			</form>
+			</CreateModal>
 		</section>
 	</GmOnly>
 

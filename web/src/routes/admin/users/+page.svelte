@@ -2,16 +2,15 @@
 	import { onMount } from 'svelte';
 	import { createAccount, listAccounts, resetPassword } from '$lib/api/accounts';
 	import { getAccessToken } from '$lib/auth-token';
+	import CreateModal from '$lib/components/CreateModal.svelte';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
-	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import type { Account, Role } from '$lib/types';
 
 	let accounts = $state<Account[]>([]);
 	let loading = $state(true);
 	let email = $state('');
 	let role = $state<Role>('player');
-	let submitting = $state(false);
 	let error = $state('');
 	let issuedCredential = $state<{ email: string; password: string } | null>(null);
 
@@ -29,22 +28,12 @@
 
 	onMount(loadAccounts);
 
-	async function handleCreate(event: SubmitEvent) {
-		event.preventDefault();
-		error = '';
-		submitting = true;
-
-		try {
-			const created = await createAccount(email, role, getAccessToken());
-			issuedCredential = { email: created.email, password: created.temporary_password };
-			email = '';
-			role = 'player';
-			await loadAccounts();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to create account.';
-		} finally {
-			submitting = false;
-		}
+	async function handleCreate() {
+		const created = await createAccount(email, role, getAccessToken());
+		issuedCredential = { email: created.email, password: created.temporary_password };
+		email = '';
+		role = 'player';
+		await loadAccounts();
 	}
 
 	async function handleResetPassword(account: Account) {
@@ -75,8 +64,7 @@
 	{/if}
 
 	<section>
-		<h2>Create account</h2>
-		<form onsubmit={handleCreate}>
+		<CreateModal triggerLabel="Create account" pendingLabel="Creating…" onSubmit={handleCreate}>
 			<FormField
 				id="email"
 				label="Email"
@@ -91,9 +79,7 @@
 				<option value="player">Player</option>
 				<option value="gm">GM</option>
 			</select>
-
-			<SubmitButton pending={submitting} label="Create account" pendingLabel="Creating…" />
-		</form>
+		</CreateModal>
 	</section>
 
 	<section>
