@@ -57,10 +57,10 @@ func toSessionResponse(s *models.Session) sessionResponse {
 // CreateSessionHandler lets a GM create a session. Must be wrapped in
 // RequireAuth.
 func CreateSessionHandler(svc *application.SessionService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createSessionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -72,14 +72,14 @@ func CreateSessionHandler(svc *application.SessionService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toSessionResponse(session))
+		w.WriteJSON(http.StatusCreated, toSessionResponse(session))
 	})
 }
 
 // ListSessionsHandler returns every session with its participants. Must be
 // wrapped in RequireAuth.
 func ListSessionsHandler(svc *application.SessionService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		sessions, err := svc.List(r.Context(), requesterFrom(r))
 		if err != nil {
 			writeServiceError(w, err)
@@ -92,14 +92,14 @@ func ListSessionsHandler(svc *application.SessionService) http.Handler {
 			responses[i] = toSessionResponse(&sessions[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // GetSessionHandler returns one session with its participants. Must be
 // wrapped in RequireAuth.
 func GetSessionHandler(svc *application.SessionService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		session, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -107,17 +107,17 @@ func GetSessionHandler(svc *application.SessionService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toSessionResponse(session))
+		w.WriteJSON(http.StatusOK, toSessionResponse(session))
 	})
 }
 
 // UpdateSessionHandler lets a GM edit a session's name or description. Must
 // be wrapped in RequireAuth.
 func UpdateSessionHandler(svc *application.SessionService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateSessionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -129,17 +129,17 @@ func UpdateSessionHandler(svc *application.SessionService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toSessionResponse(session))
+		w.WriteJSON(http.StatusOK, toSessionResponse(session))
 	})
 }
 
 // AddSessionParticipantHandler lets a GM add a character to a session. Must
 // be wrapped in RequireAuth.
 func AddSessionParticipantHandler(svc *application.SessionService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req addSessionParticipantRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -158,7 +158,7 @@ func AddSessionParticipantHandler(svc *application.SessionService) http.Handler 
 // RemoveSessionParticipantHandler lets a GM remove a character from a
 // session. Must be wrapped in RequireAuth.
 func RemoveSessionParticipantHandler(svc *application.SessionService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		err := svc.RemoveParticipant(r.Context(), requesterFrom(r), r.PathValue("id"), r.PathValue("characterId"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -174,10 +174,10 @@ func RemoveSessionParticipantHandler(svc *application.SessionService) http.Handl
 // every session participant, or for one participant catching up. Must be
 // wrapped in RequireAuth.
 func AdvanceSessionGameDayHandler(svc *application.SessionService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req advanceGameDayRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -189,6 +189,6 @@ func AdvanceSessionGameDayHandler(svc *application.SessionService) http.Handler 
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toSessionResponse(session))
+		w.WriteJSON(http.StatusOK, toSessionResponse(session))
 	})
 }

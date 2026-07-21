@@ -30,10 +30,10 @@ type resetPasswordResponse struct {
 // back a random temporary password for the GM to relay out of band. Must be
 // wrapped in RequireAuth.
 func CreateAccountHandler(svc *application.UserService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createAccountRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -45,7 +45,7 @@ func CreateAccountHandler(svc *application.UserService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, accountResponse{
+		w.WriteJSON(http.StatusCreated, accountResponse{
 			ID: user.ID, Email: user.Email, Role: user.Role, TemporaryPassword: password,
 		})
 	})
@@ -54,7 +54,7 @@ func CreateAccountHandler(svc *application.UserService) http.Handler {
 // ListAccountsHandler lets a GM list every account for the admin panel. Must
 // be wrapped in RequireAuth.
 func ListAccountsHandler(svc *application.UserService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		users, err := svc.ListAccounts(r.Context(), requesterFrom(r))
 		if err != nil {
 			writeServiceError(w, err)
@@ -67,7 +67,7 @@ func ListAccountsHandler(svc *application.UserService) http.Handler {
 			accounts[i] = accountResponse{ID: users[i].ID, Email: users[i].Email, Role: users[i].Role}
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, accounts)
+		w.WriteJSON(http.StatusOK, accounts)
 	})
 }
 
@@ -75,7 +75,7 @@ func ListAccountsHandler(svc *application.UserService) http.Handler {
 // random temporary password, handed back for the GM to relay out of band. No
 // SMTP dependency. Must be wrapped in RequireAuth.
 func ResetPasswordHandler(svc *application.UserService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		password, err := svc.ResetPassword(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -83,6 +83,6 @@ func ResetPasswordHandler(svc *application.UserService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, resetPasswordResponse{TemporaryPassword: password})
+		w.WriteJSON(http.StatusOK, resetPasswordResponse{TemporaryPassword: password})
 	})
 }

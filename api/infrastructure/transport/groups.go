@@ -54,10 +54,10 @@ func toGroupResponse(g *models.Group) groupResponse {
 
 // CreateGroupHandler lets a GM create a group. Must be wrapped in RequireAuth.
 func CreateGroupHandler(svc *application.GroupService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -69,14 +69,14 @@ func CreateGroupHandler(svc *application.GroupService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toGroupResponse(group))
+		w.WriteJSON(http.StatusCreated, toGroupResponse(group))
 	})
 }
 
 // ListGroupsHandler returns every group with its members. Must be wrapped in
 // RequireAuth.
 func ListGroupsHandler(svc *application.GroupService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		groups, err := svc.List(r.Context(), requesterFrom(r))
 		if err != nil {
 			writeServiceError(w, err)
@@ -89,14 +89,14 @@ func ListGroupsHandler(svc *application.GroupService) http.Handler {
 			responses[i] = toGroupResponse(&groups[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // GetGroupHandler returns one group with its members. Must be wrapped in
 // RequireAuth.
 func GetGroupHandler(svc *application.GroupService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		group, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -104,17 +104,17 @@ func GetGroupHandler(svc *application.GroupService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toGroupResponse(group))
+		w.WriteJSON(http.StatusOK, toGroupResponse(group))
 	})
 }
 
 // UpdateGroupHandler lets a GM edit a group's name, type, or description.
 // Must be wrapped in RequireAuth.
 func UpdateGroupHandler(svc *application.GroupService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -126,17 +126,17 @@ func UpdateGroupHandler(svc *application.GroupService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toGroupResponse(group))
+		w.WriteJSON(http.StatusOK, toGroupResponse(group))
 	})
 }
 
 // JoinGroupHandler adds one of the caller's characters (or any character, for
 // a GM) to a group. Must be wrapped in RequireAuth.
 func JoinGroupHandler(svc *application.GroupService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req joinGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -154,7 +154,7 @@ func JoinGroupHandler(svc *application.GroupService) http.Handler {
 // LeaveGroupHandler removes one of the caller's characters (or any character,
 // for a GM) from a group. Must be wrapped in RequireAuth.
 func LeaveGroupHandler(svc *application.GroupService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		err := svc.Leave(r.Context(), requesterFrom(r), r.PathValue("id"), r.PathValue("characterId"))
 		if err != nil {
 			writeServiceError(w, err)

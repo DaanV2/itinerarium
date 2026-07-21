@@ -109,7 +109,7 @@ func toSectionInputs(payloads []documentSectionPayload) []application.DocumentSe
 // ListDocumentsHandler returns the documents in the repository named by {id}
 // that the caller may see. Must be wrapped in RequireAuth.
 func ListDocumentsHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		docs, err := svc.ListByRepository(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -122,7 +122,7 @@ func ListDocumentsHandler(svc *application.DocumentService) http.Handler {
 			responses[i] = toDocumentListItemResponse(&docs[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
@@ -146,7 +146,7 @@ func toFolderTreeResponse(node *application.FolderNode) folderTreeNodeResponse {
 // every level. Folders with no accessible documents never appear. Must be
 // wrapped in RequireAuth.
 func GetDocumentFolderTreeHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		tree, err := svc.FolderTree(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -154,17 +154,17 @@ func GetDocumentFolderTreeHandler(svc *application.DocumentService) http.Handler
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toFolderTreeResponse(tree))
+		w.WriteJSON(http.StatusOK, toFolderTreeResponse(tree))
 	})
 }
 
 // CreateDocumentHandler adds a document to the repository named by {id}.
 // Must be wrapped in RequireAuth.
 func CreateDocumentHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -184,14 +184,14 @@ func CreateDocumentHandler(svc *application.DocumentService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toDocumentResponse(view))
+		w.WriteJSON(http.StatusCreated, toDocumentResponse(view))
 	})
 }
 
 // GetDocumentHandler returns one document with the sections the caller may
 // see. Must be wrapped in RequireAuth.
 func GetDocumentHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		view, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -199,17 +199,17 @@ func GetDocumentHandler(svc *application.DocumentService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toDocumentResponse(view))
+		w.WriteJSON(http.StatusOK, toDocumentResponse(view))
 	})
 }
 
 // UpdateDocumentHandler replaces a document's metadata and the caller's
 // visible sections. Must be wrapped in RequireAuth.
 func UpdateDocumentHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -230,7 +230,7 @@ func UpdateDocumentHandler(svc *application.DocumentService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toDocumentResponse(view))
+		w.WriteJSON(http.StatusOK, toDocumentResponse(view))
 	})
 }
 
@@ -238,10 +238,10 @@ func UpdateDocumentHandler(svc *application.DocumentService) http.Handler {
 // repository into a target group repository at a chosen game day. Must be
 // wrapped in RequireAuth.
 func ShareDocumentHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req shareDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -257,7 +257,7 @@ func ShareDocumentHandler(svc *application.DocumentService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toDocumentResponse(view))
+		w.WriteJSON(http.StatusOK, toDocumentResponse(view))
 	})
 }
 
@@ -283,16 +283,16 @@ func toDocumentShareResponse(s *models.DocumentShare) documentShareResponse {
 // named by {id} with one character on a game day. Must be wrapped in
 // RequireAuth.
 func ShareDocumentWithCharacterHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req shareDocumentWithCharacterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
 
 		if req.CharacterID == "" {
-			xhttp.WriteErrorMsg(w, http.StatusBadRequest, "invalid request body: missing character_id")
+			w.WriteErrorMsg(http.StatusBadRequest, "invalid request body: missing character_id")
 
 			return
 		}
@@ -306,14 +306,14 @@ func ShareDocumentWithCharacterHandler(svc *application.DocumentService) http.Ha
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toDocumentShareResponse(share))
+		w.WriteJSON(http.StatusCreated, toDocumentShareResponse(share))
 	})
 }
 
 // ListDocumentSharesHandler lets a GM list the direct shares on a document.
 // Must be wrapped in RequireAuth.
 func ListDocumentSharesHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		shares, err := svc.ListShares(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -326,14 +326,14 @@ func ListDocumentSharesHandler(svc *application.DocumentService) http.Handler {
 			responses[i] = toDocumentShareResponse(&shares[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // RevokeDocumentShareHandler lets a GM remove one direct share from a
 // document. Must be wrapped in RequireAuth.
 func RevokeDocumentShareHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		err := svc.RevokeShare(r.Context(), requesterFrom(r), r.PathValue("id"), r.PathValue("shareId"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -349,7 +349,7 @@ func RevokeDocumentShareHandler(svc *application.DocumentService) http.Handler {
 // of the caller's characters whose game day has been reached. Must be
 // wrapped in RequireAuth.
 func ListSharedDocumentsHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		views, err := svc.ListSharedWithMe(r.Context(), requesterFrom(r))
 		if err != nil {
 			writeServiceError(w, err)
@@ -362,14 +362,14 @@ func ListSharedDocumentsHandler(svc *application.DocumentService) http.Handler {
 			responses[i] = toDocumentResponse(&views[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // DeleteDocumentHandler removes a document and its sections. GM only; the
 // removal is recorded in the activity log. Must be wrapped in RequireAuth.
 func DeleteDocumentHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		if err := svc.Delete(r.Context(), requesterFrom(r), r.PathValue("id")); err != nil {
 			writeServiceError(w, err)
 

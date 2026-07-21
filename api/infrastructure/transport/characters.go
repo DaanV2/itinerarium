@@ -37,10 +37,10 @@ func toCharacterResponse(c *models.Character) characterResponse {
 // CreateCharacterHandler lets a caller create a character for themselves, or
 // a GM create one for any existing user. Must be wrapped in RequireAuth.
 func CreateCharacterHandler(svc *application.CharacterService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createCharacterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -52,14 +52,14 @@ func CreateCharacterHandler(svc *application.CharacterService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toCharacterResponse(c))
+		w.WriteJSON(http.StatusCreated, toCharacterResponse(c))
 	})
 }
 
 // ListCharactersHandler returns the caller's own characters, or every
 // character for a GM. Must be wrapped in RequireAuth.
 func ListCharactersHandler(svc *application.CharacterService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		characters, err := svc.List(r.Context(), requesterFrom(r))
 		if err != nil {
 			writeServiceError(w, err)
@@ -72,14 +72,14 @@ func ListCharactersHandler(svc *application.CharacterService) http.Handler {
 			responses[i] = toCharacterResponse(&characters[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // GetCharacterHandler returns a single character owned by the caller, or any
 // character for a GM. Must be wrapped in RequireAuth.
 func GetCharacterHandler(svc *application.CharacterService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		c, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -87,17 +87,17 @@ func GetCharacterHandler(svc *application.CharacterService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toCharacterResponse(c))
+		w.WriteJSON(http.StatusOK, toCharacterResponse(c))
 	})
 }
 
 // UpdateCharacterHandler renames a character and/or (GM only) sets its
 // current_game_day. Must be wrapped in RequireAuth.
 func UpdateCharacterHandler(svc *application.CharacterService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateCharacterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -109,6 +109,6 @@ func UpdateCharacterHandler(svc *application.CharacterService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toCharacterResponse(c))
+		w.WriteJSON(http.StatusOK, toCharacterResponse(c))
 	})
 }

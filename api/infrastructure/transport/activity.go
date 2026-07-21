@@ -74,7 +74,7 @@ func toActivityEntryResponses(entries []models.ActivityEntry) []activityEntryRes
 // enforces ownership (owner + GM) and strips the actor from announced entries
 // for non-GM callers. Must be wrapped in RequireAuth.
 func GetCharacterActivityHandler(svc *application.ActivityService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		entries, err := svc.Feed(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -82,14 +82,14 @@ func GetCharacterActivityHandler(svc *application.ActivityService) http.Handler 
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toActivityEntryResponses(entries))
+		w.WriteJSON(http.StatusOK, toActivityEntryResponses(entries))
 	})
 }
 
 // ListActivityHandler returns the full campaign log, announcement targets
 // included. GM only. Must be wrapped in RequireAuth.
 func ListActivityHandler(svc *application.ActivityService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		entries, err := svc.ListAll(r.Context(), requesterFrom(r))
 		if err != nil {
 			writeServiceError(w, err)
@@ -97,7 +97,7 @@ func ListActivityHandler(svc *application.ActivityService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toActivityEntryResponses(entries))
+		w.WriteJSON(http.StatusOK, toActivityEntryResponses(entries))
 	})
 }
 
@@ -115,10 +115,10 @@ type announceActivityRequest struct {
 // AnnounceActivityHandler lets a GM broadcast an announced activity entry to
 // specific characters, groups, or everyone. Must be wrapped in RequireAuth.
 func AnnounceActivityHandler(svc *application.ActivityService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req announceActivityRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -139,6 +139,6 @@ func AnnounceActivityHandler(svc *application.ActivityService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toActivityEntryResponse(entry))
+		w.WriteJSON(http.StatusCreated, toActivityEntryResponse(entry))
 	})
 }

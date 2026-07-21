@@ -96,7 +96,7 @@ type moveInventoryItemRequest struct {
 // ListInventoryHandler returns an inventory's lines. Callers without access
 // to the owner get 404. Must be wrapped in RequireAuth.
 func ListInventoryHandler(svc *application.InventoryService, owner OwnerExtractor) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		items, err := svc.ListInventory(r.Context(), requesterFrom(r), owner(r))
 		if err != nil {
 			writeServiceError(w, err)
@@ -109,17 +109,17 @@ func ListInventoryHandler(svc *application.InventoryService, owner OwnerExtracto
 			responses[i] = toInventoryItemResponse(&items[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // AddInventoryItemHandler appends an item to an inventory. Must be wrapped in
 // RequireAuth.
 func AddInventoryItemHandler(svc *application.InventoryService, owner OwnerExtractor) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req addInventoryItemRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -134,17 +134,17 @@ func AddInventoryItemHandler(svc *application.InventoryService, owner OwnerExtra
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toInventoryItemResponse(item))
+		w.WriteJSON(http.StatusCreated, toInventoryItemResponse(item))
 	})
 }
 
 // UpdateInventoryItemHandler edits one inventory line. Must be wrapped in
 // RequireAuth.
 func UpdateInventoryItemHandler(svc *application.InventoryService, owner OwnerExtractor) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateInventoryItemRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -159,14 +159,14 @@ func UpdateInventoryItemHandler(svc *application.InventoryService, owner OwnerEx
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toInventoryItemResponse(item))
+		w.WriteJSON(http.StatusOK, toInventoryItemResponse(item))
 	})
 }
 
 // RemoveInventoryItemHandler deletes one inventory line. Must be wrapped in
 // RequireAuth.
 func RemoveInventoryItemHandler(svc *application.InventoryService, owner OwnerExtractor) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		err := svc.RemoveItem(r.Context(), requesterFrom(r), owner(r), r.PathValue("itemId"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -182,10 +182,10 @@ func RemoveInventoryItemHandler(svc *application.InventoryService, owner OwnerEx
 // the caller can access (character, group, or location). Must be wrapped in
 // RequireAuth.
 func MoveInventoryItemHandler(svc *application.InventoryService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req moveInventoryItemRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -203,14 +203,14 @@ func MoveInventoryItemHandler(svc *application.InventoryService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toInventoryItemResponse(item))
+		w.WriteJSON(http.StatusOK, toInventoryItemResponse(item))
 	})
 }
 
 // ListMoneyHandler returns an owner's balances. Callers without access get
 // 404. Must be wrapped in RequireAuth.
 func ListMoneyHandler(svc *application.InventoryService, owner OwnerExtractor) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		balances, err := svc.ListMoney(r.Context(), requesterFrom(r), owner(r))
 		if err != nil {
 			writeServiceError(w, err)
@@ -223,17 +223,17 @@ func ListMoneyHandler(svc *application.InventoryService, owner OwnerExtractor) h
 			responses[i] = toMoneyBalanceResponse(&balances[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // SetMoneyHandler sets an owner's balance in one currency to an absolute
 // amount. Must be wrapped in RequireAuth.
 func SetMoneyHandler(svc *application.InventoryService, owner OwnerExtractor) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req setMoneyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -247,6 +247,6 @@ func SetMoneyHandler(svc *application.InventoryService, owner OwnerExtractor) ht
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toMoneyBalanceResponse(balance))
+		w.WriteJSON(http.StatusOK, toMoneyBalanceResponse(balance))
 	})
 }

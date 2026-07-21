@@ -37,26 +37,26 @@ func serviceErrorStatus(kind application.ErrorKind) int {
 // former per-entity write<Entity>ServiceError mappers. Anything that isn't a
 // recognised ServiceError (or is tagged KindInternal) becomes a generic 500
 // with no leaked detail.
-func writeServiceError(w http.ResponseWriter, err error) {
+func writeServiceError(w xhttp.JSONResponseWriter, err error) {
 	var se *application.ServiceError
 	if !errors.As(err, &se) {
-		xhttp.WriteError(w, http.StatusInternalServerError, fmt.Errorf("processing request: %w", err))
+		w.WriteError(http.StatusInternalServerError, fmt.Errorf("processing request: %w", err))
 
 		return
 	}
 
 	status := serviceErrorStatus(se.Kind())
 	if status == http.StatusInternalServerError {
-		xhttp.WriteError(w, http.StatusInternalServerError, fmt.Errorf("processing request: %w", err))
+		w.WriteError(http.StatusInternalServerError, fmt.Errorf("processing request: %w", err))
 
 		return
 	}
 
 	if code := se.Code(); code != "" {
-		xhttp.WriteJSON(w, status, map[string]string{"error": err.Error(), "code": code})
+		w.WriteJSON(status, map[string]string{"error": err.Error(), "code": code})
 
 		return
 	}
 
-	xhttp.WriteError(w, status, fmt.Errorf("processing request: %w", err))
+	w.WriteError(status, fmt.Errorf("processing request: %w", err))
 }

@@ -37,10 +37,10 @@ type importVaultResponse struct {
 // so the client can offer rename-or-continue per file. Must be wrapped in
 // RequireAuth.
 func ImportVaultHandler(svc *application.VaultImportService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req importVaultRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -68,6 +68,6 @@ func ImportVaultHandler(svc *application.VaultImportService) http.Handler {
 			}
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, importVaultResponse{Results: responses})
+		w.WriteJSON(http.StatusOK, importVaultResponse{Results: responses})
 	})
 }

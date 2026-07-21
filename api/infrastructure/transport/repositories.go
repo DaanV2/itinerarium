@@ -24,7 +24,7 @@ func toRepositoryResponse(r *models.Repository) repositoryResponse {
 // character and group repositories for a player. Must be wrapped in
 // RequireAuth.
 func ListRepositoriesHandler(svc *application.RepositoryService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		repos, err := svc.List(r.Context(), requesterFrom(r))
 		if err != nil {
 			writeServiceError(w, err)
@@ -37,14 +37,14 @@ func ListRepositoriesHandler(svc *application.RepositoryService) http.Handler {
 			responses[i] = toRepositoryResponse(&repos[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // GetRepositoryHandler returns one repository, or 404 when the caller may not
 // see it (existence hidden). Must be wrapped in RequireAuth.
 func GetRepositoryHandler(svc *application.RepositoryService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		repo, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -52,6 +52,6 @@ func GetRepositoryHandler(svc *application.RepositoryService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toRepositoryResponse(repo))
+		w.WriteJSON(http.StatusOK, toRepositoryResponse(repo))
 	})
 }

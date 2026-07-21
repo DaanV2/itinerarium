@@ -32,10 +32,10 @@ func toJournalEntryResponse(e *models.JournalEntry) journalEntryResponse {
 // CreateJournalEntryHandler adds a journal entry to the character named by
 // {id}, stamped with its current_game_day. Must be wrapped in RequireAuth.
 func CreateJournalEntryHandler(svc *application.JournalEntryService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createJournalEntryRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -47,14 +47,14 @@ func CreateJournalEntryHandler(svc *application.JournalEntryService) http.Handle
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toJournalEntryResponse(e))
+		w.WriteJSON(http.StatusCreated, toJournalEntryResponse(e))
 	})
 }
 
 // ListJournalEntriesHandler returns every journal entry for the character
 // named by {id}. Must be wrapped in RequireAuth.
 func ListJournalEntriesHandler(svc *application.JournalEntryService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		entries, err := svc.List(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -67,14 +67,14 @@ func ListJournalEntriesHandler(svc *application.JournalEntryService) http.Handle
 			responses[i] = toJournalEntryResponse(&entries[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // GetJournalEntryHandler returns a single journal entry. Must be wrapped in
 // RequireAuth.
 func GetJournalEntryHandler(svc *application.JournalEntryService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		e, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("entryId"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -82,17 +82,17 @@ func GetJournalEntryHandler(svc *application.JournalEntryService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toJournalEntryResponse(e))
+		w.WriteJSON(http.StatusOK, toJournalEntryResponse(e))
 	})
 }
 
 // UpdateJournalEntryHandler edits a journal entry's content. Must be wrapped
 // in RequireAuth.
 func UpdateJournalEntryHandler(svc *application.JournalEntryService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateJournalEntryRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -104,7 +104,7 @@ func UpdateJournalEntryHandler(svc *application.JournalEntryService) http.Handle
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toJournalEntryResponse(e))
+		w.WriteJSON(http.StatusOK, toJournalEntryResponse(e))
 	})
 }
 
@@ -112,7 +112,7 @@ func UpdateJournalEntryHandler(svc *application.JournalEntryService) http.Handle
 // the character's personal repository. The journal entry itself is left
 // untouched. Must be wrapped in RequireAuth.
 func ConvertJournalEntryHandler(svc *application.JournalEntryService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		view, err := svc.Convert(r.Context(), requesterFrom(r), r.PathValue("entryId"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -120,6 +120,6 @@ func ConvertJournalEntryHandler(svc *application.JournalEntryService) http.Handl
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toDocumentResponse(view))
+		w.WriteJSON(http.StatusCreated, toDocumentResponse(view))
 	})
 }

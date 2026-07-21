@@ -92,10 +92,10 @@ type setCharacterLocationRequest struct {
 // CreateLocationHandler lets a GM create a location. Must be wrapped in
 // RequireAuth.
 func CreateLocationHandler(svc *application.LocationService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createLocationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -107,14 +107,14 @@ func CreateLocationHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toLocationResponse(location))
+		w.WriteJSON(http.StatusCreated, toLocationResponse(location))
 	})
 }
 
 // ListLocationsHandler returns every location a caller may see: all of them
 // for a GM, only accessible ones for a player. Must be wrapped in RequireAuth.
 func ListLocationsHandler(svc *application.LocationService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		locations, err := svc.List(r.Context(), requesterFrom(r))
 		if err != nil {
 			writeServiceError(w, err)
@@ -127,14 +127,14 @@ func ListLocationsHandler(svc *application.LocationService) http.Handler {
 			responses[i] = toLocationSummaryResponse(&locations[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // GetLocationHandler returns one location, or 404 when the caller may not see
 // it (existence hidden). Must be wrapped in RequireAuth.
 func GetLocationHandler(svc *application.LocationService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		location, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -142,17 +142,17 @@ func GetLocationHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toLocationResponse(location))
+		w.WriteJSON(http.StatusOK, toLocationResponse(location))
 	})
 }
 
 // UpdateLocationHandler edits a location — anyone who can see it can edit it.
 // Must be wrapped in RequireAuth.
 func UpdateLocationHandler(svc *application.LocationService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateLocationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -176,17 +176,17 @@ func UpdateLocationHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toLocationResponse(location))
+		w.WriteJSON(http.StatusOK, toLocationResponse(location))
 	})
 }
 
 // GrantLocationAccessHandler lets a GM grant a character or group access to a
 // location. Must be wrapped in RequireAuth.
 func GrantLocationAccessHandler(svc *application.LocationService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req grantLocationAccessRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -200,14 +200,14 @@ func GrantLocationAccessHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toLocationAccessResponse(grant))
+		w.WriteJSON(http.StatusCreated, toLocationAccessResponse(grant))
 	})
 }
 
 // ListLocationAccessHandler lets a GM list the grants on a location. Must be
 // wrapped in RequireAuth.
 func ListLocationAccessHandler(svc *application.LocationService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		grants, err := svc.ListAccess(r.Context(), requesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -220,14 +220,14 @@ func ListLocationAccessHandler(svc *application.LocationService) http.Handler {
 			responses[i] = toLocationAccessResponse(&grants[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // RevokeLocationAccessHandler lets a GM remove one grant from a location.
 // Must be wrapped in RequireAuth.
 func RevokeLocationAccessHandler(svc *application.LocationService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		err := svc.RevokeAccess(r.Context(), requesterFrom(r), r.PathValue("id"), r.PathValue("accessId"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -242,10 +242,10 @@ func RevokeLocationAccessHandler(svc *application.LocationService) http.Handler 
 // SetCharacterLocationHandler associates a character with a location. Must be
 // wrapped in RequireAuth.
 func SetCharacterLocationHandler(svc *application.LocationService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req setCharacterLocationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LocationID == "" {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -257,14 +257,14 @@ func SetCharacterLocationHandler(svc *application.LocationService) http.Handler 
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toCharacterResponse(character))
+		w.WriteJSON(http.StatusOK, toCharacterResponse(character))
 	})
 }
 
 // ClearCharacterLocationHandler removes a character's location association.
 // Must be wrapped in RequireAuth.
 func ClearCharacterLocationHandler(svc *application.LocationService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		character, err := svc.AssignCharacter(r.Context(), requesterFrom(r), r.PathValue("id"), nil)
 		if err != nil {
 			writeServiceError(w, err)
@@ -272,6 +272,6 @@ func ClearCharacterLocationHandler(svc *application.LocationService) http.Handle
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, toCharacterResponse(character))
+		w.WriteJSON(http.StatusOK, toCharacterResponse(character))
 	})
 }

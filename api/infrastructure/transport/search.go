@@ -18,7 +18,7 @@ type searchResultResponse struct {
 // are built — inaccessible documents never surface. Must be wrapped in
 // RequireAuth.
 func SearchDocumentsHandler(svc *application.DocumentService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		results, err := svc.Search(r.Context(), requesterFrom(r), r.URL.Query().Get("q"))
 		if err != nil {
 			writeServiceError(w, err)
@@ -35,6 +35,6 @@ func SearchDocumentsHandler(svc *application.DocumentService) http.Handler {
 			}
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }

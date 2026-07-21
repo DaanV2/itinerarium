@@ -47,7 +47,7 @@ func toItemDefinitionResponse(d *models.ItemDefinition) itemDefinitionResponse {
 // ListCurrenciesHandler returns the currency catalog. Must be wrapped in
 // RequireAuth.
 func ListCurrenciesHandler(svc *application.CatalogService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		currencies, err := svc.ListCurrencies(r.Context())
 		if err != nil {
 			writeServiceError(w, err)
@@ -60,17 +60,17 @@ func ListCurrenciesHandler(svc *application.CatalogService) http.Handler {
 			responses[i] = toCurrencyResponse(&currencies[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // CreateCurrencyHandler lets a GM add a currency to the catalog. Must be
 // wrapped in RequireAuth.
 func CreateCurrencyHandler(svc *application.CatalogService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createCurrencyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -82,14 +82,14 @@ func CreateCurrencyHandler(svc *application.CatalogService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toCurrencyResponse(c))
+		w.WriteJSON(http.StatusCreated, toCurrencyResponse(c))
 	})
 }
 
 // ListItemDefinitionsHandler returns the item catalog. Must be wrapped in
 // RequireAuth.
 func ListItemDefinitionsHandler(svc *application.CatalogService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		defs, err := svc.ListItemDefinitions(r.Context())
 		if err != nil {
 			writeServiceError(w, err)
@@ -102,17 +102,17 @@ func ListItemDefinitionsHandler(svc *application.CatalogService) http.Handler {
 			responses[i] = toItemDefinitionResponse(&defs[i])
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
 // CreateItemDefinitionHandler lets a GM add an item to the catalog. Must be
 // wrapped in RequireAuth.
 func CreateItemDefinitionHandler(svc *application.CatalogService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createItemDefinitionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -124,7 +124,7 @@ func CreateItemDefinitionHandler(svc *application.CatalogService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusCreated, toItemDefinitionResponse(d))
+		w.WriteJSON(http.StatusCreated, toItemDefinitionResponse(d))
 	})
 }
 
@@ -160,10 +160,10 @@ type convertCurrencyResponse struct {
 // be wrapped in RequireAuth; any authenticated user may call it, currencies
 // are not secret.
 func ConvertCurrencyHandler(svc *application.CatalogService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req convertCurrencyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -175,7 +175,7 @@ func ConvertCurrencyHandler(svc *application.CatalogService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, convertCurrencyResponse{
+		w.WriteJSON(http.StatusOK, convertCurrencyResponse{
 			Currency:  toCurrencyResponse(&result.Currency),
 			Whole:     result.Whole,
 			Remainder: result.Remainder,
@@ -197,10 +197,10 @@ type simplifiedAmountResponse struct {
 // the fewest-coins breakdown across the whole catalog. Must be wrapped in
 // RequireAuth.
 func SimplifyCurrencyHandler(svc *application.CatalogService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req simplifyCurrencyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -217,6 +217,6 @@ func SimplifyCurrencyHandler(svc *application.CatalogService) http.Handler {
 			responses[i] = simplifiedAmountResponse{Currency: toCurrencyResponse(&breakdown[i].Currency), Amount: breakdown[i].Amount}
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, responses)
+		w.WriteJSON(http.StatusOK, responses)
 	})
 }

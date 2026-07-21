@@ -32,10 +32,10 @@ type loginResponse struct {
 // LoginHandler authenticates an email + password pair and returns a signed
 // access token. No auth required.
 func LoginHandler(svc *application.AuthService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			xhttp.WriteError(w, http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
+			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
 
 			return
 		}
@@ -47,18 +47,18 @@ func LoginHandler(svc *application.AuthService) http.Handler {
 			return
 		}
 
-		xhttp.WriteJSON(w, http.StatusOK, loginResponse{
+		w.WriteJSON(http.StatusOK, loginResponse{
 			ID: user.ID, Email: user.Email, Role: user.Role, AccessToken: token,
 		})
 	})
 }
 
-func writeLoginError(w http.ResponseWriter, err error) {
+func writeLoginError(w xhttp.JSONResponseWriter, err error) {
 	switch {
 	case errors.Is(err, application.ErrInvalidCredentials):
-		xhttp.WriteErrorMsg(w, http.StatusUnauthorized, "invalid credentials")
+		w.WriteErrorMsg(http.StatusUnauthorized, "invalid credentials")
 	default:
-		xhttp.WriteError(w, http.StatusInternalServerError, fmt.Errorf("logging in: %w", err))
+		w.WriteError(http.StatusInternalServerError, fmt.Errorf("logging in: %w", err))
 	}
 }
 
