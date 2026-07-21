@@ -1,11 +1,5 @@
 import type { InventoryItem, InventoryOwnerRef, MoneyBalance } from '$lib/types';
-
-async function errorMessage(res: Response, fallback: string): Promise<string> {
-	const body: unknown = await res.json().catch(() => null);
-	return body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-		? body.error
-		: fallback;
-}
+import { apiFetch, apiSend } from './client';
 
 /** Base API path of the entity owning an inventory/money pouch. */
 function ownerPath(owner: InventoryOwnerRef): string {
@@ -26,15 +20,11 @@ export async function listInventory(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<InventoryItem[]> {
-	const res = await fetchFn(`${ownerPath(owner)}/inventory`, {
-		headers: { Authorization: `Bearer ${token}` }
+	return apiFetch<InventoryItem[]>(`${ownerPath(owner)}/inventory`, {
+		token,
+		errorContext: 'failed to list inventory',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to list inventory: ${res.status}`));
-	}
-
-	return (await res.json()) as InventoryItem[];
 }
 
 /** Fields accepted when adding an inventory line. `name` is required; omit
@@ -53,17 +43,13 @@ export async function addInventoryItem(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<InventoryItem> {
-	const res = await fetchFn(`${ownerPath(owner)}/inventory`, {
+	return apiFetch<InventoryItem>(`${ownerPath(owner)}/inventory`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify(input)
+		token,
+		body: input,
+		errorContext: 'failed to add item',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to add item: ${res.status}`));
-	}
-
-	return (await res.json()) as InventoryItem;
 }
 
 /** Fields that can be changed on an inventory line; omit a field to leave it. */
@@ -81,17 +67,13 @@ export async function updateInventoryItem(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<InventoryItem> {
-	const res = await fetchFn(`${ownerPath(owner)}/inventory/${itemId}`, {
+	return apiFetch<InventoryItem>(`${ownerPath(owner)}/inventory/${itemId}`, {
 		method: 'PATCH',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify(input)
+		token,
+		body: input,
+		errorContext: 'failed to update item',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to update item: ${res.status}`));
-	}
-
-	return (await res.json()) as InventoryItem;
 }
 
 /** Removes an inventory line. */
@@ -101,14 +83,12 @@ export async function removeInventoryItem(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<void> {
-	const res = await fetchFn(`${ownerPath(owner)}/inventory/${itemId}`, {
+	await apiSend(`${ownerPath(owner)}/inventory/${itemId}`, {
 		method: 'DELETE',
-		headers: { Authorization: `Bearer ${token}` }
+		token,
+		errorContext: 'failed to remove item',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to remove item: ${res.status}`));
-	}
 }
 
 /** Moves quantity units of an item into another inventory the caller can
@@ -126,17 +106,13 @@ export async function moveInventoryItem(
 	if (target.kind === 'group') body.to_group_id = target.id;
 	if (target.kind === 'location') body.to_location_id = target.id;
 
-	const res = await fetchFn('/api/inventory/move', {
+	return apiFetch<InventoryItem>('/api/inventory/move', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify(body)
+		token,
+		body,
+		errorContext: 'failed to move item',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to move item: ${res.status}`));
-	}
-
-	return (await res.json()) as InventoryItem;
 }
 
 /** Lists an owner's money balances across all currencies (characters and
@@ -146,15 +122,11 @@ export async function listMoney(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<MoneyBalance[]> {
-	const res = await fetchFn(`${ownerPath(owner)}/money`, {
-		headers: { Authorization: `Bearer ${token}` }
+	return apiFetch<MoneyBalance[]>(`${ownerPath(owner)}/money`, {
+		token,
+		errorContext: 'failed to list money',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to list money: ${res.status}`));
-	}
-
-	return (await res.json()) as MoneyBalance[];
 }
 
 /** Sets an owner's balance in one currency to an absolute amount. */
@@ -165,15 +137,11 @@ export async function setMoney(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<MoneyBalance> {
-	const res = await fetchFn(`${ownerPath(owner)}/money/${currencyId}`, {
+	return apiFetch<MoneyBalance>(`${ownerPath(owner)}/money/${currencyId}`, {
 		method: 'PUT',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify({ amount })
+		token,
+		body: { amount },
+		errorContext: 'failed to set money',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to set money: ${res.status}`));
-	}
-
-	return (await res.json()) as MoneyBalance;
 }

@@ -1,24 +1,16 @@
 import type { Document, DocumentSection, DocumentShare } from '$lib/types';
-
-async function errorBody(res: Response): Promise<{ error?: string; code?: string } | null> {
-	const body: unknown = await res.json().catch(() => null);
-	return body && typeof body === 'object' ? (body as { error?: string; code?: string }) : null;
-}
-
-async function errorMessage(res: Response, fallback: string): Promise<string> {
-	const body = await errorBody(res);
-	return body && typeof body.error === 'string' ? body.error : fallback;
-}
+import { ApiError, apiFetch } from './client';
 
 /** Thrown by {@link updateDocument} for the two editor warnings, which the
  * API reports as 409 with a machine-readable `code` (docs/architecture.md).
  * Callers branch on `code` to offer "rename or continue" / "overwrite
- * anyway" instead of treating this as a generic failure. */
-export class DocumentConflictError extends Error {
+ * anyway" instead of treating this as a generic failure. Extends
+ * {@link ApiError} so it still carries the HTTP `status`. */
+export class DocumentConflictError extends ApiError {
 	code: 'path_collision' | 'concurrent_edit';
 
 	constructor(code: 'path_collision' | 'concurrent_edit', message: string) {
-		super(message);
+		super(message, 409, code);
 		this.name = 'DocumentConflictError';
 		this.code = code;
 	}
@@ -43,15 +35,11 @@ export async function getDocument(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<Document> {
-	const res = await fetchFn(`/api/documents/${id}`, {
-		headers: { Authorization: `Bearer ${token}` }
+	return apiFetch<Document>(`/api/documents/${id}`, {
+		token,
+		errorContext: 'failed to load document',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to load document: ${res.status}`));
-	}
-
-	return (await res.json()) as Document;
 }
 
 /** Saves a document's metadata and sections. Echoes back the version the
@@ -65,32 +53,33 @@ export async function updateDocument(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<Document> {
-	const res = await fetchFn(`/api/documents/${id}`, {
-		method: 'PATCH',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify({
-			path: input.path,
-			title: input.title,
-			tags: input.tags,
-			shared_on_game_day: input.sharedOnGameDay,
-			sections: input.sections,
-			expected_version: input.expectedVersion,
-			force: input.force ?? false,
-			allow_collision: input.allowCollision ?? false
-		})
-	});
-
-	if (!res.ok) {
-		if (res.status === 409) {
-			const body = await errorBody(res);
-			if (body?.code === 'path_collision' || body?.code === 'concurrent_edit') {
-				throw new DocumentConflictError(body.code, body.error ?? 'conflict saving document');
-			}
+	try {
+		return await apiFetch<Document>(`/api/documents/${id}`, {
+			method: 'PATCH',
+			token,
+			body: {
+				path: input.path,
+				title: input.title,
+				tags: input.tags,
+				shared_on_game_day: input.sharedOnGameDay,
+				sections: input.sections,
+				expected_version: input.expectedVersion,
+				force: input.force ?? false,
+				allow_collision: input.allowCollision ?? false
+			},
+			errorContext: 'failed to update document',
+			fetchFn
+		});
+	} catch (err) {
+		if (
+			err instanceof ApiError &&
+			err.status === 409 &&
+			(err.code === 'path_collision' || err.code === 'concurrent_edit')
+		) {
+			throw new DocumentConflictError(err.code, err.message);
 		}
-		throw new Error(await errorMessage(res, `failed to update document: ${res.status}`));
+		throw err;
 	}
-
-	return (await res.json()) as Document;
 }
 
 /** Lists the direct character shares on a document. GM only. */
@@ -99,13 +88,9 @@ export async function listDocumentShares(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<DocumentShare[]> {
-	const res = await fetchFn(`/api/documents/${id}/shares`, {
-		headers: { Authorization: `Bearer ${token}` }
+	return apiFetch<DocumentShare[]>(`/api/documents/${id}/shares`, {
+		token,
+		errorContext: 'failed to list document shares',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to list document shares: ${res.status}`));
-	}
-
-	return (await res.json()) as DocumentShare[];
 }

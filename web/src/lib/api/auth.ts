@@ -1,4 +1,5 @@
 import type { LoginResult } from '$lib/types';
+import { apiFetch } from './client';
 
 /** Logs in with an email + password pair, returning the account and a signed access token. */
 export async function login(
@@ -6,20 +7,10 @@ export async function login(
 	password: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<LoginResult> {
-	const res = await fetchFn('/api/login', {
+	return apiFetch<LoginResult>('/api/login', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ email, password })
+		body: { email, password },
+		errorContext: 'login failed',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		const body: unknown = await res.json().catch(() => null);
-		const message =
-			body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-				? body.error
-				: `login failed: ${res.status}`;
-		throw new Error(message);
-	}
-
-	return (await res.json()) as LoginResult;
 }

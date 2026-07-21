@@ -13,16 +13,16 @@
 	import { listGroups } from '$lib/api/groups';
 	import { getAccessToken, isGM } from '$lib/auth-token';
 	import { describeAudience } from '$lib/document-reveal';
+	import {
+		buildDocumentUpdate,
+		editFieldsFromDocument,
+		emptyDocumentEditFields,
+		newDocumentSection,
+		sharedCharacterNames as resolveSharedNames
+	} from '$lib/document-editor';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import ConcurrentEditDialog from '$lib/components/ConcurrentEditDialog.svelte';
-	import type {
-		Character,
-		Document,
-		DocumentSection,
-		DocumentShare,
-		Group,
-		Repository
-	} from '$lib/types';
+	import type { Character, Document, DocumentShare, Group, Repository } from '$lib/types';
 
 	const documentId = page.params.id ?? '';
 	const gm = isGM();
@@ -37,18 +37,11 @@
 	let saving = $state(false);
 
 	let editing = $state(false);
-	let editTitle = $state('');
-	let editPath = $state('');
-	let editTags = $state('');
-	let editSharedOnGameDay = $state(0);
-	let editSections = $state<DocumentSection[]>([]);
-	let editVersion = $state(0);
+	let form = $state(emptyDocumentEditFields());
 	let showConflict = $state(false);
 
 	let audience = $derived(repository ? describeAudience(repository, characters, groups) : '');
-	let sharedCharacterNames = $derived(
-		shares.map((s) => characters.find((c) => c.id === s.character_id)?.name ?? 'a character')
-	);
+	let sharedCharacterNames = $derived(resolveSharedNames(shares, characters));
 
 	async function loadAll() {
 		loading = true;
@@ -73,12 +66,7 @@
 
 	function startEditing() {
 		if (!doc) return;
-		editTitle = doc.title;
-		editPath = doc.path;
-		editTags = doc.tags.join(', ');
-		editSharedOnGameDay = doc.shared_on_game_day;
-		editSections = doc.sections.map((s) => ({ ...s }));
-		editVersion = doc.version;
+		form = editFieldsFromDocument(doc);
 		editing = true;
 	}
 
@@ -87,11 +75,11 @@
 	}
 
 	function addSection() {
-		editSections = [...editSections, { id: '', content: '', gm_only: false }];
+		form.sections = [...form.sections, newDocumentSection()];
 	}
 
 	function removeSection(index: number) {
-		editSections = editSections.filter((_, i) => i !== index);
+		form.sections = form.sections.filter((_, i) => i !== index);
 	}
 
 	async function save(force: boolean) {
@@ -99,22 +87,7 @@
 		saving = true;
 		try {
 			const token = getAccessToken();
-			doc = await updateDocument(
-				documentId,
-				{
-					title: editTitle,
-					path: editPath,
-					tags: editTags
-						.split(',')
-						.map((t) => t.trim())
-						.filter(Boolean),
-					sharedOnGameDay: editSharedOnGameDay,
-					sections: editSections,
-					expectedVersion: editVersion,
-					force
-				},
-				token
-			);
+			doc = await updateDocument(documentId, buildDocumentUpdate(form, force), token);
 			editing = false;
 			showConflict = false;
 			error = '';
@@ -149,33 +122,33 @@
 	{:else if editing}
 		<label>
 			Title
-			<input type="text" bind:value={editTitle} />
+			<input type="text" bind:value={form.title} />
 		</label>
 		<label>
 			Path
-			<input type="text" bind:value={editPath} />
+			<input type="text" bind:value={form.path} />
 		</label>
 		<label>
 			Tags (comma-separated)
-			<input type="text" bind:value={editTags} />
+			<input type="text" bind:value={form.tags} />
 		</label>
 		{#if gm}
 			<label>
 				Revealed at game day
-				<input type="number" min="0" bind:value={editSharedOnGameDay} />
+				<input type="number" min="0" bind:value={form.sharedOnGameDay} />
 			</label>
 		{/if}
 
 		<div class="sections">
-			{#each editSections as section, i (section.id || `new-${i}`)}
+			{#each form.sections as section, i (section.id || `new-${i}`)}
 				<section class="doc-section" class:gm-only={section.gm_only}>
 					<p class="section-banner">{section.gm_only ? 'GM only' : 'Visible to players'}</p>
-					<textarea class="section-content" bind:value={editSections[i].content} rows="4"
+					<textarea class="section-content" bind:value={form.sections[i].content} rows="4"
 					></textarea>
 					<div class="section-actions">
 						{#if gm}
 							<label class="gm-only-toggle">
-								<input type="checkbox" bind:checked={editSections[i].gm_only} />
+								<input type="checkbox" bind:checked={form.sections[i].gm_only} />
 								GM only
 							</label>
 						{/if}

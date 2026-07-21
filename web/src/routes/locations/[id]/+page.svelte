@@ -12,19 +12,19 @@
 	import { listCharacters } from '$lib/api/characters';
 	import { listGroups } from '$lib/api/groups';
 	import { getAccessToken, isGM } from '$lib/auth-token';
+	import {
+		buildLocationUpdate,
+		editFieldsFromLocation,
+		emptyLocationEditFields,
+		grantLabel,
+		newLocationSection
+	} from '$lib/location-editor';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
 	import GmOnly from '$lib/components/GmOnly.svelte';
 	import InventoryPanel from '$lib/components/InventoryPanel.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
-	import type {
-		Character,
-		Group,
-		InventoryOwnerRef,
-		Location,
-		LocationAccess,
-		LocationSection
-	} from '$lib/types';
+	import type { Character, Group, InventoryOwnerRef, Location, LocationAccess } from '$lib/types';
 
 	const locationId = page.params.id ?? '';
 	const owner: InventoryOwnerRef = { kind: 'location', id: locationId };
@@ -37,10 +37,7 @@
 	// Edit form — anyone who can see the location can edit it. The
 	// description follows the same game-day/GM-only rules as a document.
 	let editing = $state(false);
-	let editName = $state('');
-	let editPlane = $state('');
-	let editSharedOnGameDay = $state(0);
-	let editSections = $state<LocationSection[]>([]);
+	let form = $state(emptyLocationEditFields());
 	let saving = $state(false);
 
 	// GM-only access management.
@@ -50,15 +47,6 @@
 	let grantKind = $state<'character' | 'group'>('character');
 	let grantTargetId = $state('');
 	let granting = $state(false);
-
-	function grantLabel(grant: LocationAccess): string {
-		if (grant.character_id) {
-			const character = allCharacters.find((c) => c.id === grant.character_id);
-			return `Character: ${character?.name ?? grant.character_id}`;
-		}
-		const group = allGroups.find((g) => g.id === grant.group_id);
-		return `Group: ${group?.name ?? grant.group_id}`;
-	}
 
 	async function loadAll() {
 		loading = true;
@@ -85,10 +73,7 @@
 
 	function startEditing() {
 		if (!location) return;
-		editName = location.name;
-		editPlane = location.plane ?? '';
-		editSharedOnGameDay = location.shared_on_game_day;
-		editSections = location.sections.map((s) => ({ ...s }));
+		form = editFieldsFromLocation(location);
 		editing = true;
 	}
 
@@ -97,11 +82,11 @@
 	}
 
 	function addSection() {
-		editSections = [...editSections, { id: '', content: '', gm_only: false }];
+		form.sections = [...form.sections, newLocationSection()];
 	}
 
 	function removeSection(index: number) {
-		editSections = editSections.filter((_, i) => i !== index);
+		form.sections = form.sections.filter((_, i) => i !== index);
 	}
 
 	async function handleSave(event: SubmitEvent) {
@@ -109,16 +94,7 @@
 		error = '';
 		saving = true;
 		try {
-			location = await updateLocation(
-				locationId,
-				{
-					name: editName,
-					plane: editPlane,
-					shared_on_game_day: editSharedOnGameDay,
-					sections: editSections
-				},
-				getAccessToken()
-			);
+			location = await updateLocation(locationId, buildLocationUpdate(form), getAccessToken());
 			editing = false;
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to save location.';
@@ -170,25 +146,25 @@
 		<h1>{location.name}</h1>
 
 		<form onsubmit={handleSave}>
-			<FormField id="edit-name" label="Name" type="text" required bind:value={editName} />
-			<FormField id="edit-plane" label="Plane" type="text" bind:value={editPlane} />
+			<FormField id="edit-name" label="Name" type="text" required bind:value={form.name} />
+			<FormField id="edit-plane" label="Plane" type="text" bind:value={form.plane} />
 			{#if gm}
 				<label>
 					Description revealed at game day
-					<input type="number" min="0" bind:value={editSharedOnGameDay} />
+					<input type="number" min="0" bind:value={form.sharedOnGameDay} />
 				</label>
 			{/if}
 
 			<div class="sections">
-				{#each editSections as section, i (section.id || `new-${i}`)}
+				{#each form.sections as section, i (section.id || `new-${i}`)}
 					<section class="loc-section" class:gm-only={section.gm_only}>
 						<p class="section-banner">{section.gm_only ? 'GM only' : 'Visible to players'}</p>
-						<textarea class="section-content" bind:value={editSections[i].content} rows="4"
+						<textarea class="section-content" bind:value={form.sections[i].content} rows="4"
 						></textarea>
 						<div class="section-actions">
 							{#if gm}
 								<label class="gm-only-toggle">
-									<input type="checkbox" bind:checked={editSections[i].gm_only} />
+									<input type="checkbox" bind:checked={form.sections[i].gm_only} />
 									GM only
 								</label>
 							{/if}
@@ -235,7 +211,7 @@
 					<ul>
 						{#each grants as grant (grant.id)}
 							<li>
-								{grantLabel(grant)}
+								{grantLabel(grant, allCharacters, allGroups)}
 								<button type="button" onclick={() => handleRevoke(grant.id)}>Revoke</button>
 							</li>
 						{/each}

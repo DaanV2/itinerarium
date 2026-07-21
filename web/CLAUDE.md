@@ -96,5 +96,5 @@ This is the same client-side check called out above: styling, not access control
 
 ## Testing
 
-- Unit tests: `*.spec.ts` / `*.test.ts` next to the code, run by Vitest in node environment (see `src/lib/vitest-examples/`).
+- Unit tests: `*.spec.ts` / `*.test.ts` next to the code, run by Vitest in node environment (see `src/lib/inventory-view.spec.ts` or `src/lib/api/client.spec.ts`).
 - Keep logic (formatting, game-day math, API response mapping) in plain `.ts` files under `lib/` so it's testable without mounting components.

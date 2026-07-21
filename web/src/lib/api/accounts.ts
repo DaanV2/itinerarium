@@ -1,26 +1,16 @@
 import type { Account, CreatedAccount, ResetPasswordResult, Role } from '$lib/types';
-
-async function errorMessage(res: Response, fallback: string): Promise<string> {
-	const body: unknown = await res.json().catch(() => null);
-	return body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-		? body.error
-		: fallback;
-}
+import { apiFetch } from './client';
 
 /** Lists every account. GM-only. */
 export async function listAccounts(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<Account[]> {
-	const res = await fetchFn('/api/admin/users', {
-		headers: { Authorization: `Bearer ${token}` }
+	return apiFetch<Account[]>('/api/admin/users', {
+		token,
+		errorContext: 'failed to list accounts',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to list accounts: ${res.status}`));
-	}
-
-	return (await res.json()) as Account[];
 }
 
 /** Creates a new account with a random temporary password. GM-only. */
@@ -30,17 +20,13 @@ export async function createAccount(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<CreatedAccount> {
-	const res = await fetchFn('/api/admin/users', {
+	return apiFetch<CreatedAccount>('/api/admin/users', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify({ email, role })
+		token,
+		body: { email, role },
+		errorContext: 'failed to create account',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to create account: ${res.status}`));
-	}
-
-	return (await res.json()) as CreatedAccount;
 }
 
 /** Resets an account's password to a new random temporary password. GM-only, no SMTP. */
@@ -49,14 +35,10 @@ export async function resetPassword(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<ResetPasswordResult> {
-	const res = await fetchFn(`/api/admin/users/${userId}/reset-password`, {
+	return apiFetch<ResetPasswordResult>(`/api/admin/users/${userId}/reset-password`, {
 		method: 'POST',
-		headers: { Authorization: `Bearer ${token}` }
+		token,
+		errorContext: 'failed to reset password',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to reset password: ${res.status}`));
-	}
-
-	return (await res.json()) as ResetPasswordResult;
 }
