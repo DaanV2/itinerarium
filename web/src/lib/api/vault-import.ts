@@ -1,11 +1,5 @@
 import type { VaultImportFile, VaultImportFileResult } from '$lib/types';
-
-async function errorMessage(res: Response, fallback: string): Promise<string> {
-	const body: unknown = await res.json().catch(() => null);
-	return body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-		? body.error
-		: fallback;
-}
+import { apiFetch } from './client';
 
 /** Imports a batch of Obsidian vault files as documents. Files whose
  * frontmatter names a `repository` go there; the rest go to `repositoryId`.
@@ -18,16 +12,12 @@ export async function importVault(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<VaultImportFileResult[]> {
-	const res = await fetchFn('/api/import/obsidian', {
+	const body = await apiFetch<{ results: VaultImportFileResult[] }>('/api/import/obsidian', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify({ repository_id: repositoryId, files })
+		token,
+		body: { repository_id: repositoryId, files },
+		errorContext: 'import failed',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `import failed: ${res.status}`));
-	}
-
-	const body = (await res.json()) as { results: VaultImportFileResult[] };
 	return body.results;
 }

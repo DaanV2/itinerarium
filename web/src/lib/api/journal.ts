@@ -1,11 +1,5 @@
 import type { Document, JournalEntry } from '$lib/types';
-
-async function errorMessage(res: Response, fallback: string): Promise<string> {
-	const body: unknown = await res.json().catch(() => null);
-	return body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-		? body.error
-		: fallback;
-}
+import { apiFetch } from './client';
 
 /** Lists a character's journal entries. The API returns 404 for a character
  * the caller may not see — surface that as not-found, don't special-case it. */
@@ -14,15 +8,11 @@ export async function listJournalEntries(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<JournalEntry[]> {
-	const res = await fetchFn(`/api/characters/${characterId}/journal`, {
-		headers: { Authorization: `Bearer ${token}` }
+	return apiFetch<JournalEntry[]>(`/api/characters/${characterId}/journal`, {
+		token,
+		errorContext: 'failed to list journal entries',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to list journal entries: ${res.status}`));
-	}
-
-	return (await res.json()) as JournalEntry[];
 }
 
 /** Adds a journal entry to a character, stamped with its current game day. */
@@ -32,17 +22,13 @@ export async function createJournalEntry(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<JournalEntry> {
-	const res = await fetchFn(`/api/characters/${characterId}/journal`, {
+	return apiFetch<JournalEntry>(`/api/characters/${characterId}/journal`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify({ content })
+		token,
+		body: { content },
+		errorContext: 'failed to create journal entry',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to create journal entry: ${res.status}`));
-	}
-
-	return (await res.json()) as JournalEntry;
 }
 
 /** Edits a journal entry's content. The game day it was stamped with never
@@ -54,17 +40,13 @@ export async function updateJournalEntry(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<JournalEntry> {
-	const res = await fetchFn(`/api/characters/${characterId}/journal/${entryId}`, {
+	return apiFetch<JournalEntry>(`/api/characters/${characterId}/journal/${entryId}`, {
 		method: 'PATCH',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify({ content })
+		token,
+		body: { content },
+		errorContext: 'failed to update journal entry',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to update journal entry: ${res.status}`));
-	}
-
-	return (await res.json()) as JournalEntry;
 }
 
 /** Copies a journal entry into a new document in the character's personal
@@ -76,14 +58,10 @@ export async function convertJournalEntry(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<Document> {
-	const res = await fetchFn(`/api/characters/${characterId}/journal/${entryId}/convert`, {
+	return apiFetch<Document>(`/api/characters/${characterId}/journal/${entryId}/convert`, {
 		method: 'POST',
-		headers: { Authorization: `Bearer ${token}` }
+		token,
+		errorContext: 'failed to convert journal entry',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to convert journal entry: ${res.status}`));
-	}
-
-	return (await res.json()) as Document;
 }

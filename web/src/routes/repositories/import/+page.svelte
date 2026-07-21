@@ -5,20 +5,18 @@
 	import { listGroups } from '$lib/api/groups';
 	import { importVault } from '$lib/api/vault-import';
 	import { getAccessToken } from '$lib/auth-token';
+	import {
+		defaultRepositoryId,
+		repositoryLabel,
+		summarizeRows,
+		toResultRows,
+		vaultRelativePath,
+		type FileRow,
+		type PendingFile
+	} from '$lib/vault-import-view';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
-	import type { Character, Group, Repository, VaultImportFileResult } from '$lib/types';
+	import type { Character, Group, Repository } from '$lib/types';
 	import { onMount } from 'svelte';
-
-	interface PendingFile {
-		path: string;
-		markdown: string;
-	}
-
-	interface FileRow extends VaultImportFileResult {
-		/** Rename target offered on a collision; starts as the original path. */
-		newPath: string;
-		busy: boolean;
-	}
 
 	let repositories = $state<Repository[]>([]);
 	let characters = $state<Character[]>([]);
@@ -30,23 +28,6 @@
 	let importing = $state(false);
 	let error = $state('');
 
-	function repositoryLabel(repo: Repository): string {
-		switch (repo.type) {
-			case 'general':
-				return 'General';
-			case 'template':
-				return 'Templates';
-			case 'group': {
-				const group = groups.find((g) => g.id === repo.group_id);
-				return group ? `${group.name} (group)` : 'Group repository';
-			}
-			case 'character': {
-				const character = characters.find((c) => c.id === repo.character_id);
-				return character ? `${character.name} (character)` : 'Character repository';
-			}
-		}
-	}
-
 	async function loadAll() {
 		loading = true;
 		const token = getAccessToken();
@@ -56,8 +37,7 @@
 				listCharacters(token),
 				listGroups(token)
 			]);
-			repositoryId =
-				repositories.find((r) => r.type === 'general')?.id ?? repositories[0]?.id ?? '';
+			repositoryId = defaultRepositoryId(repositories);
 			error = '';
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load repositories.';
@@ -80,9 +60,7 @@
 		const files: PendingFile[] = [];
 		for (const file of picked) {
 			const relative = (file as File & { webkitRelativePath?: string }).webkitRelativePath;
-			const path =
-				relative && relative.includes('/') ? relative.split('/').slice(1).join('/') : file.name;
-			files.push({ path, markdown: await file.text() });
+			files.push({ path: vaultRelativePath(file.name, relative), markdown: await file.text() });
 		}
 
 		pending = files;
@@ -106,7 +84,7 @@
 				pending.map((f) => ({ path: f.path, markdown: f.markdown })),
 				getAccessToken()
 			);
-			rows = results.map((r) => ({ ...r, newPath: r.path.replace(/\.md$/i, ''), busy: false }));
+			rows = toResultRows(results);
 			error = '';
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Import failed.';
@@ -140,9 +118,7 @@
 		}
 	}
 
-	let collisions = $derived(rows.filter((r) => r.status === 'collision').length);
-	let imported = $derived(rows.filter((r) => r.status === 'imported').length);
-	let failed = $derived(rows.filter((r) => r.status === 'error').length);
+	let summary = $derived(summarizeRows(rows));
 </script>
 
 <main class="main-page">
@@ -165,7 +141,7 @@
 				Default repository
 				<select bind:value={repositoryId}>
 					{#each repositories as repo (repo.id)}
-						<option value={repo.id}>{repositoryLabel(repo)}</option>
+						<option value={repo.id}>{repositoryLabel(repo, characters, groups)}</option>
 					{/each}
 				</select>
 			</label>
@@ -196,9 +172,9 @@
 
 		{#if rows.length > 0}
 			<p class="summary">
-				{imported} imported{collisions > 0 ? `, ${collisions} collisions` : ''}{failed > 0
-					? `, ${failed} failed`
-					: ''}
+				{summary.imported} imported{summary.collisions > 0
+					? `, ${summary.collisions} collisions`
+					: ''}{summary.failed > 0 ? `, ${summary.failed} failed` : ''}
 			</p>
 
 			<ul class="result-list">

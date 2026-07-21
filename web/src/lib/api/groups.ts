@@ -1,23 +1,13 @@
 import type { Group, GroupType } from '$lib/types';
-
-async function errorMessage(res: Response, fallback: string): Promise<string> {
-	const body: unknown = await res.json().catch(() => null);
-	return body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
-		? body.error
-		: fallback;
-}
+import { apiFetch, apiSend } from './client';
 
 /** Lists every group with its members. Visible to any authenticated user. */
 export async function listGroups(token: string, fetchFn: typeof fetch = fetch): Promise<Group[]> {
-	const res = await fetchFn('/api/groups', {
-		headers: { Authorization: `Bearer ${token}` }
+	return apiFetch<Group[]>('/api/groups', {
+		token,
+		errorContext: 'failed to list groups',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to list groups: ${res.status}`));
-	}
-
-	return (await res.json()) as Group[];
 }
 
 /** Fetches one group with its members. */
@@ -26,15 +16,11 @@ export async function getGroup(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<Group> {
-	const res = await fetchFn(`/api/groups/${id}`, {
-		headers: { Authorization: `Bearer ${token}` }
+	return apiFetch<Group>(`/api/groups/${id}`, {
+		token,
+		errorContext: 'failed to load group',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to load group: ${res.status}`));
-	}
-
-	return (await res.json()) as Group;
 }
 
 /** Creates a group. GM only. */
@@ -43,17 +29,13 @@ export async function createGroup(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<Group> {
-	const res = await fetchFn('/api/groups', {
+	return apiFetch<Group>('/api/groups', {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify(input)
+		token,
+		body: input,
+		errorContext: 'failed to create group',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to create group: ${res.status}`));
-	}
-
-	return (await res.json()) as Group;
 }
 
 /** Joins one of the caller's characters (or any character, for a GM) to a
@@ -64,15 +46,13 @@ export async function joinGroup(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<void> {
-	const res = await fetchFn(`/api/groups/${groupId}/members`, {
+	await apiSend(`/api/groups/${groupId}/members`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-		body: JSON.stringify({ character_id: characterId })
+		token,
+		body: { character_id: characterId },
+		errorContext: 'failed to join group',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to join group: ${res.status}`));
-	}
 }
 
 /** Removes a character from a group under the same ownership rule as join. */
@@ -82,12 +62,10 @@ export async function leaveGroup(
 	token: string,
 	fetchFn: typeof fetch = fetch
 ): Promise<void> {
-	const res = await fetchFn(`/api/groups/${groupId}/members/${characterId}`, {
+	await apiSend(`/api/groups/${groupId}/members/${characterId}`, {
 		method: 'DELETE',
-		headers: { Authorization: `Bearer ${token}` }
+		token,
+		errorContext: 'failed to leave group',
+		fetchFn
 	});
-
-	if (!res.ok) {
-		throw new Error(await errorMessage(res, `failed to leave group: ${res.status}`));
-	}
 }
