@@ -9,7 +9,8 @@ import (
 // CreateRouter assembles the HTTP router. Public routes (health, setup, login)
 // sit at the top; every authenticated resource is its own subrouter, mounted
 // under an "authenticated" subrouter that applies RequireAuth once and is
-// itself mounted under /api.
+// itself mounted under /api. Security middleware (headers + body-size cap)
+// comes from the security config set (M10).
 func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 	authenticated := transport.NewRouter(
 		transport.WithMiddleware(transport.RequireAuth(services.Auth)),
@@ -30,6 +31,8 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 
 	opts := []transport.Option{
 		transport.WithMiddleware(transport.Logging(logger)),
+		transport.WithMiddleware(transport.SecurityHeaders(CSPFlag.Value(), HSTSFlag.Value())),
+		transport.WithMiddleware(transport.MaxBytes(int64(BodyLimitFlag.Value()))),
 		transport.WithHandle("GET /api/health", transport.HealthHandler()),
 		transport.WithHandle("GET /api/setup", transport.SetupStatusHandler(services.Setup)),
 		transport.WithHandle("POST /api/setup", transport.CreateInitialGMHandler(services.Setup)),

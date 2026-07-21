@@ -62,11 +62,11 @@ The API layer and route pages carry the mirror image of the backend's duplicatio
 
 Itinerarium is self-hosted and may be exposed to the internet. The invariants are enforced; the surface around them is not yet hardened. This is the one milestone that intentionally changes observable behavior.
 
-- [ ] **Login/reset rate limiting.** Add per-account and per-IP throttling + backoff on `/api/login` and the GM password-reset path; no unauthenticated endpoint should allow unbounded attempts.
-- [ ] **Request body size limits.** Wrap request decoding in `http.MaxBytesReader` (import and document/section payloads are the largest) so a single request can't exhaust memory.
-- [ ] **Security-header middleware.** Add `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, a minimal CSP appropriate for the embedded SPA, and HSTS when served behind TLS — alongside the existing `Logging` middleware, which is currently the only one.
-- [ ] **Fresh invariant review.** Re-run the negative-test checklist against the refactored M7 gate; add tests for any path the consolidation touched. Consider running the repo's `/security-review` over the diff of this phase.
-- [ ] **Repo-hygiene for a security-shaped product.** Add a **`SECURITY.md`** with a vulnerability-disclosure path — the whole product is a server-side permission system, so an invited, documented report channel matters more here than for a typical tool. Add an **`.editorconfig`** (LF line endings, matching the committed style) to blunt the recurring CRLF/`autocrlf` friction the `CLAUDE.md` files warn about. `CONTRIBUTING.md` / `CODEOWNERS` are optional — `docs/development.md` + `docs/onboarding.md` already cover the contributor story.
+- [ ] **Login/reset rate limiting.** Add per-account and per-IP throttling + backoff on `/api/login` and the GM password-reset path; no unauthenticated endpoint should allow unbounded attempts. _(Deferred — the reverse proxy in front of a self-hosted deployment is the intended place for this; revisit if an in-process limiter is wanted.)_
+- [x] **Request body size limits.** `transport.MaxBytes` middleware wraps every request body in `http.MaxBytesReader` (default 10 MiB, `security.body-limit`) so a single request can't exhaust memory.
+- [x] **Security-header middleware.** `transport.SecurityHeaders` sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a minimal CSP for the embedded SPA (`security.csp`), and HSTS when served behind TLS (`security.hsts`, or any TLS request) — alongside the existing `Logging` middleware.
+- [x] **Fresh invariant review.** The full negative-test suite (the checklist in `development.md`) still passes against the M7 gate; added tests cover the new middleware (`transport/security_test.go`). The `security.*` surface is opt-out-able but on by default.
+- [x] **Repo-hygiene for a security-shaped product.** Added [`SECURITY.md`](../SECURITY.md) with a GitHub private-advisory disclosure path and operator hardening notes, and an [`.editorconfig`](../.editorconfig) (LF, tabs for Go/frontend, 2-space YAML) to blunt the CRLF/`autocrlf` friction. `CONTRIBUTING.md` / `CODEOWNERS` left out — `docs/development.md` + `docs/onboarding.md` cover the contributor story.
 
 ### M11 — Schema & contract durability
 

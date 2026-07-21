@@ -46,3 +46,17 @@ log:
   # level: "info"
   # Log format: text, json, logfmt (flag: --log.format, env: LOG_FORMAT)
   # format: "text"
+
+security:
+  # Maximum accepted request body size in bytes; 0 disables the cap. Default
+  # 10 MiB. Raise only if large Obsidian imports need it.
+  # (flag: --security.body-limit, env: SECURITY_BODY_LIMIT)
+  # body-limit: 10485760
+
+  # Content-Security-Policy header value. Empty uses a built-in policy suited to
+  # the embedded SPA (flag: --security.csp, env: SECURITY_CSP)
+  # csp: ""
+
+  # Send Strict-Transport-Security on every response. Enable when the instance
+  # is served behind TLS (flag: --security.hsts, env: SECURITY_HSTS)
+  # hsts: false

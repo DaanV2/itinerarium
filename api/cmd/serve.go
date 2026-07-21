@@ -28,6 +28,7 @@ func init() {
 	persistence.DatabaseConfigSet.AddToSet(fs)
 	authentication.AuthConfigSet.AddToSet(fs)
 	components.CatalogConfigSet.AddToSet(fs)
+	components.SecurityConfigSet.AddToSet(fs)
 }
 
 func runServe(cmd *cobra.Command, _ []string) error {

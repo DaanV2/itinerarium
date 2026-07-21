@@ -1,0 +1,35 @@
+# EditorConfig — https://editorconfig.org
+# Normalises line endings and indentation to the committed style, blunting the
+# CRLF/autocrlf friction that the CLAUDE.md files warn about on Windows.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = tab
+
+# Go: tabs, as gofmt enforces.
+[*.go]
+indent_style = tab
+
+# Frontend: tabs, matching prettier (useTabs: true).
+[*.{js,ts,svelte,css,html,json}]
+indent_style = tab
+
+# YAML and Markdown are space-indented.
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+indent_style = space
+indent_size = 2
+# Markdown uses trailing whitespace for hard line breaks.
+trim_trailing_whitespace = false
+
+# Makefile-style recipes require real tabs.
+[justfile]
+indent_style = tab
