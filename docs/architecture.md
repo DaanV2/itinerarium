@@ -72,6 +72,15 @@ GM-only document sections are stripped **server-side** before the response is se
 
 Location inventories apply the same access-control check: if a character lacks access to a location, the inventory (and its existence) must not appear in any API response.
 
+### Transport-layer hardening (M10)
+
+The permission rules above are the core defence; the HTTP edge adds a thin hardening layer so the surface around them is not trivially abused. It changes no permission decision — a request that passes these guards is still subject to every rule above.
+
+- **Security headers** on every response (`transport.SecurityHeaders`): `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a Content-Security-Policy for the embedded SPA, and `Strict-Transport-Security` when served over TLS.
+- **Request body cap** (`transport.MaxBytes`, default 10 MiB) so one request can't exhaust memory during decode.
+
+These live in `infrastructure/transport` (middleware), wired in `components/router.go` and tuned by the `security.*` config set. See [deployment.md](deployment.md#security-hardening) and [SECURITY.md](../SECURITY.md).
+
 ### Groups and locations (M2)
 
 - **Groups are campaign structure, their content is not.** Any authenticated user may list groups and see member identity (id + name only — never a member's game day or owning account); only a GM creates or edits a group. The group's *content* — shared inventory, shared money, and (from M3) its repository — is member-only: a non-member gets `404`, never a `403`.
