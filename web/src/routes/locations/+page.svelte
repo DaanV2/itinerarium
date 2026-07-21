@@ -3,10 +3,10 @@
 	import { resolve } from '$app/paths';
 	import { createLocation, listLocations } from '$lib/api/locations';
 	import { getAccessToken } from '$lib/auth-token';
+	import CreateModal from '$lib/components/CreateModal.svelte';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
 	import GmOnly from '$lib/components/GmOnly.svelte';
-	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import type { LocationSummary } from '$lib/types';
 
 	let locations = $state<LocationSummary[]>([]);
@@ -17,7 +17,6 @@
 	// description is added afterward from the location's own page.
 	let name = $state('');
 	let plane = $state('');
-	let submitting = $state(false);
 
 	async function loadLocations() {
 		loading = true;
@@ -33,20 +32,11 @@
 
 	onMount(loadLocations);
 
-	async function handleCreate(event: SubmitEvent) {
-		event.preventDefault();
-		error = '';
-		submitting = true;
-		try {
-			await createLocation({ name, plane: plane || undefined }, getAccessToken());
-			name = '';
-			plane = '';
-			await loadLocations();
-		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to create location.';
-		} finally {
-			submitting = false;
-		}
+	async function handleCreate() {
+		await createLocation({ name, plane: plane || undefined }, getAccessToken());
+		name = '';
+		plane = '';
+		await loadLocations();
 	}
 </script>
 
@@ -59,13 +49,10 @@
 
 	<GmOnly>
 		<section>
-			<h2>Create location</h2>
-			<form onsubmit={handleCreate}>
+			<CreateModal triggerLabel="Create location" pendingLabel="Creating…" onSubmit={handleCreate}>
 				<FormField id="location-name" label="Name" type="text" required bind:value={name} />
 				<FormField id="location-plane" label="Plane" type="text" bind:value={plane} />
-
-				<SubmitButton pending={submitting} label="Create location" pendingLabel="Creating…" />
-			</form>
+			</CreateModal>
 		</section>
 	</GmOnly>
 
