@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/DaanV2/itinerarium/api/domain"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/google/uuid"
@@ -345,7 +346,7 @@ func (s *DocumentService) documentEntry(
 		}
 
 		actor = ""
-		if best := furthestCharacter(eligible); best != nil {
+		if best := domain.FurthestCharacter(eligible); best != nil {
 			actor = best.Name
 		}
 	}

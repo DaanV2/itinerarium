@@ -6,6 +6,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/DaanV2/itinerarium/api/domain"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 )
@@ -132,7 +133,7 @@ func (s *DocumentService) searchScope(
 			return nil, nil, err
 		}
 
-		day, ok := furthestGameDay(eligible)
+		day, ok := domain.FurthestGameDay(eligible)
 		if !ok {
 			continue
 		}

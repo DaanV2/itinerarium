@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/DaanV2/itinerarium/api/domain"
+	"github.com/DaanV2/itinerarium/api/domain/documentfmt"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 )
 
@@ -62,9 +64,9 @@ func resolveCreateContent(
 		return "", nil, 0, nil, fmt.Errorf("%w: give either markdown or sections, not both", ErrInvalidDocument)
 	}
 
-	meta, body, err := parseFrontmatter(input.Markdown)
+	meta, body, err := documentfmt.Parse(input.Markdown)
 	if err != nil {
-		return "", nil, 0, nil, err
+		return "", nil, 0, nil, fmt.Errorf("%w: %w", ErrInvalidDocument, err)
 	}
 
 	if title == "" {
@@ -137,13 +139,13 @@ func mergeSectionsGM(
 func mergeSectionsPlayer(
 	existing []models.DocumentSection, inputs []DocumentSectionInput,
 ) ([]models.DocumentSection, error) {
-	edits := make([]sectionEdit, len(inputs))
+	edits := make([]domain.SectionEdit, len(inputs))
 	for i, in := range inputs {
-		edits[i] = sectionEdit(in)
+		edits[i] = domain.SectionEdit(in)
 	}
 
-	return mergeVisibleSections(
-		existing, edits, ErrInvalidDocument,
+	return domain.MergeVisibleSections(
+		existing, edits, ErrInvalidDocument, ErrForbidden,
 		func(s models.DocumentSection) string { return s.ID },
 		func(s models.DocumentSection) bool { return s.GMOnly },
 		func(s models.DocumentSection, content string) models.DocumentSection {

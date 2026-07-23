@@ -7,7 +7,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/components"
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
-	"github.com/DaanV2/itinerarium/api/infrastructure/servers"
+	"github.com/DaanV2/itinerarium/api/transport/server"
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +24,7 @@ var serveCmd = &cobra.Command{
 
 func init() {
 	fs := serveCmd.Flags()
-	servers.ServerConfigSet.AddToSet(fs)
+	server.ServerConfigSet.AddToSet(fs)
 	persistence.DatabaseConfigSet.AddToSet(fs)
 	authentication.AuthConfigSet.AddToSet(fs)
 	components.CatalogConfigSet.AddToSet(fs)

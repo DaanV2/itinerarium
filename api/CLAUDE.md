@@ -23,14 +23,16 @@ CI additionally runs `go test -race ./...` on Linux. The race detector needs cgo
 
 ## Layer rules — where code goes
 
-Request flow: `transport` → `application` → `repositories` → `models`. Never skip a layer, never import upward.
+Request flow: `handlers` → `application` → `repositories` → `models`. Never skip a layer, never import upward. `handlers` and `application` may call `domain` for pure rules; `transport` is app-agnostic mechanism and imports none of them.
 
 | Layer | Directory | Owns | Never contains |
 |-------|-----------|------|----------------|
-| Transport | `infrastructure/transport/` | Routes, request decode, response encode, auth middleware | Business logic, GORM queries |
+| Handlers | `handlers/` | Per-entity endpoints: request decode, response encode, request/response DTOs | Business logic, GORM queries, routing/middleware |
+| Transport | `transport/` (+ `transport/server/`) | HTTP mechanism: router, middleware, security, throttle, error→status mapping, SPA, auth middleware, http host | Per-entity endpoint logic, business logic |
+| Domain | `domain/` | Pure rules: game-day maths, section merge, frontmatter parsing (`documentfmt/`) | I/O, HTTP types, GORM queries |
 | Services | `application/` | Business logic, **all permission rules** (game-day gating, GM-only stripping, existence hiding) | HTTP types, GORM queries |
 | Repositories | `infrastructure/persistence/repositories/` | All GORM queries, one file per entity | Permission decisions, HTTP types |
-| Models | `infrastructure/persistence/models/` | GORM structs + tags | Query methods, logic |
+| Models | `infrastructure/persistence/models/` | GORM structs + tags (DB DTOs) | Query methods, logic |
 
 Permission checks live in **services**, not repositories and not handlers. A repository returns what it is asked for; the service decides what the caller may see.
 
@@ -116,24 +118,24 @@ func (s *CharacterService) Get(ctx context.Context, requester Requester, id stri
 }
 ```
 
-### 5. Route — handler in `infrastructure/transport/`, wired in `components/router.go`
+### 5. Route — handler in `handlers/`, wired in `components/router.go`
 
-Handlers decode the request, call one service method, encode the response:
+Handlers decode the request, call one service method, encode the response. They pull the caller from the context seam `transport.RequesterFrom` and map errors with `transport.WriteServiceError`:
 
 ```go
-// transport/characters.go
+// handlers/characters.go
 func GetCharacterHandler(svc *application.CharacterService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := svc.Get(r.Context(), requesterFrom(r), r.PathValue("id"))
-		// ... map error, write JSON
+		c, err := svc.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		// ... transport.WriteServiceError on err, else write JSON
 	})
 }
 ```
 
-Wire it into `CreateRouter` in `components/router.go` with the existing options pattern (services come off the `*Services` bundle):
+Wire it into `CreateRouter` in `components/router.go` with the existing options pattern — `transport.*` provides the mechanism, `handlers.*` the endpoint (services come off the `*Services` bundle):
 
 ```go
-transport.WithHandle("GET /api/characters/{id}", requireAuth(transport.GetCharacterHandler(services.Characters))),
+transport.WithHandle("GET /api/characters/{id}", requireAuth(handlers.GetCharacterHandler(services.Characters))),
 ```
 
 If the handler needs a new service or repository, add it to the `Services` / `Repositories` bundle in `components/services.go` / `components/repositories.go` — that is the composition root.
