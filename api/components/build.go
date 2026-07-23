@@ -49,7 +49,7 @@ func BuildServer(ctx context.Context) (*ServerComponents, error) {
 		return nil, err
 	}
 
-	server := server.New(
+	serv := server.New(
 		server.WithAddr(server.AddressFlag.Value()),
 		server.WithHandler(CreateRouter(services, logger)),
 	)
@@ -58,7 +58,7 @@ func BuildServer(ctx context.Context) (*ServerComponents, error) {
 		DB:           db,
 		Repositories: repos,
 		Services:     services,
-		Server:       server,
+		Server:       serv,
 	}, nil
 }
 

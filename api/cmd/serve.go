@@ -35,14 +35,14 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
 	logger := log.Default()
 
-	server, err := components.BuildServer(ctx)
+	serv, err := components.BuildServer(ctx)
 	if err != nil {
 		return err
 	}
 
 	errCh := make(chan error, 1)
-	go func() { errCh <- server.Server.ListenAndServe() }()
-	logger.Info("server started", "address", server.Server.Addr())
+	go func() { errCh <- serv.Server.ListenAndServe() }()
+	logger.Info("server started", "address", serv.Server.Addr())
 
 	select {
 	case err := <-errCh:
@@ -54,5 +54,5 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	return server.Shutdown(shutdownCtx)
+	return serv.Shutdown(shutdownCtx)
 }
