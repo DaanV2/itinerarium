@@ -56,7 +56,16 @@ Many-to-many uses a named junction table: `` gorm:"many2many:group_members" ``.
 
 ### 2. Register in `infrastructure/persistence/migrations.go`
 
-Add `&models.Character{}` to `allModels()`. **Skipping this means no table is created.**
+Add `&models.Character{}` to `allModels()` — this creates the table on **fresh** installs (migration `0001`). To reach **existing** deployments too, also append a new numbered migration that `AutoMigrate`s the new model (or expresses whatever schema change you're making):
+
+```go
+{
+	ID: "0003_add_character",
+	Migrate: func(tx *gorm.DB) error { return tx.AutoMigrate(&models.Character{}) },
+},
+```
+
+**Skipping `allModels()` means no table on fresh installs; skipping the numbered migration means no table on upgrades.** Never edit `0001` to change a deployed schema — it never re-runs on an existing database.
 
 ### 3. Repository — `infrastructure/persistence/repositories/<entities>.go`
 
@@ -150,7 +159,8 @@ Route patterns use Go 1.22+ `http.ServeMux` syntax: `"METHOD /path/{param}"`, re
 - **Errors**: wrap with `fmt.Errorf("doing thing: %w", err)`; sentinel errors (`ErrNotFound`) live in the service layer.
 - **Per-request gating cache** (M8): the game-day gate resolves the requester's characters and group memberships many times per request. `application/request_cache.go` memoizes those lookups for the lifetime of one request — `RequireAuth` installs a cache with `application.WithRequestCache(ctx)`, and the gating helpers (`requesterCharacters`, `cachedGroupIDsForCharacters`, `cachedGroup`) read through it. When no cache is on the context (a direct service call, most tests) the helpers hit the database every time, so results are identical with or without it. Use these helpers for character/group-membership lookups inside gating rather than calling the repositories directly. The cache assumes its entries are stable within a request — only add a lookup to it that no request both caches and then mutates.
 - **Logging**: `github.com/charmbracelet/log` (`log.Default()`, `logger.Info("msg", "key", value)`). The linter rejects the stdlib `log` package (and `log/slog` — same import prefix). `infrastructure/logging` configures the global logger from the `log` config set (`--log.level`/`LOG_LEVEL`, `--log.format`/`LOG_FORMAT` — text/json/logfmt, `--log.report-caller`/`LOG_REPORT_CALLER`) and carries request-scoped loggers through `context.Context` via `logging.Context`/`logging.From` — request handlers get one via `logging.From(r.Context())` after `transport.Logging` middleware has run.
-- **HTTP hardening** (M10): router-wide middleware in `transport/security.go` sets security headers (`SecurityHeaders`) and caps request bodies (`MaxBytes`). Both are tuned by the `security.*` config set (`components/config.go`, registered in `cmd/serve.go`) and wired in `components/router.go`. They add no permission logic — they live in transport, not `application`.
+- **HTTP hardening** (M10): router-wide middleware in `transport/security.go` sets security headers (`SecurityHeaders`) and caps request bodies (`MaxBytes`); `transport/throttle.go` adds an in-process login/reset rate limiter (`Throttle`) that `LoginHandler`/`ResetPasswordHandler` consult (per-IP + per-account for login, per-target for reset, exponential lockout → `429` + `Retry-After`). A nil `*Throttle` is a valid always-allow limiter, so `security.login-max-failures: 0` disables it. All are tuned by the `security.*` config set (`components/config.go`, registered in `cmd/serve.go`) and wired in `components/router.go`. They add no permission logic — they live in transport, not `application`.
+- **Schema migrations** (M11): `infrastructure/persistence/migrations.go` runs an ordered [gormigrate](https://github.com/go-gormigrate/gormigrate) list on start (`Database.Migrate()`). `0001` is `AutoMigrate(allModels())` (fresh-install baseline); every later change is a **new numbered migration** appended to `migrations()` — never edit `0001` to alter a deployed schema, and don't rely on `allModels()` alone to reach existing installs.
 
 ## Lint rules that trip people up (`.golangci.yml`, enforced in CI)
 

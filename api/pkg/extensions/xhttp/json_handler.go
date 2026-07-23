@@ -40,3 +40,9 @@ func (jrw JSONResponseWriter) WriteErrorMsg(status int, message string) {
 func (jrw JSONResponseWriter) WriteHeader(status int) {
 	jrw.writer.WriteHeader(status)
 }
+
+// Header exposes the underlying response header map so a handler can set
+// headers (e.g. Retry-After) before writing the body.
+func (jrw JSONResponseWriter) Header() http.Header {
+	return jrw.writer.Header()
+}

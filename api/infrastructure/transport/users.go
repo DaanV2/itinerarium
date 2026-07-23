@@ -73,15 +73,31 @@ func ListAccountsHandler(svc *application.UserService) http.Handler {
 
 // ResetPasswordHandler lets a GM reset another account's password to a fresh
 // random temporary password, handed back for the GM to relay out of band. No
-// SMTP dependency. Must be wrapped in RequireAuth.
-func ResetPasswordHandler(svc *application.UserService) http.Handler {
+// SMTP dependency. Must be wrapped in RequireAuth. The throttle (nil disables
+// it) caps repeated resets against a single target account (roadmap M10) — this
+// path is authenticated and GM-only, so account spam, not credential guessing,
+// is the risk, hence keying by target rather than IP.
+func ResetPasswordHandler(svc *application.UserService, throttle *Throttle) http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		password, err := svc.ResetPassword(r.Context(), requesterFrom(r), r.PathValue("id"))
+		targetID := r.PathValue("id")
+		key := "reset:acct:" + targetID
+
+		if ok, retry := throttle.Allowed(key); !ok {
+			writeThrottled(w, retry)
+
+			return
+		}
+
+		password, err := svc.ResetPassword(r.Context(), requesterFrom(r), targetID)
 		if err != nil {
 			writeServiceError(w, err)
 
 			return
 		}
+
+		// Every successful reset is chargeable: there is no "good" outcome that
+		// should clear the counter, so the decay window caps resets per window.
+		throttle.Penalize(key)
 
 		w.WriteJSON(http.StatusOK, resetPasswordResponse{TemporaryPassword: password})
 	})

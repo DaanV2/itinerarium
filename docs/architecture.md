@@ -78,8 +78,18 @@ The permission rules above are the core defence; the HTTP edge adds a thin harde
 
 - **Security headers** on every response (`transport.SecurityHeaders`): `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a Content-Security-Policy for the embedded SPA, and `Strict-Transport-Security` when served over TLS.
 - **Request body cap** (`transport.MaxBytes`, default 10 MiB) so one request can't exhaust memory during decode.
+- **Login/reset rate limiting** (`transport.Throttle`) so a directly-exposed instance can't be brute-forced. Failed `/api/login` attempts are counted per client IP and per account; hitting the threshold locks that key for an exponentially-growing window and returns `429` + `Retry-After`. A success clears the account's counter but not the IP's (a shared/NAT address must not let a real login wipe an attacker's penalty). The GM password-reset path is capped the same way, keyed by the target account, since it is authenticated GM-only — spam, not credential guessing, is the risk there. The limiter is in-process and holds no state a request both caches and mutates; `security.login-max-failures: 0` disables it in favour of a reverse proxy.
 
-These live in `infrastructure/transport` (middleware), wired in `components/router.go` and tuned by the `security.*` config set. See [deployment.md](deployment.md#security-hardening) and [SECURITY.md](../SECURITY.md).
+These live in `infrastructure/transport` (middleware / handler decorators), wired in `components/router.go` and tuned by the `security.*` config set. See [deployment.md](deployment.md#security-hardening) and [SECURITY.md](../SECURITY.md).
+
+### Schema migrations (M11)
+
+Schema evolution runs through an ordered, versioned migration list ([gormigrate](https://github.com/go-gormigrate/gormigrate)) in `infrastructure/persistence/migrations.go`, applied automatically on start by `Database.Migrate()` (reached via `components.SetupDatabase`, so both `serve` and `init` upgrade in place). Each applied step is recorded in a `migrations` table; only pending steps run, and re-running is a no-op across restarts and backends.
+
+- `0001_initial_schema` is `AutoMigrate(allModels())` — the fresh-install fast path. On an existing database it is an idempotent no-op.
+- `0002_backfill_activity_scopes` folds in the former ad-hoc activity-scope backfill as a numbered, idempotent step.
+
+There is deliberately no `InitSchema` shortcut, so a database that predates gormigrate (schema present, no `migrations` table) still runs every step once when it first adopts tracking — nothing is silently marked applied. **Every schema change from here on is a new numbered migration**; `allModels()` alone only reaches fresh installs (`0001`), never an existing deployment.
 
 ### Groups and locations (M2)
 
