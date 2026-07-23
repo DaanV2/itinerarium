@@ -1,6 +1,8 @@
 package components
 
 import (
+	"time"
+
 	"github.com/DaanV2/itinerarium/api/infrastructure/config"
 )
 
@@ -25,4 +27,13 @@ var (
 		"Content-Security-Policy header value (empty uses a built-in policy for the embedded SPA)")
 	HSTSFlag = SecurityConfigSet.Bool("security.hsts", false,
 		"send Strict-Transport-Security on every response (enable when served behind TLS)")
+
+	// Login/reset rate limiting (M10). LoginMaxFailures <= 0 disables the
+	// in-process limiter entirely (e.g. when a reverse proxy handles throttling).
+	LoginMaxFailuresFlag = SecurityConfigSet.Int("security.login-max-failures", 5,
+		"failed login attempts (per IP and per account) before a lockout; 0 disables in-process rate limiting")
+	LoginLockoutFlag = SecurityConfigSet.Duration("security.login-lockout", time.Minute,
+		"base lockout after too many failed logins; doubles per further failure up to 32x")
+	TrustProxyHeadersFlag = SecurityConfigSet.Bool("security.trust-proxy-headers", false,
+		"trust X-Forwarded-For for the client IP in rate limiting (enable only behind a trusted reverse proxy)")
 )

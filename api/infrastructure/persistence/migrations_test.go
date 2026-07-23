@@ -5,6 +5,7 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,4 +58,66 @@ func TestMigrate_UpgradesM1InventorySchema(t *testing.T) {
 		Amount:     7,
 	}
 	require.NoError(t, db.DB().Create(groupBalance).Error, "inserting group-owned balance after migration")
+}
+
+func TestMigrate_FreshDatabaseCreatesEverySchema(t *testing.T) {
+	db, err := persistence.New(persistence.WithInMemory())
+	require.NoError(t, err)
+
+	require.NoError(t, db.Migrate())
+
+	migrator := db.DB().Migrator()
+	for _, model := range []any{
+		&models.User{}, &models.RevokedToken{}, &models.Location{}, &models.Character{},
+		&models.Group{}, &models.ActivityEntry{}, &models.Repository{}, &models.Document{},
+		&models.JournalEntry{}, &models.Session{},
+	} {
+		assert.Truef(t, migrator.HasTable(model), "expected a table for %T", model)
+	}
+
+	// gormigrate records every applied migration in the "migrations" table.
+	var applied int64
+	require.NoError(t, db.DB().Table("migrations").Count(&applied).Error)
+	assert.Equal(t, int64(2), applied, "both numbered migrations should be recorded")
+}
+
+func TestMigrate_IsIdempotent(t *testing.T) {
+	db, err := persistence.New(persistence.WithInMemory())
+	require.NoError(t, err)
+
+	require.NoError(t, db.Migrate())
+	require.NoError(t, db.Migrate(), "a second Migrate on an up-to-date database must be a clean no-op")
+
+	var applied int64
+	require.NoError(t, db.DB().Table("migrations").Count(&applied).Error)
+	assert.Equal(t, int64(2), applied, "re-running must not duplicate migration records")
+}
+
+// TestMigrate_BackfillsActivityScopesOnAdoption simulates a deployment that
+// predates gormigrate: the schema exists but there is no "migrations" table and
+// a group activity entry still lacks its access scope. Migrate must run the
+// backfill (0002) rather than silently marking it applied.
+func TestMigrate_BackfillsActivityScopesOnAdoption(t *testing.T) {
+	db, err := persistence.New(persistence.WithInMemory())
+	require.NoError(t, err)
+
+	// Old-world schema: created straight from the model, no migration history.
+	require.NoError(t, db.DB().AutoMigrate(&models.ActivityEntry{}))
+
+	entry := &models.ActivityEntry{
+		GameDay:    3,
+		Action:     models.ActivityActionJoined,
+		EntityType: models.ActivityScopeGroup,
+		EntityID:   "11111111-1111-1111-1111-111111111111",
+		EntityName: "The Thieves Guild",
+		// ScopeType/ScopeID intentionally empty — the pre-M5 state 0002 backfills.
+	}
+	require.NoError(t, db.DB().Create(entry).Error)
+
+	require.NoError(t, db.Migrate())
+
+	var got models.ActivityEntry
+	require.NoError(t, db.DB().First(&got, "id = ?", entry.ID).Error)
+	assert.Equal(t, models.ActivityScopeGroup, got.ScopeType, "scope type should be backfilled from the group entity")
+	assert.Equal(t, got.EntityID, got.ScopeID, "scope id should be backfilled from the entity id")
 }

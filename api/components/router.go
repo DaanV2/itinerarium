@@ -12,9 +12,14 @@ import (
 // itself mounted under /api. Security middleware (headers + body-size cap)
 // comes from the security config set (M10).
 func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
+	// One shared login/reset limiter for the whole server (nil when disabled by
+	// config). Login and reset use distinct key prefixes, so sharing is safe.
+	loginThrottle := transport.NewLoginThrottle(LoginMaxFailuresFlag.Value(), LoginLockoutFlag.Value())
+	trustProxy := TrustProxyHeadersFlag.Value()
+
 	authenticated := transport.NewRouter(
 		transport.WithMiddleware(transport.RequireAuth(services.Auth)),
-		transport.WithSubRoute("/admin", adminRouter(services)),
+		transport.WithSubRoute("/admin", adminRouter(services, loginThrottle)),
 		transport.WithSubRoute("/characters", charactersRouter(services)),
 		transport.WithSubRoute("/groups", groupsRouter(services)),
 		transport.WithSubRoute("/sessions", sessionsRouter(services)),
@@ -36,7 +41,7 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithHandle("GET /api/health", transport.HealthHandler()),
 		transport.WithHandle("GET /api/setup", transport.SetupStatusHandler(services.Setup)),
 		transport.WithHandle("POST /api/setup", transport.CreateInitialGMHandler(services.Setup)),
-		transport.WithHandle("POST /api/login", transport.LoginHandler(services.Auth)),
+		transport.WithHandle("POST /api/login", transport.LoginHandler(services.Auth, loginThrottle, trustProxy)),
 		transport.WithSubRoute("/api", authenticated),
 	}
 
@@ -52,12 +57,15 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 	return transport.NewRouter(opts...)
 }
 
-// adminRouter serves account administration under /api/admin.
-func adminRouter(services *Services) *transport.Router {
+// adminRouter serves account administration under /api/admin. The shared
+// loginThrottle also caps password-reset spam per target account.
+func adminRouter(services *Services, loginThrottle *transport.Throttle) *transport.Router {
 	return transport.NewRouter(
 		transport.WithHandle("GET /users", transport.ListAccountsHandler(services.Users)),
 		transport.WithHandle("POST /users", transport.CreateAccountHandler(services.Users)),
-		transport.WithHandle("POST /users/{id}/reset-password", transport.ResetPasswordHandler(services.Users)),
+		transport.WithHandle(
+			"POST /users/{id}/reset-password", transport.ResetPasswordHandler(services.Users, loginThrottle),
+		),
 	)
 }
 

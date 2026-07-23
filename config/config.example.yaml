@@ -60,3 +60,20 @@ security:
   # Send Strict-Transport-Security on every response. Enable when the instance
   # is served behind TLS (flag: --security.hsts, env: SECURITY_HSTS)
   # hsts: false
+
+  # Failed login attempts (counted per client IP and per account) before an
+  # exponential lockout kicks in. 0 disables the in-process limiter — leave it
+  # on unless a reverse proxy already throttles /api/login.
+  # (flag: --security.login-max-failures, env: SECURITY_LOGIN_MAX_FAILURES)
+  # login-max-failures: 5
+
+  # Base lockout applied once the failure threshold is hit; it doubles per
+  # further failure, up to 32x this value.
+  # (flag: --security.login-lockout, env: SECURITY_LOGIN_LOCKOUT)
+  # login-lockout: 1m
+
+  # Trust X-Forwarded-For for the client IP in rate limiting. Enable ONLY when a
+  # reverse proxy you control sets it, otherwise a caller can spoof it to dodge
+  # the per-IP limit.
+  # (flag: --security.trust-proxy-headers, env: SECURITY_TRUST_PROXY_HEADERS)
+  # trust-proxy-headers: false

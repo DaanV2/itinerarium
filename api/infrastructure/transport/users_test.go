@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
@@ -13,6 +14,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,8 +24,13 @@ type usersTestEnv struct {
 	playerToken string
 }
 
-func newUsersTestEnv(t *testing.T) usersTestEnv {
+func newUsersTestEnv(t *testing.T, throttle ...*transport.Throttle) usersTestEnv {
 	t.Helper()
+
+	var resetThrottle *transport.Throttle
+	if len(throttle) > 0 {
+		resetThrottle = throttle[0]
+	}
 
 	db, err := persistence.New(persistence.WithInMemory())
 	require.NoError(t, err, "persistence.New")
@@ -57,7 +64,7 @@ func newUsersTestEnv(t *testing.T) usersTestEnv {
 		transport.WithHandle("POST /api/admin/users", requireAuth(transport.CreateAccountHandler(userSvc))),
 		transport.WithHandle(
 			"POST /api/admin/users/{id}/reset-password",
-			requireAuth(transport.ResetPasswordHandler(userSvc)),
+			requireAuth(transport.ResetPasswordHandler(userSvc, resetThrottle)),
 		),
 	)
 
@@ -197,4 +204,36 @@ func TestResetPassword_UnknownAccount(t *testing.T) {
 
 	rec := env.doJSON(t, http.MethodPost, "/api/admin/users/does-not-exist/reset-password", env.gmToken, nil)
 	require.Equal(t, http.StatusNotFound, rec.Code, "body: %s", rec.Body.String())
+}
+
+func TestResetPassword_ThrottlesRepeatedResetsPerTarget(t *testing.T) {
+	now := time.Now()
+	throttle := transport.NewTestThrottle(2, time.Minute, func() time.Time { return now })
+	env := newUsersTestEnv(t, throttle)
+
+	listRec := env.doJSON(t, http.MethodGet, "/api/admin/users", env.gmToken, nil)
+
+	var accounts []struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+	}
+	require.NoError(t, json.Unmarshal(listRec.Body.Bytes(), &accounts), "decoding body")
+
+	var targetID string
+	for _, a := range accounts {
+		if a.Email == "player@example.com" {
+			targetID = a.ID
+		}
+	}
+	require.NotEmpty(t, targetID, "could not find player account in list")
+
+	path := "/api/admin/users/" + targetID + "/reset-password"
+
+	// Two resets against the same account succeed; the third is throttled.
+	require.Equal(t, http.StatusOK, env.doJSON(t, http.MethodPost, path, env.gmToken, nil).Code)
+	require.Equal(t, http.StatusOK, env.doJSON(t, http.MethodPost, path, env.gmToken, nil).Code)
+
+	rec := env.doJSON(t, http.MethodPost, path, env.gmToken, nil)
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code, "repeated resets of one account should be capped")
+	assert.NotEmpty(t, rec.Header().Get("Retry-After"))
 }
