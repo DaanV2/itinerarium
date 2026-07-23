@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/DaanV2/itinerarium/api/domain"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 )
@@ -634,13 +635,13 @@ func mergeLocationSectionsGM(
 func mergeLocationSectionsPlayer(
 	existing []models.LocationSection, inputs []LocationSectionInput,
 ) ([]models.LocationSection, error) {
-	edits := make([]sectionEdit, len(inputs))
+	edits := make([]domain.SectionEdit, len(inputs))
 	for i, in := range inputs {
-		edits[i] = sectionEdit(in)
+		edits[i] = domain.SectionEdit(in)
 	}
 
-	return mergeVisibleSections(
-		existing, edits, ErrInvalidLocation,
+	return domain.MergeVisibleSections(
+		existing, edits, ErrInvalidLocation, ErrForbidden,
 		func(s models.LocationSection) string { return s.ID },
 		func(s models.LocationSection) bool { return s.GMOnly },
 		func(s models.LocationSection, content string) models.LocationSection {

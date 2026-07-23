@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/DaanV2/itinerarium/api/domain/documentfmt"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
 )
@@ -112,7 +113,7 @@ func (s *VaultImportService) importFile(
 		return result
 	}
 
-	meta, _, err := parseFrontmatter(file.Markdown)
+	meta, _, err := documentfmt.Parse(file.Markdown)
 	if err != nil {
 		result.Error = err.Error()
 

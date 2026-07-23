@@ -80,7 +80,7 @@ The permission rules above are the core defence; the HTTP edge adds a thin harde
 - **Request body cap** (`transport.MaxBytes`, default 10 MiB) so one request can't exhaust memory during decode.
 - **Login/reset rate limiting** (`transport.Throttle`) so a directly-exposed instance can't be brute-forced. Failed `/api/login` attempts are counted per client IP and per account; hitting the threshold locks that key for an exponentially-growing window and returns `429` + `Retry-After`. A success clears the account's counter but not the IP's (a shared/NAT address must not let a real login wipe an attacker's penalty). The GM password-reset path is capped the same way, keyed by the target account, since it is authenticated GM-only — spam, not credential guessing, is the risk there. The limiter is in-process and holds no state a request both caches and mutates; `security.login-max-failures: 0` disables it in favour of a reverse proxy.
 
-These live in `infrastructure/transport` (middleware / handler decorators), wired in `components/router.go` and tuned by the `security.*` config set. See [deployment.md](deployment.md#security-hardening) and [SECURITY.md](../SECURITY.md).
+These live in `transport` (the app-agnostic HTTP mechanism package — middleware / handler decorators), wired in `components/router.go` and tuned by the `security.*` config set. See [deployment.md](deployment.md#security-hardening) and [SECURITY.md](../SECURITY.md).
 
 ### Schema migrations (M11)
 

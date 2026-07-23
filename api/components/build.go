@@ -5,7 +5,7 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/lifecycle"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
-	"github.com/DaanV2/itinerarium/api/infrastructure/servers"
+	"github.com/DaanV2/itinerarium/api/transport/server"
 	"github.com/charmbracelet/log"
 )
 
@@ -16,7 +16,7 @@ type ServerComponents struct {
 	DB           *persistence.Database
 	Repositories *Repositories
 	Services     *Services
-	Server       *servers.Server
+	Server       *server.Server
 }
 
 // BuildServer wires every component into a ready-to-run server: database and
@@ -49,16 +49,16 @@ func BuildServer(ctx context.Context) (*ServerComponents, error) {
 		return nil, err
 	}
 
-	server := servers.New(
-		servers.WithAddr(servers.AddressFlag.Value()),
-		servers.WithHandler(CreateRouter(services, logger)),
+	serv := server.New(
+		server.WithAddr(server.AddressFlag.Value()),
+		server.WithHandler(CreateRouter(services, logger)),
 	)
 
 	return &ServerComponents{
 		DB:           db,
 		Repositories: repos,
 		Services:     services,
-		Server:       server,
+		Server:       serv,
 	}, nil
 }
 

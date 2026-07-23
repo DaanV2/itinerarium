@@ -1,8 +1,9 @@
 package components
 
 import (
-	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
+	"github.com/DaanV2/itinerarium/api/handlers"
 	"github.com/DaanV2/itinerarium/api/infrastructure/webapp"
+	"github.com/DaanV2/itinerarium/api/transport"
 	"github.com/charmbracelet/log"
 )
 
@@ -29,9 +30,9 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithSubRoute("/repositories", repositoriesRouter(services)),
 		transport.WithSubRoute("/documents", documentsRouter(services)),
 		transport.WithSubRoute("/activity", activityRouter(services)),
-		transport.WithHandle("POST /inventory/move", transport.MoveInventoryItemHandler(services.Inventory)),
-		transport.WithHandle("GET /search", transport.SearchDocumentsHandler(services.Documents)),
-		transport.WithHandle("POST /import/obsidian", transport.ImportVaultHandler(services.VaultImport)),
+		transport.WithHandle("POST /inventory/move", handlers.MoveInventoryItemHandler(services.Inventory)),
+		transport.WithHandle("GET /search", handlers.SearchDocumentsHandler(services.Documents)),
+		transport.WithHandle("POST /import/obsidian", handlers.ImportVaultHandler(services.VaultImport)),
 	)
 
 	opts := []transport.Option{
@@ -39,9 +40,9 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 		transport.WithMiddleware(transport.SecurityHeaders(CSPFlag.Value(), HSTSFlag.Value())),
 		transport.WithMiddleware(transport.MaxBytes(int64(BodyLimitFlag.Value()))),
 		transport.WithHandle("GET /api/health", transport.HealthHandler()),
-		transport.WithHandle("GET /api/setup", transport.SetupStatusHandler(services.Setup)),
-		transport.WithHandle("POST /api/setup", transport.CreateInitialGMHandler(services.Setup)),
-		transport.WithHandle("POST /api/login", transport.LoginHandler(services.Auth, loginThrottle, trustProxy)),
+		transport.WithHandle("GET /api/setup", handlers.SetupStatusHandler(services.Setup)),
+		transport.WithHandle("POST /api/setup", handlers.CreateInitialGMHandler(services.Setup)),
+		transport.WithHandle("POST /api/login", handlers.LoginHandler(services.Auth, loginThrottle, trustProxy)),
 		transport.WithSubRoute("/api", authenticated),
 	}
 
@@ -61,10 +62,10 @@ func CreateRouter(services *Services, logger *log.Logger) *transport.Router {
 // loginThrottle also caps password-reset spam per target account.
 func adminRouter(services *Services, loginThrottle *transport.Throttle) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /users", transport.ListAccountsHandler(services.Users)),
-		transport.WithHandle("POST /users", transport.CreateAccountHandler(services.Users)),
+		transport.WithHandle("GET /users", handlers.ListAccountsHandler(services.Users)),
+		transport.WithHandle("POST /users", handlers.CreateAccountHandler(services.Users)),
 		transport.WithHandle(
-			"POST /users/{id}/reset-password", transport.ResetPasswordHandler(services.Users, loginThrottle),
+			"POST /users/{id}/reset-password", handlers.ResetPasswordHandler(services.Users, loginThrottle),
 		),
 	)
 }
@@ -73,15 +74,15 @@ func adminRouter(services *Services, loginThrottle *transport.Throttle) *transpo
 // subresources under /api/characters.
 func charactersRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListCharactersHandler(services.Characters)),
-		transport.WithHandle("POST /", transport.CreateCharacterHandler(services.Characters)),
-		transport.WithHandle("GET /{id}", transport.GetCharacterHandler(services.Characters)),
-		transport.WithHandle("PATCH /{id}", transport.UpdateCharacterHandler(services.Characters)),
-		transport.WithHandle("PUT /{id}/location", transport.SetCharacterLocationHandler(services.Locations)),
-		transport.WithHandle("DELETE /{id}/location", transport.ClearCharacterLocationHandler(services.Locations)),
-		transport.WithHandle("GET /{id}/activity", transport.GetCharacterActivityHandler(services.Activity)),
-		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, transport.CharacterOwner)),
-		transport.WithSubRoute("/{id}/money", moneyRouter(services, transport.CharacterOwner)),
+		transport.WithHandle("GET /", handlers.ListCharactersHandler(services.Characters)),
+		transport.WithHandle("POST /", handlers.CreateCharacterHandler(services.Characters)),
+		transport.WithHandle("GET /{id}", handlers.GetCharacterHandler(services.Characters)),
+		transport.WithHandle("PATCH /{id}", handlers.UpdateCharacterHandler(services.Characters)),
+		transport.WithHandle("PUT /{id}/location", handlers.SetCharacterLocationHandler(services.Locations)),
+		transport.WithHandle("DELETE /{id}/location", handlers.ClearCharacterLocationHandler(services.Locations)),
+		transport.WithHandle("GET /{id}/activity", handlers.GetCharacterActivityHandler(services.Activity)),
+		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, handlers.CharacterOwner)),
+		transport.WithSubRoute("/{id}/money", moneyRouter(services, handlers.CharacterOwner)),
 		transport.WithSubRoute("/{id}/journal", journalRouter(services)),
 	)
 }
@@ -91,8 +92,8 @@ func charactersRouter(services *Services) *transport.Router {
 // /api/characters/{id}/activity.
 func activityRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListActivityHandler(services.Activity)),
-		transport.WithHandle("POST /announcements", transport.AnnounceActivityHandler(services.Activity)),
+		transport.WithHandle("GET /", handlers.ListActivityHandler(services.Activity)),
+		transport.WithHandle("POST /announcements", handlers.AnnounceActivityHandler(services.Activity)),
 	)
 }
 
@@ -100,11 +101,11 @@ func activityRouter(services *Services) *transport.Router {
 // /api/characters/{id}/journal.
 func journalRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListJournalEntriesHandler(services.Journals)),
-		transport.WithHandle("POST /", transport.CreateJournalEntryHandler(services.Journals)),
-		transport.WithHandle("GET /{entryId}", transport.GetJournalEntryHandler(services.Journals)),
-		transport.WithHandle("PATCH /{entryId}", transport.UpdateJournalEntryHandler(services.Journals)),
-		transport.WithHandle("POST /{entryId}/convert", transport.ConvertJournalEntryHandler(services.Journals)),
+		transport.WithHandle("GET /", handlers.ListJournalEntriesHandler(services.Journals)),
+		transport.WithHandle("POST /", handlers.CreateJournalEntryHandler(services.Journals)),
+		transport.WithHandle("GET /{entryId}", handlers.GetJournalEntryHandler(services.Journals)),
+		transport.WithHandle("PATCH /{entryId}", handlers.UpdateJournalEntryHandler(services.Journals)),
+		transport.WithHandle("POST /{entryId}/convert", handlers.ConvertJournalEntryHandler(services.Journals)),
 	)
 }
 
@@ -112,48 +113,48 @@ func journalRouter(services *Services) *transport.Router {
 // /api/locations.
 func locationsRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListLocationsHandler(services.Locations)),
-		transport.WithHandle("POST /", transport.CreateLocationHandler(services.Locations)),
-		transport.WithHandle("GET /{id}", transport.GetLocationHandler(services.Locations)),
-		transport.WithHandle("PATCH /{id}", transport.UpdateLocationHandler(services.Locations)),
-		transport.WithHandle("GET /{id}/access", transport.ListLocationAccessHandler(services.Locations)),
-		transport.WithHandle("POST /{id}/access", transport.GrantLocationAccessHandler(services.Locations)),
-		transport.WithHandle("DELETE /{id}/access/{accessId}", transport.RevokeLocationAccessHandler(services.Locations)),
-		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, transport.LocationOwner)),
+		transport.WithHandle("GET /", handlers.ListLocationsHandler(services.Locations)),
+		transport.WithHandle("POST /", handlers.CreateLocationHandler(services.Locations)),
+		transport.WithHandle("GET /{id}", handlers.GetLocationHandler(services.Locations)),
+		transport.WithHandle("PATCH /{id}", handlers.UpdateLocationHandler(services.Locations)),
+		transport.WithHandle("GET /{id}/access", handlers.ListLocationAccessHandler(services.Locations)),
+		transport.WithHandle("POST /{id}/access", handlers.GrantLocationAccessHandler(services.Locations)),
+		transport.WithHandle("DELETE /{id}/access/{accessId}", handlers.RevokeLocationAccessHandler(services.Locations)),
+		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, handlers.LocationOwner)),
 	)
 }
 
 // inventoryRouter serves one inventory (character, group, or location — the
 // extractor decides what {id} names) under <resource>/{id}/inventory.
-func inventoryRouter(services *Services, owner transport.OwnerExtractor) *transport.Router {
+func inventoryRouter(services *Services, owner handlers.OwnerExtractor) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListInventoryHandler(services.Inventory, owner)),
-		transport.WithHandle("POST /", transport.AddInventoryItemHandler(services.Inventory, owner)),
-		transport.WithHandle("PATCH /{itemId}", transport.UpdateInventoryItemHandler(services.Inventory, owner)),
-		transport.WithHandle("DELETE /{itemId}", transport.RemoveInventoryItemHandler(services.Inventory, owner)),
+		transport.WithHandle("GET /", handlers.ListInventoryHandler(services.Inventory, owner)),
+		transport.WithHandle("POST /", handlers.AddInventoryItemHandler(services.Inventory, owner)),
+		transport.WithHandle("PATCH /{itemId}", handlers.UpdateInventoryItemHandler(services.Inventory, owner)),
+		transport.WithHandle("DELETE /{itemId}", handlers.RemoveInventoryItemHandler(services.Inventory, owner)),
 	)
 }
 
 // moneyRouter serves one owner's balances (character or group) under
 // <resource>/{id}/money.
-func moneyRouter(services *Services, owner transport.OwnerExtractor) *transport.Router {
+func moneyRouter(services *Services, owner handlers.OwnerExtractor) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListMoneyHandler(services.Inventory, owner)),
-		transport.WithHandle("PUT /{currencyId}", transport.SetMoneyHandler(services.Inventory, owner)),
+		transport.WithHandle("GET /", handlers.ListMoneyHandler(services.Inventory, owner)),
+		transport.WithHandle("PUT /{currencyId}", handlers.SetMoneyHandler(services.Inventory, owner)),
 	)
 }
 
 // groupsRouter serves groups and membership under /api/groups.
 func groupsRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListGroupsHandler(services.Groups)),
-		transport.WithHandle("POST /", transport.CreateGroupHandler(services.Groups)),
-		transport.WithHandle("GET /{id}", transport.GetGroupHandler(services.Groups)),
-		transport.WithHandle("PATCH /{id}", transport.UpdateGroupHandler(services.Groups)),
-		transport.WithHandle("POST /{id}/members", transport.JoinGroupHandler(services.Groups)),
-		transport.WithHandle("DELETE /{id}/members/{characterId}", transport.LeaveGroupHandler(services.Groups)),
-		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, transport.GroupOwner)),
-		transport.WithSubRoute("/{id}/money", moneyRouter(services, transport.GroupOwner)),
+		transport.WithHandle("GET /", handlers.ListGroupsHandler(services.Groups)),
+		transport.WithHandle("POST /", handlers.CreateGroupHandler(services.Groups)),
+		transport.WithHandle("GET /{id}", handlers.GetGroupHandler(services.Groups)),
+		transport.WithHandle("PATCH /{id}", handlers.UpdateGroupHandler(services.Groups)),
+		transport.WithHandle("POST /{id}/members", handlers.JoinGroupHandler(services.Groups)),
+		transport.WithHandle("DELETE /{id}/members/{characterId}", handlers.LeaveGroupHandler(services.Groups)),
+		transport.WithSubRoute("/{id}/inventory", inventoryRouter(services, handlers.GroupOwner)),
+		transport.WithSubRoute("/{id}/money", moneyRouter(services, handlers.GroupOwner)),
 	)
 }
 
@@ -161,33 +162,33 @@ func groupsRouter(services *Services) *transport.Router {
 // /api/sessions.
 func sessionsRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListSessionsHandler(services.Sessions)),
-		transport.WithHandle("POST /", transport.CreateSessionHandler(services.Sessions)),
-		transport.WithHandle("GET /{id}", transport.GetSessionHandler(services.Sessions)),
-		transport.WithHandle("PATCH /{id}", transport.UpdateSessionHandler(services.Sessions)),
-		transport.WithHandle("POST /{id}/participants", transport.AddSessionParticipantHandler(services.Sessions)),
+		transport.WithHandle("GET /", handlers.ListSessionsHandler(services.Sessions)),
+		transport.WithHandle("POST /", handlers.CreateSessionHandler(services.Sessions)),
+		transport.WithHandle("GET /{id}", handlers.GetSessionHandler(services.Sessions)),
+		transport.WithHandle("PATCH /{id}", handlers.UpdateSessionHandler(services.Sessions)),
+		transport.WithHandle("POST /{id}/participants", handlers.AddSessionParticipantHandler(services.Sessions)),
 		transport.WithHandle(
-			"DELETE /{id}/participants/{characterId}", transport.RemoveSessionParticipantHandler(services.Sessions),
+			"DELETE /{id}/participants/{characterId}", handlers.RemoveSessionParticipantHandler(services.Sessions),
 		),
-		transport.WithHandle("POST /{id}/game-day", transport.AdvanceSessionGameDayHandler(services.Sessions)),
+		transport.WithHandle("POST /{id}/game-day", handlers.AdvanceSessionGameDayHandler(services.Sessions)),
 	)
 }
 
 // currenciesRouter serves the currency catalog under /api/currencies.
 func currenciesRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListCurrenciesHandler(services.Catalog)),
-		transport.WithHandle("POST /", transport.CreateCurrencyHandler(services.Catalog)),
-		transport.WithHandle("POST /convert", transport.ConvertCurrencyHandler(services.Catalog)),
-		transport.WithHandle("POST /simplify", transport.SimplifyCurrencyHandler(services.Catalog)),
+		transport.WithHandle("GET /", handlers.ListCurrenciesHandler(services.Catalog)),
+		transport.WithHandle("POST /", handlers.CreateCurrencyHandler(services.Catalog)),
+		transport.WithHandle("POST /convert", handlers.ConvertCurrencyHandler(services.Catalog)),
+		transport.WithHandle("POST /simplify", handlers.SimplifyCurrencyHandler(services.Catalog)),
 	)
 }
 
 // itemsRouter serves the item-definition catalog under /api/items.
 func itemsRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListItemDefinitionsHandler(services.Catalog)),
-		transport.WithHandle("POST /", transport.CreateItemDefinitionHandler(services.Catalog)),
+		transport.WithHandle("GET /", handlers.ListItemDefinitionsHandler(services.Catalog)),
+		transport.WithHandle("POST /", handlers.CreateItemDefinitionHandler(services.Catalog)),
 	)
 }
 
@@ -196,11 +197,11 @@ func itemsRouter(services *Services) *transport.Router {
 // /api/repositories.
 func repositoriesRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /", transport.ListRepositoriesHandler(services.Repositories)),
-		transport.WithHandle("GET /{id}", transport.GetRepositoryHandler(services.Repositories)),
-		transport.WithHandle("GET /{id}/documents", transport.ListDocumentsHandler(services.Documents)),
-		transport.WithHandle("POST /{id}/documents", transport.CreateDocumentHandler(services.Documents)),
-		transport.WithHandle("GET /{id}/documents/tree", transport.GetDocumentFolderTreeHandler(services.Documents)),
+		transport.WithHandle("GET /", handlers.ListRepositoriesHandler(services.Repositories)),
+		transport.WithHandle("GET /{id}", handlers.GetRepositoryHandler(services.Repositories)),
+		transport.WithHandle("GET /{id}/documents", handlers.ListDocumentsHandler(services.Documents)),
+		transport.WithHandle("POST /{id}/documents", handlers.CreateDocumentHandler(services.Documents)),
+		transport.WithHandle("GET /{id}/documents/tree", handlers.GetDocumentFolderTreeHandler(services.Documents)),
 	)
 }
 
@@ -209,13 +210,13 @@ func repositoriesRouter(services *Services) *transport.Router {
 // directly.
 func documentsRouter(services *Services) *transport.Router {
 	return transport.NewRouter(
-		transport.WithHandle("GET /shared", transport.ListSharedDocumentsHandler(services.Documents)),
-		transport.WithHandle("GET /{id}", transport.GetDocumentHandler(services.Documents)),
-		transport.WithHandle("PATCH /{id}", transport.UpdateDocumentHandler(services.Documents)),
-		transport.WithHandle("DELETE /{id}", transport.DeleteDocumentHandler(services.Documents)),
-		transport.WithHandle("POST /{id}/share", transport.ShareDocumentHandler(services.Documents)),
-		transport.WithHandle("GET /{id}/shares", transport.ListDocumentSharesHandler(services.Documents)),
-		transport.WithHandle("POST /{id}/shares", transport.ShareDocumentWithCharacterHandler(services.Documents)),
-		transport.WithHandle("DELETE /{id}/shares/{shareId}", transport.RevokeDocumentShareHandler(services.Documents)),
+		transport.WithHandle("GET /shared", handlers.ListSharedDocumentsHandler(services.Documents)),
+		transport.WithHandle("GET /{id}", handlers.GetDocumentHandler(services.Documents)),
+		transport.WithHandle("PATCH /{id}", handlers.UpdateDocumentHandler(services.Documents)),
+		transport.WithHandle("DELETE /{id}", handlers.DeleteDocumentHandler(services.Documents)),
+		transport.WithHandle("POST /{id}/share", handlers.ShareDocumentHandler(services.Documents)),
+		transport.WithHandle("GET /{id}/shares", handlers.ListDocumentSharesHandler(services.Documents)),
+		transport.WithHandle("POST /{id}/shares", handlers.ShareDocumentWithCharacterHandler(services.Documents)),
+		transport.WithHandle("DELETE /{id}/shares/{shareId}", handlers.RevokeDocumentShareHandler(services.Documents)),
 	)
 }

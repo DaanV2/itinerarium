@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/components"
-	"github.com/DaanV2/itinerarium/api/infrastructure/servers"
+	"github.com/DaanV2/itinerarium/api/transport/server"
 	"github.com/stretchr/testify/require"
 )
 
@@ -48,7 +48,7 @@ func New(t *testing.T) *Harness {
 	sc, err := components.BuildServer(t.Context())
 	require.NoError(t, err, "building server")
 
-	srv := httptest.NewServer(servers.Handler(sc.Server))
+	srv := httptest.NewServer(server.Handler(sc.Server))
 
 	t.Cleanup(func() {
 		srv.Close()

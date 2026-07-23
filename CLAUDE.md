@@ -32,17 +32,19 @@ Full docs live in `docs/`: [features](docs/features.md), [architecture](docs/arc
 api/
 ├── cmd/                    # Cobra CLI commands (thin: delegate to components)
 ├── components/             # Composition root — wires config→db→auth→repos→services→router→server
-├── application/            # Service / business logic layer
-├── infrastructure/
+├── domain/                 # Game-day gating maths + section-merge rule (no I/O); documentfmt/ parses frontmatter
+├── application/            # Service / business-logic layer (use cases)
+├── handlers/               # Per-entity HTTP endpoint adapters + request/response DTOs
+├── transport/              # HTTP mechanism: router, middleware, security, throttle, error mapping, SPA
+│   └── server/             # http.Server wrapper
+├── infrastructure/         # Outbound adapters + platform the app depends on
 │   ├── authentication/     # JWT, JTI, key storage
 │   ├── config/             # Viper setup and manager
 │   ├── lifecycle/          # graceful-shutdown phase interfaces
 │   ├── persistence/
-│   │   ├── models/         # GORM models
+│   │   ├── models/         # GORM models (DB DTOs)
 │   │   ├── repositories/   # One file per entity
 │   │   └── migrations.go
-│   ├── servers/            # http.Server wrapper
-│   ├── transport/          # Routers, middleware, CORS
 │   └── webapp/             # embedded web build (dist/ gitignored, baked in with -tags embedweb)
 ├── main.go
 └── go.mod

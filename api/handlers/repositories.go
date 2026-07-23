@@ -1,0 +1,58 @@
+package handlers
+
+import (
+	"net/http"
+
+	"github.com/DaanV2/itinerarium/api/application"
+	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
+	"github.com/DaanV2/itinerarium/api/transport"
+)
+
+type repositoryResponse struct {
+	ID          string                `json:"id"`
+	Type        models.RepositoryType `json:"type"`
+	GroupID     *string               `json:"group_id,omitempty"`
+	CharacterID *string               `json:"character_id,omitempty"`
+}
+
+func toRepositoryResponse(r *models.Repository) repositoryResponse {
+	return repositoryResponse{ID: r.ID, Type: r.Type, GroupID: r.GroupID, CharacterID: r.CharacterID}
+}
+
+// ListRepositoriesHandler returns every repository the caller may see: all of
+// them for a GM, the general/template singletons plus the caller's own
+// character and group repositories for a player. Must be wrapped in
+// RequireAuth.
+func ListRepositoriesHandler(svc *application.RepositoryService) http.Handler {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
+		repos, err := svc.List(r.Context(), transport.RequesterFrom(r))
+		if err != nil {
+			transport.WriteServiceError(w, err)
+
+			return
+		}
+
+		responses := make([]repositoryResponse, len(repos))
+		for i := range repos {
+			responses[i] = toRepositoryResponse(&repos[i])
+		}
+
+		w.WriteJSON(http.StatusOK, responses)
+	})
+}
+
+// GetRepositoryHandler returns one repository, or 404 when the caller may not
+// see it (existence hidden). Must be wrapped in RequireAuth.
+func GetRepositoryHandler(svc *application.RepositoryService) http.Handler {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
+		repo, err := svc.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		if err != nil {
+			transport.WriteServiceError(w, err)
+
+			return
+		}
+
+		w.WriteJSON(http.StatusOK, toRepositoryResponse(repo))
+	})
+}
