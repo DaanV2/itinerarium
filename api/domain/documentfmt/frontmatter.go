@@ -16,8 +16,7 @@ type Frontmatter struct {
 	Title   string   `yaml:"title"`
 	Tags    []string `yaml:"tags"`
 	GameDay *int     `yaml:"game_day"`
-	// Repository targets a repository by name on vault import (M6); document
-	// creation inside a known repository ignores it.
+	// Repository targets a repository by name on vault import (M6); document creation inside a known repository ignores it.
 	Repository string `yaml:"repository"`
 }
 
