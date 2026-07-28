@@ -23,12 +23,12 @@ CI additionally runs `go test -race ./...` on Linux. The race detector needs cgo
 
 ## Layer rules — where code goes
 
-Request flow: `handlers` → `application` → `repositories` → `models`. Never skip a layer, never import upward. `handlers` and `application` may call `domain` for pure rules; `transport` is app-agnostic mechanism and imports none of them.
+Request flow: `api/v1/{domain}` → `application` → `repositories` → `models`. Never skip a layer, never import upward. Handlers and `application` may call `domain` for pure rules; `infrastructure/transport` is app-agnostic mechanism and imports none of them.
 
 | Layer | Directory | Owns | Never contains |
 |-------|-----------|------|----------------|
-| Handlers | `handlers/` | Per-entity endpoints: request decode, response encode, request/response DTOs | Business logic, GORM queries, routing/middleware |
-| Transport | `transport/` (+ `transport/server/`) | HTTP mechanism: router, middleware, security, throttle, error→status mapping, SPA, auth middleware, http host | Per-entity endpoint logic, business logic |
+| Handlers | `api/v1/{domain}/` | Per-entity endpoints: request decode, response encode, request/response DTOs | Business logic, GORM queries, routing/middleware |
+| Transport | `infrastructure/transport/` (+ `infrastructure/transport/server/`) | HTTP mechanism: router, middleware, security, throttle, error→status mapping, SPA, auth middleware, http host | Per-entity endpoint logic, business logic |
 | Domain | `domain/` | Pure rules: game-day maths, section merge, frontmatter parsing (`documentfmt/`) | I/O, HTTP types, GORM queries |
 | Services | `application/` | Business logic, **all permission rules** (game-day gating, GM-only stripping, existence hiding) | HTTP types, GORM queries |
 | Repositories | `infrastructure/persistence/repositories/` | All GORM queries, one file per entity | Permission decisions, HTTP types |
@@ -118,12 +118,12 @@ func (s *CharacterService) Get(ctx context.Context, requester Requester, id stri
 }
 ```
 
-### 5. Route — handler in `handlers/`, wired in `components/router.go`
+### 5. Route — handler in `api/v1/{domain}/`, wired in `components/router.go`
 
 Handlers decode the request, call one service method, encode the response. They pull the caller from the context seam `transport.RequesterFrom` and map errors with `transport.WriteServiceError`:
 
 ```go
-// handlers/characters.go
+// api/v1/characters/characters.go
 func GetCharacterHandler(svc *application.CharacterService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c, err := svc.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
@@ -132,10 +132,10 @@ func GetCharacterHandler(svc *application.CharacterService) http.Handler {
 }
 ```
 
-Wire it into `CreateRouter` in `components/router.go` with the existing options pattern — `transport.*` provides the mechanism, `handlers.*` the endpoint (services come off the `*Services` bundle):
+Wire it into `CreateRouter` in `components/router.go` with the existing options pattern — `transport.*` provides the mechanism, `charactersv1.*` (or the relevant domain package) the endpoint (services come off the `*Services` bundle):
 
 ```go
-transport.WithHandle("GET /api/characters/{id}", requireAuth(handlers.GetCharacterHandler(services.Characters))),
+transport.WithHandle("GET /api/characters/{id}", requireAuth(charactersv1.GetCharacterHandler(services.Characters))),
 ```
 
 If the handler needs a new service or repository, add it to the `Services` / `Repositories` bundle in `components/services.go` / `components/repositories.go` — that is the composition root.
@@ -151,7 +151,7 @@ Route patterns use Go 1.22+ `http.ServeMux` syntax: `"METHOD /path/{param}"`, re
 
 ## Conventions
 
-- **Functional options** for every constructor that has configuration: `New(opts ...Option)` — see `servers/server.go`, `persistence/database.go`.
+- **Functional options** for every constructor that has configuration: `New(opts ...Option)` — see `infrastructure/transport/server/server.go`, `persistence/database.go`.
 - **Config** (mechanus convention): the component that consumes a setting declares it as a typed flag on a named set at package init — `DatabaseConfigSet = config.New("database")` + `PathFlag = DatabaseConfigSet.String("database.path", ...)` (see `persistence/config.go`, `servers/config.go`, `authentication/config.go`, `logging/setup.go`, `components/config.go`). Commands opt in with `Set.AddToSet(cmd.Flags())`; read values with `PathFlag.Value()`. The flag name is every key at once: flag `--database.path` = env `DATABASE_PATH` = YAML `database.path`. Attach cross-field checks with `.WithValidate(fn)` — `config.Validate()` runs them all from the root command's `PersistentPreRunE`.
 - **Shutdown**: anything holding resources implements a `lifecycle` interface (`Shutdown(ctx) error` usually) and is joined by `lifecycle.ShutdownAll` in `ServerComponents.Shutdown` (`components/build.go`).
 - **Composition root**: `components/` wires config → database → auth → repositories → services → router → server. `BuildServer(ctx)` returns a `*ServerComponents`; commands (`cmd/serve.go`, `cmd/init.go`) stay thin and reuse the smaller builders (`SetupDatabase`, `NewRepositories`, `SetupAuthentication`, `NewServices`).
@@ -161,7 +161,7 @@ Route patterns use Go 1.22+ `http.ServeMux` syntax: `"METHOD /path/{param}"`, re
 - **Errors**: wrap with `fmt.Errorf("doing thing: %w", err)`; sentinel errors (`ErrNotFound`) live in the service layer.
 - **Per-request gating cache** (M8): the game-day gate resolves the requester's characters and group memberships many times per request. `application/request_cache.go` memoizes those lookups for the lifetime of one request — `RequireAuth` installs a cache with `application.WithRequestCache(ctx)`, and the gating helpers (`requesterCharacters`, `cachedGroupIDsForCharacters`, `cachedGroup`) read through it. When no cache is on the context (a direct service call, most tests) the helpers hit the database every time, so results are identical with or without it. Use these helpers for character/group-membership lookups inside gating rather than calling the repositories directly. The cache assumes its entries are stable within a request — only add a lookup to it that no request both caches and then mutates.
 - **Logging**: `github.com/charmbracelet/log` (`log.Default()`, `logger.Info("msg", "key", value)`). The linter rejects the stdlib `log` package (and `log/slog` — same import prefix). `infrastructure/logging` configures the global logger from the `log` config set (`--log.level`/`LOG_LEVEL`, `--log.format`/`LOG_FORMAT` — text/json/logfmt, `--log.report-caller`/`LOG_REPORT_CALLER`) and carries request-scoped loggers through `context.Context` via `logging.Context`/`logging.From` — request handlers get one via `logging.From(r.Context())` after `transport.Logging` middleware has run.
-- **HTTP hardening** (M10): router-wide middleware in `transport/security.go` sets security headers (`SecurityHeaders`) and caps request bodies (`MaxBytes`); `transport/throttle.go` adds an in-process login/reset rate limiter (`Throttle`) that `LoginHandler`/`ResetPasswordHandler` consult (per-IP + per-account for login, per-target for reset, exponential lockout → `429` + `Retry-After`). A nil `*Throttle` is a valid always-allow limiter, so `security.login-max-failures: 0` disables it. All are tuned by the `security.*` config set (`components/config.go`, registered in `cmd/serve.go`) and wired in `components/router.go`. They add no permission logic — they live in transport, not `application`.
+- **HTTP hardening** (M10): router-wide middleware in `infrastructure/transport/security.go` sets security headers (`SecurityHeaders`) and caps request bodies (`MaxBytes`); `infrastructure/transport/throttle.go` adds an in-process login/reset rate limiter (`Throttle`) that `LoginHandler`/`ResetPasswordHandler` consult (per-IP + per-account for login, per-target for reset, exponential lockout → `429` + `Retry-After`). A nil `*Throttle` is a valid always-allow limiter, so `security.login-max-failures: 0` disables it. All are tuned by the `security.*` config set (`components/config.go`, registered in `cmd/serve.go`) and wired in `components/router.go`. They add no permission logic — they live in `infrastructure/transport`, not `application`.
 - **Schema migrations** (M11): `infrastructure/persistence/migrations.go` runs an ordered [gormigrate](https://github.com/go-gormigrate/gormigrate) list on start (`Database.Migrate()`). `0001` is `AutoMigrate(allModels())` (fresh-install baseline); every later change is a **new numbered migration** appended to `migrations()` — never edit `0001` to alter a deployed schema, and don't rely on `allModels()` alone to reach existing installs.
 
 ## Lint rules that trip people up (`.golangci.yml`, enforced in CI)
