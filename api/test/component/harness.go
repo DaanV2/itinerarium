@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/DaanV2/itinerarium/api/components"
-	"github.com/DaanV2/itinerarium/api/transport/server"
+	"github.com/DaanV2/itinerarium/api/infrastructure/transport/server"
 	"github.com/stretchr/testify/require"
 )
 

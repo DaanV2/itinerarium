@@ -5,7 +5,7 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/infrastructure/lifecycle"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
-	"github.com/DaanV2/itinerarium/api/transport/server"
+	"github.com/DaanV2/itinerarium/api/infrastructure/transport/server"
 	"github.com/charmbracelet/log"
 )
 

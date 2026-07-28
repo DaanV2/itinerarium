@@ -34,9 +34,17 @@ api/
 ├── components/             # Composition root — wires config→db→auth→repos→services→router→server
 ├── domain/                 # Game-day gating maths + section-merge rule (no I/O); documentfmt/ parses frontmatter
 ├── application/            # Service / business-logic layer (use cases)
-├── handlers/               # Per-entity HTTP endpoint adapters + request/response DTOs
-├── transport/              # HTTP mechanism: router, middleware, security, throttle, error mapping, SPA
-│   └── server/             # http.Server wrapper
+├── api/v1/                 # Per-entity HTTP handlers, one sub-package per domain
+│   ├── activities/
+│   ├── authenication/
+│   ├── characters/
+│   ├── currencies/
+│   ├── inventory/
+│   ├── knowledge/
+│   ├── locations/
+│   ├── sessions/
+│   ├── setup/
+│   └── users/
 ├── infrastructure/         # Outbound adapters + platform the app depends on
 │   ├── authentication/     # JWT, JTI, key storage
 │   ├── config/             # Viper setup and manager
@@ -45,6 +53,8 @@ api/
 │   │   ├── models/         # GORM models (DB DTOs)
 │   │   ├── repositories/   # One file per entity
 │   │   └── migrations.go
+│   ├── transport/          # HTTP mechanism: router, middleware, security, throttle, error mapping, SPA
+│   │   └── server/         # http.Server wrapper
 │   └── webapp/             # embedded web build (dist/ gitignored, baked in with -tags embedweb)
 ├── main.go
 └── go.mod

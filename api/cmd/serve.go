@@ -7,7 +7,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/components"
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
-	"github.com/DaanV2/itinerarium/api/transport/server"
+	"github.com/DaanV2/itinerarium/api/infrastructure/transport/server"
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 )
