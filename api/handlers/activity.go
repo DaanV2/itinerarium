@@ -8,8 +8,8 @@ import (
 
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
+	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
 	"github.com/DaanV2/itinerarium/api/pkg/extensions/xhttp"
-	"github.com/DaanV2/itinerarium/api/transport"
 )
 
 type activityTargetResponse struct {

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/DaanV2/itinerarium/api/transport"
+	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
 	"github.com/stretchr/testify/require"
 )
 

@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/DaanV2/itinerarium/api/transport"
+	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
 	"github.com/stretchr/testify/require"
 )
 

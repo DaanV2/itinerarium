@@ -13,7 +13,7 @@ import (
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/repositories"
-	"github.com/DaanV2/itinerarium/api/transport"
+	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
 	"github.com/stretchr/testify/require"
 )
 
