@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/DaanV2/itinerarium/api/application"
-	"github.com/DaanV2/itinerarium/api/handlers"
+	"github.com/DaanV2/itinerarium/api/application/handlers"
 	"github.com/DaanV2/itinerarium/api/infrastructure/authentication"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"

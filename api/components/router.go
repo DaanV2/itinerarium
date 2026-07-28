@@ -1,7 +1,7 @@
 package components
 
 import (
-	"github.com/DaanV2/itinerarium/api/handlers"
+	"github.com/DaanV2/itinerarium/api/application/handlers"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
 	"github.com/DaanV2/itinerarium/api/infrastructure/webapp"
 	"github.com/charmbracelet/log"
