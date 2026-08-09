@@ -76,7 +76,7 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading…</p>
+		<p>Loading...</p>
 	{:else if !group}
 		<p>Group not found.</p>
 	{:else}
@@ -105,13 +105,13 @@
 					<h3>Join with a character</h3>
 					<label for="join-character">Character</label>
 					<select id="join-character" bind:value={joinCharacterId} required>
-						<option value="" disabled>Pick a character…</option>
+						<option value="" disabled>Pick a character...</option>
 						{#each joinable as character (character.id)}
 							<option value={character.id}>{character.name}</option>
 						{/each}
 					</select>
 
-					<SubmitButton pending={joining} label="Join" pendingLabel="Joining…" />
+					<SubmitButton pending={joining} label="Join" pendingLabel="Joining..." />
 				</form>
 			{/if}
 		</section>

@@ -49,7 +49,7 @@
 
 	<GmOnly>
 		<section>
-			<CreateModal triggerLabel="Create location" pendingLabel="Creating…" onSubmit={handleCreate}>
+			<CreateModal triggerLabel="Create location" pendingLabel="Creating..." onSubmit={handleCreate}>
 				<FormField id="location-name" label="Name" type="text" required bind:value={name} />
 				<FormField id="location-plane" label="Plane" type="text" bind:value={plane} />
 			</CreateModal>
@@ -59,7 +59,7 @@
 	<section>
 		<h2>Known locations</h2>
 		{#if loading}
-			<p>Loading…</p>
+			<p>Loading...</p>
 		{:else if locations.length === 0}
 			<p>No locations you can see yet.</p>
 		{:else}

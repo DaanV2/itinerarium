@@ -116,7 +116,7 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading…</p>
+		<p>Loading...</p>
 	{:else if !doc}
 		<p>Document not found.</p>
 	{:else if editing}
@@ -163,7 +163,7 @@
 		<div class="edit-actions">
 			<button type="button" onclick={cancelEditing} disabled={saving}>Cancel</button>
 			<button type="button" onclick={() => save(false)} disabled={saving}>
-				{saving ? 'Saving…' : 'Save'}
+				{saving ? 'Saving...' : 'Save'}
 			</button>
 		</div>
 

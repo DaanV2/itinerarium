@@ -39,7 +39,7 @@ itinerarium/
 | `JournalEntry` | Belongs to a character, stamped with `game_day`. Readable by the owning player and GMs only. Can be converted (copied) into a `Document` in the character's private knowledge repository. |
 | `ActivityEntry` | Append-only event log row, stamped with `game_day` (M5). Describes what changed (`entity_type`/`entity_id`/`entity_name`), who did it (`actor` — a character name or `"GM"`), and carries an access **scope** (`scope_type`/`scope_id`: `group`, `location`, or `repository`) that gates who may normally see it. Announced entries (`announced`, `announced_public`, plus `ActivityTarget` rows) instead reach their targets regardless of entity access. Entries are written in the **same transaction** as the change they describe, so history and state can never drift apart. |
 | `ActivityTarget` | One explicit recipient of an announced `ActivityEntry`: exactly one character or one group. |
-| `Location`     | Named plane or place (town, building, room, …). `plane` is a free-text label grouping locations into planes of existence. Has its own inventory and access-controlled visibility via `LocationAccess`. Its description is a set of `LocationSection` rows — `gm_only` flag plus a shared `shared_on_game_day` gate, exactly like a `Document`'s sections. Characters and sessions can be associated with one. |
+| `Location`     | Named plane or place (town, building, room, ...). `plane` is a free-text label grouping locations into planes of existence. Has its own inventory and access-controlled visibility via `LocationAccess`. Its description is a set of `LocationSection` rows — `gm_only` flag plus a shared `shared_on_game_day` gate, exactly like a `Document`'s sections. Characters and sessions can be associated with one. |
 
 ## Permission Model
 
@@ -112,7 +112,7 @@ There is deliberately no `InitSchema` shortcut, so a database that predates gorm
 - **Player edits merge, never clobber**: a player's save replaces only the visible sections (by section ID); GM-only rows keep their position untouched. New sections land player-visible at the end — so an edit on an all-GM-only document becomes a new player-visible section (core domain rule 7). A player submitting a GM-only section ID gets the same "unknown section" error as a garbage ID, so GM-ness never leaks.
 - **Warnings, not blocks** (both `409` with a machine-readable `code`): creating/moving onto an occupied path returns `path_collision` unless `allow_collision` is set; saving with a stale `expected_version` returns `concurrent_edit` unless `force` is set. `version` is an integer that increments on every save — editors echo it back.
 - **Reveal state for the editor**: document responses carry `revealed` — whether any character with repository access has reached `shared_on_game_day` — so the editor can warn that edits to an already-revealed document are immediately visible (documents are not versioned).
-- **Frontmatter**: `POST … /documents` accepts raw markdown whose leading `---` YAML block sets `title`, `tags`, and `game_day` (explicit request fields win). This is the same Obsidian-compatible format the M6 vault import will use.
+- **Frontmatter**: `POST ... /documents` accepts raw markdown whose leading `---` YAML block sets `title`, `tags`, and `game_day` (explicit request fields win). This is the same Obsidian-compatible format the M6 vault import will use.
 - **Direct shares** (`DocumentShare`) let a GM hand one specific character a document independently of the document's `Repository` access rule — e.g. revealing a note from another character's private repository. A share carries its own `character_id` and `shared_on_game_day`; it is checked as a fallback only when the repository/game-day path doesn't already grant access, so it can only add reach, never take it away. GM-only sections are still stripped for the recipient exactly as on any other read. GM only to create, list, or revoke; `GET /api/documents/shared` lets a player list what's been shared with any of their characters.
 
 ### Item movement (M2)
@@ -164,7 +164,7 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `POST /api/inventory/move` | access to both ends | Move item quantity between inventories |
 | `GET /api/characters/{id}/money` | owner + GM | List a character's balances |
 | `PUT /api/characters/{id}/money/{currencyId}` | owner + GM | Set a balance to an absolute amount |
-| `GET\|PUT /api/groups/{id}/money…` | members + GM | Same, for a group's shared money |
+| `GET\|PUT /api/groups/{id}/money...` | members + GM | Same, for a group's shared money |
 | `GET /api/groups` | any authenticated | List groups with member identity |
 | `POST /api/groups`, `PATCH /api/groups/{id}` | GM | Create / edit a group |
 | `POST /api/groups/{id}/members` | character owner + GM | Join a character to a group |
@@ -172,7 +172,7 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `GET /api/locations` | GM all, players accessible only | List visible locations |
 | `POST /api/locations` | GM | Create a location |
 | `GET\|PATCH /api/locations/{id}` | anyone with access | Read / edit a location (404 without access) |
-| `GET\|POST /api/locations/{id}/access`, `DELETE …/access/{accessId}` | GM | Manage a location's grants |
+| `GET\|POST /api/locations/{id}/access`, `DELETE .../access/{accessId}` | GM | Manage a location's grants |
 | `PUT\|DELETE /api/characters/{id}/location` | owner + GM | Set / clear a character's location (players only to locations the character can see) |
 | `GET /api/repositories` | any authenticated | List visible repositories: general, template, plus own character/group repositories (GM sees all) |
 | `GET /api/repositories/{id}` | per repository rule | Read one repository (404 without access) |
@@ -197,7 +197,7 @@ Since M2, inventories are **owner-based** — a line belongs to exactly one char
 | `GET /api/characters/{id}/activity` | owner + GM | The character's activity feed: game-day gated, scope-access gated, announced entries included, `actor` stripped on announced entries for players |
 | `GET /api/activity` | GM | The full campaign log, all game days, announcement targets included |
 | `POST /api/activity/announcements` | GM | Broadcast an announced entry to characters, groups, or everyone, surfacing at a chosen game day |
-| `GET /api/search?q=…` | any authenticated | Full-text search over the documents the caller may see (see [Search](#search)) |
+| `GET /api/search?q=...` | any authenticated | Full-text search over the documents the caller may see (see [Search](#search)) |
 | `POST /api/import/obsidian` | any authenticated | Import a batch of Obsidian vault files as documents; per-file target repository access enforced (see [Obsidian vault import](#obsidian-vault-import)) |
 
 ## Document Format
@@ -228,7 +228,7 @@ This format is intentionally compatible with Obsidian so GMs can author document
 
 ## Search
 
-Full-text search over titles, file names (paths), tags, and section content — `GET /api/search?q=…` (M6). The backend is a case-insensitive SQL `LIKE` match (wildcards in the query are escaped, so `50%` matches literally) that works unchanged on every supported database; no separate index to maintain, results always reflect the current documents. Access rules are applied **before** results are returned:
+Full-text search over titles, file names (paths), tags, and section content — `GET /api/search?q=...` (M6). The backend is a case-insensitive SQL `LIKE` match (wildcards in the query are escaped, so `50%` matches literally) that works unchanged on every supported database; no separate index to maintain, results always reflect the current documents. Access rules are applied **before** results are returned:
 
 - The database query is already scoped to the caller's reachable repositories and reached direct shares, and the service re-checks the game-day gate per document — an inaccessible document is excluded entirely, no titles, no hit counts
 - GM-only sections are excluded from the searchable content for non-GM users, both from matching (a document reachable only through GM-only text is never returned) and from the returned sections

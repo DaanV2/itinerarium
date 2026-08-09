@@ -72,6 +72,6 @@
 
 		<ErrorAlert message={error} />
 
-		<SubmitButton pending={submitting} label="Create GM account" pendingLabel="Creating account…" />
+		<SubmitButton pending={submitting} label="Create GM account" pendingLabel="Creating account..." />
 	</form>
 </main>

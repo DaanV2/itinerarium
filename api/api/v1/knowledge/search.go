@@ -14,7 +14,7 @@ type searchResultResponse struct {
 	Snippet   string   `json:"snippet,omitempty"`
 }
 
-// SearchDocumentsHandler runs a full-text search (?q=…) over the documents
+// SearchDocumentsHandler runs a full-text search (?q=...) over the documents
 // the caller may see. Access filtering happens in the service before results
 // are built — inaccessible documents never surface. Must be wrapped in
 // RequireAuth.

@@ -139,7 +139,7 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading…</p>
+		<p>Loading...</p>
 	{:else if !location}
 		<p>Location not found.</p>
 	{:else if editing}
@@ -178,7 +178,7 @@
 
 			<div class="edit-actions">
 				<button type="button" onclick={cancelEditing} disabled={saving}>Cancel</button>
-				<SubmitButton pending={saving} label="Save" pendingLabel="Saving…" />
+				<SubmitButton pending={saving} label="Save" pendingLabel="Saving..." />
 			</div>
 		</form>
 	{:else}
@@ -228,7 +228,7 @@
 
 					<label for="grant-target">Target</label>
 					<select id="grant-target" bind:value={grantTargetId} required>
-						<option value="" disabled>Pick…</option>
+						<option value="" disabled>Pick...</option>
 						{#if grantKind === 'character'}
 							{#each allCharacters as character (character.id)}
 								<option value={character.id}>{character.name}</option>
@@ -240,7 +240,7 @@
 						{/if}
 					</select>
 
-					<SubmitButton pending={granting} label="Grant" pendingLabel="Granting…" />
+					<SubmitButton pending={granting} label="Grant" pendingLabel="Granting..." />
 				</form>
 			</section>
 		</GmOnly>

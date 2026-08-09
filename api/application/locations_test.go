@@ -79,12 +79,12 @@ func TestLocationService_HiddenWithoutGrant(t *testing.T) {
 	location := env.createLocation(t, "Hidden Vault")
 	ownedCharacter(t, env.characters, "Aria")
 
-	// Not in the list…
+	// Not in the list...
 	locations, err := env.locations.List(ctx, playerRequester)
 	require.NoError(t, err)
 	assert.Empty(t, locations, "List leaked locations to an unauthorised player")
 
-	// …and a direct read is 404, never 403 (existence must not leak).
+	// ...and a direct read is 404, never 403 (existence must not leak).
 	_, err = env.locations.Get(ctx, playerRequester, location.ID)
 	require.ErrorIs(t, err, application.ErrNotFound)
 }
@@ -140,11 +140,11 @@ func TestLocationService_AnyoneWithAccessCanEdit(t *testing.T) {
 	newName := "The Rusty Tavern"
 	sections := []application.LocationSectionInput{{Content: "Smells of stale ale."}}
 
-	// Without access the edit reads as not-found…
+	// Without access the edit reads as not-found...
 	_, err := env.locations.Update(ctx, playerRequester, location.ID, &newName, nil, nil, sections)
 	require.ErrorIs(t, err, application.ErrNotFound)
 
-	// …with access it succeeds (rule 7: seeing a location means editing it).
+	// ...with access it succeeds (rule 7: seeing a location means editing it).
 	_, err = env.locations.GrantAccess(ctx, gmRequester, location.ID, &character.ID, nil)
 	require.NoError(t, err)
 
@@ -195,13 +195,13 @@ func TestLocationService_Description_GameDayGating(t *testing.T) {
 	_, err = env.locations.Update(ctx, gmRequester, location.ID, nil, nil, &sharedOn, sections)
 	require.NoError(t, err)
 
-	// The character hasn't reached game day 5 yet — description stays hidden…
+	// The character hasn't reached game day 5 yet — description stays hidden...
 	got, err := env.locations.Get(ctx, playerRequester, location.ID)
 	require.NoError(t, err)
 	assert.Empty(t, got.Location.Sections, "description revealed before its game day")
 	assert.False(t, got.Revealed)
 
-	// …but the location itself is still visible and editable (existence is
+	// ...but the location itself is still visible and editable (existence is
 	// gated by LocationAccess, not game day).
 	newName := "The Tavern (rebuilt)"
 	_, err = env.locations.Update(ctx, playerRequester, location.ID, &newName, nil, nil, nil)

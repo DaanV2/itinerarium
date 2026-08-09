@@ -50,7 +50,7 @@
 
 	<GmOnly>
 		<section>
-			<CreateModal triggerLabel="Create group" pendingLabel="Creating…" onSubmit={handleCreate}>
+			<CreateModal triggerLabel="Create group" pendingLabel="Creating..." onSubmit={handleCreate}>
 				<FormField id="group-name" label="Name" type="text" required bind:value={name} />
 
 				<label for="group-type">Type</label>
@@ -73,7 +73,7 @@
 	<section>
 		<h2>All groups</h2>
 		{#if loading}
-			<p>Loading…</p>
+			<p>Loading...</p>
 		{:else if groups.length === 0}
 			<p>No groups yet.</p>
 		{:else}

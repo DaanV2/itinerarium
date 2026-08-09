@@ -136,14 +136,14 @@ func TestRepositories_Get_ForeignCharacterRepositoryHidden(t *testing.T) {
 
 	require.NotEmpty(t, repoID, "character repository not found in %+v", repos)
 
-	// Owner and GM can read it…
+	// Owner and GM can read it...
 	rec := env.doJSON(t, http.MethodGet, "/api/repositories/"+repoID, env.playerToken)
 	require.Equal(t, http.StatusOK, rec.Code, "owner Get body: %s", rec.Body.String())
 
 	rec = env.doJSON(t, http.MethodGet, "/api/repositories/"+repoID, env.gmToken)
 	require.Equal(t, http.StatusOK, rec.Code, "GM Get body: %s", rec.Body.String())
 
-	// …a different player gets 404, never 403 (existence hidden).
+	// ...a different player gets 404, never 403 (existence hidden).
 	rec = env.doJSON(t, http.MethodGet, "/api/repositories/"+repoID, env.otherToken)
 	require.Equal(t, http.StatusNotFound, rec.Code, "foreign player body: %s", rec.Body.String())
 }

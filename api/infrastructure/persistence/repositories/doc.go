@@ -1,5 +1,5 @@
 // Package repositories holds all database access, one file per entity
-// (users.go, characters.go, documents.go, …). Each repository is a struct
+// (users.go, characters.go, documents.go, ...). Each repository is a struct
 // around *persistence.Database with methods returning models — services in
 // application/ never build GORM queries themselves.
 //

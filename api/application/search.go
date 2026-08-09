@@ -278,10 +278,10 @@ func snippetAround(content string, idx int, query string) string {
 
 	snippet := strings.TrimSpace(string(runes[start:end]))
 	if start > 0 {
-		snippet = "…" + snippet
+		snippet = "..." + snippet
 	}
 	if end < len(runes) {
-		snippet += "…"
+		snippet += "..."
 	}
 
 	return snippet

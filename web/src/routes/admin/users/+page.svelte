@@ -64,7 +64,7 @@
 	{/if}
 
 	<section>
-		<CreateModal triggerLabel="Create account" pendingLabel="Creating…" onSubmit={handleCreate}>
+		<CreateModal triggerLabel="Create account" pendingLabel="Creating..." onSubmit={handleCreate}>
 			<FormField
 				id="email"
 				label="Email"
@@ -85,7 +85,7 @@
 	<section>
 		<h2>Existing accounts</h2>
 		{#if loading}
-			<p>Loading…</p>
+			<p>Loading...</p>
 		{:else if accounts.length === 0}
 			<p>No accounts yet.</p>
 		{:else}

@@ -45,7 +45,7 @@
 	<ErrorAlert message={error} />
 
 	<section>
-		<CreateModal triggerLabel="Create character" pendingLabel="Creating…" onSubmit={handleCreate}>
+		<CreateModal triggerLabel="Create character" pendingLabel="Creating..." onSubmit={handleCreate}>
 			<FormField id="name" label="Name" type="text" required bind:value={name} />
 		</CreateModal>
 	</section>
@@ -53,7 +53,7 @@
 	<section>
 		<h2>Your characters</h2>
 		{#if loading}
-			<p>Loading…</p>
+			<p>Loading...</p>
 		{:else if characters.length === 0}
 			<p>No characters yet.</p>
 		{:else}

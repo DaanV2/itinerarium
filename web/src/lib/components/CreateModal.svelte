@@ -17,7 +17,7 @@
 		triggerLabel,
 		title = triggerLabel,
 		submitLabel = triggerLabel,
-		pendingLabel = 'Saving…',
+		pendingLabel = 'Saving...',
 		onSubmit,
 		children
 	}: {

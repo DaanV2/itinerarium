@@ -18,7 +18,7 @@ export function newDocumentSection(): DocumentSection {
 	return { id: '', content: '', gm_only: false };
 }
 
-/** The editor's "Also directly shared with …" names, resolved from the GM-only
+/** The editor's "Also directly shared with ..." names, resolved from the GM-only
  * share list against the character roster. Falls back to a neutral label for a
  * share whose character isn't in the roster. */
 export function sharedCharacterNames(shares: DocumentShare[], characters: Character[]): string[] {

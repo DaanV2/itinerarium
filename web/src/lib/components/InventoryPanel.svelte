@@ -178,7 +178,7 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading…</p>
+		<p>Loading...</p>
 	{:else}
 		{#if items.length === 0}
 			<p>No items yet.</p>
@@ -188,14 +188,14 @@
 					<li>
 						{item.quantity}× {item.name}
 						{#if item.description}<span> — {item.description}</span>{/if}
-						<button type="button" onclick={() => toggleMove(item)}>Move…</button>
+						<button type="button" onclick={() => toggleMove(item)}>Move...</button>
 						<button type="button" onclick={() => handleRemoveItem(item.id)}>Remove</button>
 
 						{#if movingItemId === item.id}
 							<form onsubmit={handleMove}>
 								<label for="move-target-{item.id}">To</label>
 								<select id="move-target-{item.id}" bind:value={moveTargetIndex} required>
-									<option value={-1} disabled>Pick a destination…</option>
+									<option value={-1} disabled>Pick a destination...</option>
 									{#each moveTargets as target, index (target.label)}
 										<option value={index}>{target.label}</option>
 									{/each}
@@ -211,7 +211,7 @@
 									bind:value={moveQuantity}
 								/>
 
-								<SubmitButton pending={movePending} label="Move" pendingLabel="Moving…" />
+								<SubmitButton pending={movePending} label="Move" pendingLabel="Moving..." />
 							</form>
 						{/if}
 					</li>
@@ -227,7 +227,7 @@
 				bind:value={itemDefinitionId}
 				onchange={onPickDefinition}
 			>
-				<option value="">Free-text item…</option>
+				<option value="">Free-text item...</option>
 				{#each itemDefinitions as def (def.id)}
 					<option value={def.id}>{def.name}</option>
 				{/each}
@@ -250,7 +250,7 @@
 				bind:value={itemQuantity}
 			/>
 
-			<SubmitButton pending={addingItem} label="Add item" pendingLabel="Adding…" />
+			<SubmitButton pending={addingItem} label="Add item" pendingLabel="Adding..." />
 		</form>
 	{/if}
 </section>

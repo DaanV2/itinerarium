@@ -101,7 +101,7 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading…</p>
+		<p>Loading...</p>
 	{:else}
 		{#if entries.length === 0}
 			<p>No journal entries yet.</p>
@@ -113,7 +113,7 @@
 						{#if editingEntryId === entry.id}
 							<form onsubmit={handleEdit}>
 								<textarea bind:value={editContent} required></textarea>
-								<SubmitButton pending={editPending} label="Save" pendingLabel="Saving…" />
+								<SubmitButton pending={editPending} label="Save" pendingLabel="Saving..." />
 								<button type="button" onclick={cancelEdit}>Cancel</button>
 							</form>
 						{:else}
@@ -129,7 +129,7 @@
 									onclick={() => handleConvert(entry)}
 									disabled={convertingEntryId === entry.id}
 								>
-									{convertingEntryId === entry.id ? 'Converting…' : 'Convert to document'}
+									{convertingEntryId === entry.id ? 'Converting...' : 'Convert to document'}
 								</button>
 							{/if}
 						{/if}
@@ -140,8 +140,8 @@
 
 		<form onsubmit={handleAddEntry}>
 			<h3>New entry</h3>
-			<textarea bind:value={newContent} required placeholder="Dear diary…"></textarea>
-			<SubmitButton pending={addingEntry} label="Add entry" pendingLabel="Adding…" />
+			<textarea bind:value={newContent} required placeholder="Dear diary..."></textarea>
+			<SubmitButton pending={addingEntry} label="Add entry" pendingLabel="Adding..." />
 		</form>
 	{/if}
 </section>

@@ -62,7 +62,7 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading…</p>
+		<p>Loading...</p>
 	{:else if !repository || !tree}
 		<p>Repository not found.</p>
 	{:else}

@@ -33,7 +33,7 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading…</p>
+		<p>Loading...</p>
 	{:else if entries.length === 0}
 		<p>Nothing has happened yet — as far as this character knows.</p>
 	{:else}

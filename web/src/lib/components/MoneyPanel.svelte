@@ -48,7 +48,7 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading…</p>
+		<p>Loading...</p>
 	{:else if moneyRows.length === 0}
 		<p>No currencies defined. A GM can add them to the catalog.</p>
 	{:else}

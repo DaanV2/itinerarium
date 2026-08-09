@@ -56,13 +56,13 @@
 	<h1>Repositories</h1>
 
 	<p>
-		<a href={resolve('/repositories/import')}>Import an Obsidian vault…</a>
+		<a href={resolve('/repositories/import')}>Import an Obsidian vault...</a>
 	</p>
 
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading…</p>
+		<p>Loading...</p>
 	{:else if repositories.length === 0}
 		<p>No repositories you can see yet.</p>
 	{:else}

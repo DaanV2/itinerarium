@@ -133,17 +133,17 @@ func TestLocations_HiddenWithoutGrant(t *testing.T) {
 	env := newLocationHTTPTestEnv(t)
 	locationID := env.createLocation(t, "Hidden Vault")
 
-	// Absent from the list…
+	// Absent from the list...
 	listRec := env.doJSON(t, http.MethodGet, "/api/locations", env.playerToken, nil)
 	require.Equal(t, http.StatusOK, listRec.Code, "list body: %s", listRec.Body.String())
 	require.Contains(t, []string{"[]", "null"}, listRec.Body.String(),
 		"list leaked locations to player without grants")
 
-	// …direct read is 404, not 403.
+	// ...direct read is 404, not 403.
 	getRec := env.doJSON(t, http.MethodGet, "/api/locations/"+locationID, env.playerToken, nil)
 	require.Equal(t, http.StatusNotFound, getRec.Code, "get body: %s", getRec.Body.String())
 
-	// …and the access list is GM-only.
+	// ...and the access list is GM-only.
 	accessRec := env.doJSON(t, http.MethodGet, "/api/locations/"+locationID+"/access", env.playerToken, nil)
 	require.Equal(t, http.StatusForbidden, accessRec.Code, "access list body: %s", accessRec.Body.String())
 }
@@ -178,12 +178,12 @@ func TestLocations_PlayerWithAccessCanEditDescription(t *testing.T) {
 		map[string]any{"character_id": env.characterID})
 	require.Equal(t, http.StatusCreated, grantRec.Code, "grant body: %s", grantRec.Body.String())
 
-	// A player without access is not-found, never forbidden…
+	// A player without access is not-found, never forbidden...
 	deniedRec := env.doJSON(t, http.MethodPatch, "/api/locations/"+locationID, env.otherPlayerToken,
 		map[string]any{"name": "Should not apply"})
 	require.Equal(t, http.StatusNotFound, deniedRec.Code, "denied edit body: %s", deniedRec.Body.String())
 
-	// …but the granted player can edit both the name and the description.
+	// ...but the granted player can edit both the name and the description.
 	editRec := env.doJSON(t, http.MethodPatch, "/api/locations/"+locationID, env.playerToken,
 		map[string]any{
 			"name":     "The Rusty Tavern",

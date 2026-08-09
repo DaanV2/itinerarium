@@ -51,7 +51,7 @@
 	<form class="search-bar" onsubmit={runSearch}>
 		<input
 			type="search"
-			placeholder="Search titles, file names, tags, and content…"
+			placeholder="Search titles, file names, tags, and content..."
 			bind:value={query}
 			aria-label="Search query"
 		/>
@@ -61,7 +61,7 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Searching…</p>
+		<p>Searching...</p>
 	{:else if searched && results.length === 0}
 		<p>No documents found.</p>
 	{:else if results.length > 0}

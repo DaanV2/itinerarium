@@ -117,7 +117,7 @@
 			</select>
 
 			<label for="announce-entity-type">What kind of thing (optional)</label>
-			<input id="announce-entity-type" bind:value={entityType} placeholder="item, document, …" />
+			<input id="announce-entity-type" bind:value={entityType} placeholder="item, document, ..." />
 
 			<label for="announce-entity-name">Name of the thing</label>
 			<input id="announce-entity-name" bind:value={entityName} required />
@@ -144,14 +144,14 @@
 				{/each}
 			</select>
 
-			<SubmitButton pending={announcing} label="Announce" pendingLabel="Announcing…" />
+			<SubmitButton pending={announcing} label="Announce" pendingLabel="Announcing..." />
 		</form>
 	</section>
 
 	<section>
 		<h2>Full log</h2>
 		{#if loading}
-			<p>Loading…</p>
+			<p>Loading...</p>
 		{:else if entries.length === 0}
 			<p>No activity recorded yet.</p>
 		{:else}

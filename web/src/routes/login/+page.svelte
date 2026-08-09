@@ -54,6 +54,6 @@
 
 		<ErrorAlert message={error} />
 
-		<SubmitButton pending={submitting} label="Log in" pendingLabel="Logging in…" />
+		<SubmitButton pending={submitting} label="Log in" pendingLabel="Logging in..." />
 	</form>
 </main>

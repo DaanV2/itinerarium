@@ -49,7 +49,7 @@ func allModels() []any {
 //     deployment's schema — AutoMigrate never drops or renames columns and can't
 //     express a data backfill.
 //   - Every schema change from now on is a NEW numbered migration appended here
-//     (0003, 0004, …). Adding a model to allModels() alone only reaches fresh
+//     (0003, 0004, ...). Adding a model to allModels() alone only reaches fresh
 //     installs; existing deployments need the numbered migration to get the table.
 func migrations() []*gormigrate.Migration {
 	return []*gormigrate.Migration{

@@ -2,7 +2,7 @@
 	import type { HTMLInputAttributes } from 'svelte/elements';
 
 	// A labelled text/email/password/number input. Any extra attribute (type,
-	// required, autocomplete, minlength, min…) is forwarded to the <input>.
+	// required, autocomplete, minlength, min...) is forwarded to the <input>.
 	interface Props extends HTMLInputAttributes {
 		id: string;
 		label: string;

@@ -134,7 +134,7 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading…</p>
+		<p>Loading...</p>
 	{:else}
 		<div class="controls">
 			<label>
@@ -157,7 +157,7 @@
 				disabled={importing || pending.length === 0 || !repositoryId}
 			>
 				{importing
-					? 'Importing…'
+					? 'Importing...'
 					: `Import ${pending.length} file${pending.length === 1 ? '' : 's'}`}
 			</button>
 		</div>
