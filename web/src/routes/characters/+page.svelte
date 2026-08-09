@@ -37,10 +37,10 @@
 <main class="main-page">
 	<h1>Characters</h1>
 
-	<nav>
+	<p class="page-links">
 		<a href={resolve('/groups')}>Groups</a> ·
 		<a href={resolve('/locations')}>Locations</a>
-	</nav>
+	</p>
 
 	<ErrorAlert message={error} />
 
@@ -53,16 +53,17 @@
 	<section>
 		<h2>Your characters</h2>
 		{#if loading}
-			<p>Loading...</p>
+			<p>Loading…</p>
 		{:else if characters.length === 0}
-			<p>No characters yet.</p>
+			<p class="empty-state">No characters yet. Create one above to get started.</p>
 		{:else}
-			<ul>
+			<ul class="entity-list">
 				{#each characters as character (character.id)}
 					<li>
-						<a href={resolve('/characters/[id]', { id: character.id })}>{character.name}</a> — game
-						day
-						{character.current_game_day}
+						<a class="entity-row" href={resolve('/characters/[id]', { id: character.id })}>
+							<span class="entity-name">{character.name}</span>
+							<span class="entity-meta">Game day {character.current_game_day}</span>
+						</a>
 					</li>
 				{/each}
 			</ul>

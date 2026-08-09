@@ -35,7 +35,7 @@
 	{#if loading}
 		<p>Loading...</p>
 	{:else if entries.length === 0}
-		<p>Nothing has happened yet — as far as this character knows.</p>
+		<p class="empty-state">Nothing has happened yet — as far as this character knows.</p>
 	{:else}
 		<ul>
 			{#each entries as entry (entry.id)}

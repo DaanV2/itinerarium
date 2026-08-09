@@ -104,7 +104,7 @@
 		<p>Loading...</p>
 	{:else}
 		{#if entries.length === 0}
-			<p>No journal entries yet.</p>
+			<p class="empty-state">No journal entries yet. Write the first one below.</p>
 		{:else}
 			<ul>
 				{#each entries as entry (entry.id)}

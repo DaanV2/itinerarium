@@ -69,7 +69,8 @@
 		height: 100vh;
 		position: sticky;
 		top: 0;
-		border-right: 1px solid #ccc;
+		background-color: var(--secondary-color);
+		border-right: 1px solid var(--primary-color);
 		padding: 1rem 0.5rem;
 		box-sizing: border-box;
 	}

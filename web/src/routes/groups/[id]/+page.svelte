@@ -9,6 +9,7 @@
 	import InventoryPanel from '$lib/components/InventoryPanel.svelte';
 	import MoneyPanel from '$lib/components/MoneyPanel.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
+	import Tabs from '$lib/components/Tabs.svelte';
 	import type { Character, Group, InventoryOwnerRef } from '$lib/types';
 
 	const groupId = page.params.id ?? '';
@@ -76,51 +77,125 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading...</p>
+		<p>Loading…</p>
 	{:else if !group}
 		<p>Group not found.</p>
 	{:else}
 		<h1>{group.name}</h1>
-		<p>{group.type}{group.description ? ` — ${group.description}` : ''}</p>
+		<p class="group-meta">{group.type}{group.description ? ` — ${group.description}` : ''}</p>
 
-		<section>
-			<h2>Members</h2>
-			{#if group.members.length === 0}
-				<p>No members yet.</p>
-			{:else}
-				<ul>
-					{#each group.members as member (member.id)}
-						<li>
-							{member.name}
-							{#if myCharacters.some((c) => c.id === member.id)}
-								<button type="button" onclick={() => handleLeave(member.id)}>Leave</button>
-							{/if}
-						</li>
-					{/each}
-				</ul>
-			{/if}
-
-			{#if joinable.length > 0}
-				<form onsubmit={handleJoin}>
-					<h3>Join with a character</h3>
-					<label for="join-character">Character</label>
-					<select id="join-character" bind:value={joinCharacterId} required>
-						<option value="" disabled>Pick a character...</option>
-						{#each joinable as character (character.id)}
-							<option value={character.id}>{character.name}</option>
+		{#snippet membersPanel()}
+			<section>
+				{#if group && group.members.length === 0}
+					<p class="empty-state">No members yet.</p>
+				{:else if group}
+					<ul class="member-list">
+						{#each group.members as member (member.id)}
+							<li class="member-row">
+								<span>{member.name}</span>
+								{#if myCharacters.some((c) => c.id === member.id)}
+									<button type="button" onclick={() => handleLeave(member.id)}>Leave</button>
+								{/if}
+							</li>
 						{/each}
-					</select>
+					</ul>
+				{/if}
 
-					<SubmitButton pending={joining} label="Join" pendingLabel="Joining..." />
-				</form>
+				{#if joinable.length > 0}
+					<form class="join-form" onsubmit={handleJoin}>
+						<h3>Join with a character</h3>
+						<div class="join-row">
+							<label for="join-character">Character</label>
+							<select id="join-character" bind:value={joinCharacterId} required>
+								<option value="" disabled>Pick a character…</option>
+								{#each joinable as character (character.id)}
+									<option value={character.id}>{character.name}</option>
+								{/each}
+							</select>
+							<SubmitButton pending={joining} label="Join" pendingLabel="Joining…" />
+						</div>
+					</form>
+				{/if}
+			</section>
+		{/snippet}
+
+		{#snippet inventoryPanel()}
+			{#if canSeeContent}
+				<InventoryPanel {owner} />
+			{:else}
+				<p class="empty-state">
+					Join the group with one of your characters to see shared inventory.
+				</p>
 			{/if}
-		</section>
+		{/snippet}
 
-		{#if canSeeContent}
-			<InventoryPanel {owner} />
-			<MoneyPanel {owner} />
-		{:else}
-			<p>Join the group with one of your characters to see its shared inventory and money.</p>
-		{/if}
+		{#snippet moneyPanel()}
+			{#if canSeeContent}
+				<MoneyPanel {owner} />
+			{:else}
+				<p class="empty-state">Join the group with one of your characters to see shared money.</p>
+			{/if}
+		{/snippet}
+
+		<Tabs
+			tabs={[
+				{ id: 'members', label: 'Members', panel: membersPanel },
+				{ id: 'inventory', label: 'Inventory', panel: inventoryPanel },
+				{ id: 'money', label: 'Money', panel: moneyPanel }
+			]}
+		/>
 	{/if}
 </main>
+
+<style>
+	.group-meta {
+		margin: 0.25rem 0 0;
+		color: var(--color-muted);
+		font-size: 0.9rem;
+	}
+
+	.member-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+
+	.member-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.5rem 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: 5px;
+	}
+
+	.join-form {
+		margin-top: 1.25rem;
+		border-top: 1px solid var(--color-border);
+		padding-top: 1rem;
+	}
+
+	.join-form h3 {
+		margin: 0 0 0.6rem;
+		font-size: 0.95rem;
+	}
+
+	.join-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		flex-wrap: wrap;
+	}
+
+	.join-row label {
+		font-size: 0.875rem;
+	}
+
+	.join-row select {
+		flex: 1;
+		min-width: 160px;
+	}
+</style>

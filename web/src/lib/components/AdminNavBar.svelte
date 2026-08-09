@@ -58,12 +58,12 @@
 	}
 
 	.section-label {
-		margin: 0 0 0.75rem 0.75rem;
-		font-size: 0.75rem;
+		margin: 0 0 1rem 0.75rem;
+		font-size: 0.875rem;
 		font-weight: 700;
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: rgba(34, 197, 94, 0.9);
+		letter-spacing: 0.08em;
+		color: var(--gm-highlight-color);
 	}
 
 	ul {

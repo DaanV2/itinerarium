@@ -194,7 +194,7 @@
 		</div>
 
 		{#if items.length === 0}
-			<p>No items yet.</p>
+			<p class="empty-state">No items yet. Use the + button to add one.</p>
 		{:else}
 			<table class="inventory-table">
 				<thead class="inventory-table-head">
