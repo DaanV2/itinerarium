@@ -10,6 +10,7 @@
 	import InventoryPanel from '$lib/components/InventoryPanel.svelte';
 	import JournalPanel from '$lib/components/JournalPanel.svelte';
 	import MoneyPanel from '$lib/components/MoneyPanel.svelte';
+	import Tabs from '$lib/components/Tabs.svelte';
 	import type { Character, InventoryOwnerRef, LocationSummary } from '$lib/types';
 
 	// Always present for this route; `?? ''` keeps the type a plain string.
@@ -94,9 +95,26 @@
 			</select>
 		</section>
 
-		<InventoryPanel {owner} />
-		<MoneyPanel {owner} />
-		<JournalPanel {characterId} />
+		{#snippet inventoryPanel()}
+			<InventoryPanel {owner} />
+		{/snippet}
+
+		{#snippet moneyPanel()}
+			<MoneyPanel {owner} />
+		{/snippet}
+
+		{#snippet journalPanel()}
+			<JournalPanel {characterId} />
+		{/snippet}
+
+		<Tabs
+			tabs={[
+				{ id: 'inventory', label: 'Inventory', panel: inventoryPanel },
+				{ id: 'money', label: 'Money', panel: moneyPanel },
+				{ id: 'journal', label: 'Journal', panel: journalPanel }
+			]}
+		/>
+
 		<ActivityPanel {characterId} />
 	{/if}
 </main>

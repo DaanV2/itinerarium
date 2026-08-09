@@ -13,6 +13,7 @@
 	import { getAccessToken } from '$lib/auth-token';
 	import ErrorAlert from '$lib/components/ErrorAlert.svelte';
 	import FormField from '$lib/components/FormField.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import SubmitButton from '$lib/components/SubmitButton.svelte';
 	import type { InventoryItem, InventoryOwnerRef, ItemDefinition } from '$lib/types';
 
@@ -29,7 +30,9 @@
 	let loading = $state(true);
 	let error = $state('');
 
-	// Add-item form state.
+	// Add-item modal + form state.
+	let showAddModal = $state(false);
+	let addError = $state('');
 	let itemName = $state('');
 	let itemDefinitionId = $state('');
 	let itemQuantity = $state(1);
@@ -108,9 +111,14 @@
 		items = await listInventory(owner, getAccessToken());
 	}
 
+	function openAddModal() {
+		addError = '';
+		showAddModal = true;
+	}
+
 	async function handleAddItem(event: SubmitEvent) {
 		event.preventDefault();
-		error = '';
+		addError = '';
 		addingItem = true;
 		try {
 			await addInventoryItem(
@@ -125,9 +133,10 @@
 			itemName = '';
 			itemDefinitionId = '';
 			itemQuantity = 1;
+			showAddModal = false;
 			await refreshItems();
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to add item.';
+			addError = err instanceof Error ? err.message : 'Failed to add item.';
 		} finally {
 			addingItem = false;
 		}
@@ -180,77 +189,124 @@
 	{#if loading}
 		<p>Loading...</p>
 	{:else}
+		<div class="inventory-header">
+			<button type="button" class="add-btn" onclick={openAddModal} aria-label="Add item">+</button>
+		</div>
+
 		{#if items.length === 0}
 			<p>No items yet.</p>
 		{:else}
-			<ul>
-				{#each items as item (item.id)}
-					<li>
-						{item.quantity}× {item.name}
-						{#if item.description}<span> — {item.description}</span>{/if}
-						<button type="button" onclick={() => toggleMove(item)}>Move...</button>
-						<button type="button" onclick={() => handleRemoveItem(item.id)}>Remove</button>
+			<table class="inventory-table">
+				<thead class="inventory-table-head">
+					<tr>
+						<th scope="col">Name</th>
+						<th scope="col">Quantity</th>
+						<th scope="col">Description</th>
+						<th scope="col">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="inventory-table-body">
+					{#each items as item (item.id)}
+						<tr>
+							<td>{item.name}</td>
+							<td>{item.quantity}</td>
+							<td>{item.description}</td>
+							<td>
+								<button type="button" onclick={() => toggleMove(item)}>Move</button>
+								<button type="button" onclick={() => handleRemoveItem(item.id)}>Remove</button>
 
-						{#if movingItemId === item.id}
-							<form onsubmit={handleMove}>
-								<label for="move-target-{item.id}">To</label>
-								<select id="move-target-{item.id}" bind:value={moveTargetIndex} required>
-									<option value={-1} disabled>Pick a destination...</option>
-									{#each moveTargets as target, index (target.label)}
-										<option value={index}>{target.label}</option>
-									{/each}
-								</select>
+								{#if movingItemId === item.id}
+									<form onsubmit={handleMove}>
+										<label for="move-target-{item.id}">To</label>
+										<select id="move-target-{item.id}" bind:value={moveTargetIndex} required>
+											<option value={-1} disabled>Pick a destination...</option>
+											{#each moveTargets as target, index (target.label)}
+												<option value={index}>{target.label}</option>
+											{/each}
+										</select>
 
-								<FormField
-									id="move-qty-{item.id}"
-									label="Quantity"
-									type="number"
-									min={1}
-									max={item.quantity}
-									required
-									bind:value={moveQuantity}
-								/>
+										<FormField
+											id="move-qty-{item.id}"
+											label="Quantity"
+											type="number"
+											min={1}
+											max={item.quantity}
+											required
+											bind:value={moveQuantity}
+										/>
 
-								<SubmitButton pending={movePending} label="Move" pendingLabel="Moving..." />
-							</form>
-						{/if}
-					</li>
-				{/each}
-			</ul>
+										<SubmitButton pending={movePending} label="Move" pendingLabel="Moving..." />
+									</form>
+								{/if}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
 		{/if}
 
-		<form onsubmit={handleAddItem}>
-			<h3>Add item</h3>
-			<label for="item-def-{owner.kind}-{owner.id}">From catalog (optional)</label>
-			<select
-				id="item-def-{owner.kind}-{owner.id}"
-				bind:value={itemDefinitionId}
-				onchange={onPickDefinition}
-			>
-				<option value="">Free-text item...</option>
-				{#each itemDefinitions as def (def.id)}
-					<option value={def.id}>{def.name}</option>
-				{/each}
-			</select>
+		<Modal bind:open={showAddModal} title="Add item">
+			<form onsubmit={handleAddItem}>
+				<ErrorAlert message={addError} />
 
-			<FormField
-				id="item-name-{owner.kind}-{owner.id}"
-				label="Name"
-				type="text"
-				required
-				bind:value={itemName}
-			/>
+				<label for="item-def-{owner.kind}-{owner.id}">From catalog (optional)</label>
+				<select
+					id="item-def-{owner.kind}-{owner.id}"
+					bind:value={itemDefinitionId}
+					onchange={onPickDefinition}
+				>
+					<option value="">Free-text item...</option>
+					{#each itemDefinitions as def (def.id)}
+						<option value={def.id}>{def.name}</option>
+					{/each}
+				</select>
 
-			<FormField
-				id="item-qty-{owner.kind}-{owner.id}"
-				label="Quantity"
-				type="number"
-				min={1}
-				required
-				bind:value={itemQuantity}
-			/>
+				<FormField
+					id="item-name-{owner.kind}-{owner.id}"
+					label="Name"
+					type="text"
+					required
+					bind:value={itemName}
+				/>
 
-			<SubmitButton pending={addingItem} label="Add item" pendingLabel="Adding..." />
-		</form>
+				<FormField
+					id="item-qty-{owner.kind}-{owner.id}"
+					label="Quantity"
+					type="number"
+					min={1}
+					required
+					bind:value={itemQuantity}
+				/>
+
+				<SubmitButton pending={addingItem} label="Add item" pendingLabel="Adding..." />
+			</form>
+		</Modal>
 	{/if}
 </section>
+
+<style>
+	.inventory-header {
+		display: flex;
+		justify-content: flex-end;
+		margin-top: 0.75rem;
+	}
+
+	.add-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		border: none;
+		background: var(--color-accent, #4f46e5);
+		color: #fff;
+		font-size: 1.5rem;
+		line-height: 1;
+		cursor: pointer;
+	}
+
+	.add-btn:hover {
+		opacity: 0.85;
+	}
+</style>

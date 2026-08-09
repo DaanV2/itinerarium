@@ -79,6 +79,15 @@ describe('apiFetch', () => {
 		).rejects.toThrow('failed to load thing: 500');
 	});
 
+	it('throws an ApiError with status 401 and does not crash in non-browser env', async () => {
+		const fetchFn = vi.fn().mockResolvedValue(jsonResponse({ error: 'Unauthorized' }, false, 401));
+
+		const err = await apiFetch('/api/thing', { token: 't', fetchFn }).catch((e: unknown) => e);
+
+		expect(err).toBeInstanceOf(ApiError);
+		expect((err as ApiError).status).toBe(401);
+	});
+
 	it('falls back even when the error body is not JSON', async () => {
 		const fetchFn = vi.fn().mockResolvedValue({
 			ok: false,

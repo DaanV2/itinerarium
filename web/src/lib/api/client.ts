@@ -3,6 +3,8 @@
 // JSON-body, and `{ error, code }` error-parsing rules live once instead of
 // being copy-pasted per file.
 
+import { clearAccessToken } from '../auth-token';
+
 /** An unsuccessful API response, carrying the HTTP `status` and the optional
  * machine-readable `code` the server attaches to some errors (e.g.
  * `path_collision`, `concurrent_edit`). Callers that need to branch on a
@@ -81,6 +83,17 @@ async function request(path: string, options: ApiRequestOptions): Promise<Respon
 	const res = init ? await fetchFn(path, init) : await fetchFn(path);
 
 	if (!res.ok) {
+		// Expired/revoked token: clear credentials and bounce to login.
+		// Skip when already on /login to avoid a redirect loop on wrong-password 401s.
+		if (
+			res.status === 401 &&
+			typeof window !== 'undefined' &&
+			window.location.pathname !== '/login'
+		) {
+			clearAccessToken();
+			window.location.href = '/login';
+		}
+
 		const parsed = await parseErrorBody(res);
 		const message = parsed?.error ?? `${errorContext ?? 'request failed'}: ${res.status}`;
 		throw new ApiError(message, res.status, parsed?.code);
