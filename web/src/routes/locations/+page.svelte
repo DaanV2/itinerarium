@@ -49,7 +49,11 @@
 
 	<GmOnly>
 		<section>
-			<CreateModal triggerLabel="Create location" pendingLabel="Creating..." onSubmit={handleCreate}>
+			<CreateModal
+				triggerLabel="Create location"
+				pendingLabel="Creating..."
+				onSubmit={handleCreate}
+			>
 				<FormField id="location-name" label="Name" type="text" required bind:value={name} />
 				<FormField id="location-plane" label="Plane" type="text" bind:value={plane} />
 			</CreateModal>
