@@ -67,6 +67,10 @@
 		<h1>{character.name}</h1>
 		<p class="game-day">Game day {character.current_game_day}</p>
 
+		<nav>
+			<a href={resolve('/characters/[id]/journal', { id: characterId })}>Journal →</a>
+		</nav>
+
 		<section class="location-section">
 			<h2>Location</h2>
 			{#if currentLocation}
