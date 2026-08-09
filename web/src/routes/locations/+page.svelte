@@ -63,15 +63,19 @@
 	<section>
 		<h2>Known locations</h2>
 		{#if loading}
-			<p>Loading...</p>
+			<p>Loading…</p>
 		{:else if locations.length === 0}
-			<p>No locations you can see yet.</p>
+			<p class="empty-state">No locations you can see yet.</p>
 		{:else}
-			<ul>
+			<ul class="entity-list">
 				{#each locations as location (location.id)}
 					<li>
-						<a href={resolve('/locations/[id]', { id: location.id })}>{location.name}</a>
-						{#if location.plane}<span> — {location.plane}</span>{/if}
+						<a class="entity-row" href={resolve('/locations/[id]', { id: location.id })}>
+							<span class="entity-name">{location.name}</span>
+							{#if location.plane}
+								<span class="entity-meta">{location.plane}</span>
+							{/if}
+						</a>
 					</li>
 				{/each}
 			</ul>

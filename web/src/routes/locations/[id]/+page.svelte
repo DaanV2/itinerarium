@@ -251,8 +251,8 @@
 
 <style>
 	.reveal-banner {
-		background-color: rgba(59, 130, 246, 0.1);
-		border: 1px solid rgba(59, 130, 246, 0.4);
+		background-color: rgba(98, 129, 65, 0.15);
+		border: 1px solid rgba(98, 129, 65, 0.4);
 		border-radius: 5px;
 		padding: 0.6rem 0.9rem;
 		font-size: 0.875rem;
@@ -320,9 +320,10 @@
 	label {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.3rem;
 		margin-top: 0.75rem;
 		font-size: 0.875rem;
+		font-weight: 500;
 	}
 
 	.edit-actions {

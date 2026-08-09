@@ -60,18 +60,18 @@
 	<ErrorAlert message={error} />
 
 	{#if loading}
-		<p>Loading...</p>
+		<p>Loading…</p>
 	{:else if !character}
 		<p>Character not found.</p>
 	{:else}
 		<h1>{character.name}</h1>
-		<p>Game day {character.current_game_day}</p>
+		<p class="game-day">Game day {character.current_game_day}</p>
 
 		<nav>
 			<a href={resolve('/characters/[id]/journal', { id: characterId })}>Journal →</a>
 		</nav>
 
-		<section>
+		<section class="location-section">
 			<h2>Location</h2>
 			{#if currentLocation}
 				<p>
@@ -81,22 +81,24 @@
 					</a>
 				</p>
 			{:else}
-				<p>No location set.</p>
+				<p class="empty-state">No location set.</p>
 			{/if}
 
-			<label for="character-location">Move to</label>
-			<select
-				id="character-location"
-				value={character.location_id ?? ''}
-				onchange={(e) => handleLocationChange((e.target as HTMLSelectElement).value)}
-			>
-				<option value="">— no location —</option>
-				{#each locations as location (location.id)}
-					<option value={location.id}>
-						{location.name}{location.plane ? ` (${location.plane})` : ''}
-					</option>
-				{/each}
-			</select>
+			<div class="location-move">
+				<label for="character-location">Move to</label>
+				<select
+					id="character-location"
+					value={character.location_id ?? ''}
+					onchange={(e) => handleLocationChange((e.target as HTMLSelectElement).value)}
+				>
+					<option value="">— no location —</option>
+					{#each locations as location (location.id)}
+						<option value={location.id}>
+							{location.name}{location.plane ? ` (${location.plane})` : ''}
+						</option>
+					{/each}
+				</select>
+			</div>
 		</section>
 
 		{#snippet inventoryPanel()}
@@ -111,14 +113,46 @@
 			<JournalPanel {characterId} />
 		{/snippet}
 
+		{#snippet activityPanel()}
+			<ActivityPanel {characterId} />
+		{/snippet}
+
 		<Tabs
 			tabs={[
 				{ id: 'inventory', label: 'Inventory', panel: inventoryPanel },
 				{ id: 'money', label: 'Money', panel: moneyPanel },
-				{ id: 'journal', label: 'Journal', panel: journalPanel }
+				{ id: 'journal', label: 'Journal', panel: journalPanel },
+				{ id: 'activity', label: 'Activity', panel: activityPanel }
 			]}
 		/>
-
-		<ActivityPanel {characterId} />
 	{/if}
 </main>
+
+<style>
+	.game-day {
+		margin: 0.25rem 0 0;
+		color: var(--color-muted);
+		font-size: 0.9rem;
+	}
+
+	.location-section {
+		margin-top: 1.5rem;
+	}
+
+	.location-move {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+		margin-top: 0.5rem;
+		flex-wrap: wrap;
+	}
+
+	.location-move label {
+		font-size: 0.875rem;
+	}
+
+	.location-move select {
+		flex: 1;
+		min-width: 180px;
+	}
+</style>

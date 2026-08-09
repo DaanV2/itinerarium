@@ -59,7 +59,7 @@
 	}
 </script>
 
-<button type="button" onclick={openModal}>{triggerLabel}</button>
+<button type="button" class="btn-primary" onclick={openModal}>{triggerLabel}</button>
 
 <Modal bind:open {title}>
 	<form onsubmit={handleSubmit}>
