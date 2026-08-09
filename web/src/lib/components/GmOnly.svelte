@@ -16,8 +16,9 @@
 
 <style>
 	.gm-only {
-		background-color: rgba(34, 197, 94, 0.08);
-		border: 1px dashed rgba(34, 197, 94, 0.6);
+		background-color: var(--gm-color);
+		border: 1px dashed var(--gm-accent-color);
+		color: var(--text-color);
 		border-radius: 5px;
 		padding: 1rem;
 	}
@@ -26,7 +27,7 @@
 		font-size: 0.875rem;
 		font-weight: 500;
 		font: bold;
-		color: rgba(34, 197, 94, 0.8);
+		color: var(--text-color);
 		margin-bottom: 0.5rem;
 	}
 </style>

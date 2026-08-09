@@ -22,7 +22,7 @@
 		{@render content()}
 	</a>
 {:else}
-	<div class="card" class:gm>
+	<div class:gm class="card">
 		{@render content()}
 	</div>
 {/if}
@@ -36,6 +36,8 @@
 		margin: 0.2rem;
 		color: inherit;
 		text-decoration: none;
+		background-color: var(--tertiary-color);
+		transition: all 0.2s ease-in-out;
 	}
 
 	a.card:hover {
@@ -43,12 +45,12 @@
 	}
 
 	.card.gm {
-		background-color: rgba(34, 197, 94, 0.08);
-		border: 1px dashed rgba(34, 197, 94, 0.6);
+		background-color: var(--gm-color);
+		border: 1px dashed var(--gm-accent-color);
 	}
 
 	a.card.gm:hover {
-		border-color: rgba(34, 197, 94, 0.9);
+		border-color: var(--gm-highlight-color);
 	}
 
 	.card h3 {

@@ -59,7 +59,7 @@
 				Temporary password for <strong>{issuedCredential.email}</strong> — hand this to the account holder
 				now, it will not be shown again:
 			</p>
-			<pre>{issuedCredential.password}</pre>
+			<pre class="copy-box">{issuedCredential.password}</pre>
 		</div>
 	{/if}
 

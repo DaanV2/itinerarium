@@ -18,16 +18,16 @@
 	<p class="section-label">Admin</p>
 
 	<ul>
-		<li>
+		<li class="button-like">
 			<a href={resolve('/admin')} aria-current={isActive('/admin') ? 'page' : undefined}>Overview</a
 			>
 		</li>
-		<li>
+		<li class="button-like">
 			<a href={resolve('/admin/users')} aria-current={isActive('/admin/users') ? 'page' : undefined}
 				>Users</a
 			>
 		</li>
-		<li>
+		<li class="button-like">
 			<a
 				href={resolve('/admin/characters')}
 				aria-current={isActive('/admin/characters') ? 'page' : undefined}>Characters</a
@@ -51,8 +51,8 @@
 		height: 100vh;
 		position: sticky;
 		top: 0;
-		border-right: 1px dashed rgba(34, 197, 94, 0.6);
-		background-color: rgba(34, 197, 94, 0.06);
+		border-right: 1px dashed var(--gm-accent-color);
+		background-color: var(--gm-accent-color);
 		padding: 1rem 0.5rem;
 		box-sizing: border-box;
 	}
