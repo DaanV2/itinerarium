@@ -56,16 +56,9 @@ func newGroupTestEnv(t *testing.T) groupTestEnv {
 	character := &models.Character{Name: "Aria", UserID: player.ID}
 	require.NoError(t, characters.Create(ctx, character), "Create character")
 
-	router := transport.NewRouter(
-		transport.WithHandle("GET /api/groups", requireAuth(sessionsv1.ListGroupsHandler(groupSvc))),
-		transport.WithHandle("POST /api/groups", requireAuth(sessionsv1.CreateGroupHandler(groupSvc))),
-		transport.WithHandle("GET /api/groups/{id}", requireAuth(sessionsv1.GetGroupHandler(groupSvc))),
-		transport.WithHandle("PATCH /api/groups/{id}", requireAuth(sessionsv1.UpdateGroupHandler(groupSvc))),
-		transport.WithHandle("POST /api/groups/{id}/members", requireAuth(sessionsv1.JoinGroupHandler(groupSvc))),
-		transport.WithHandle(
-			"DELETE /api/groups/{id}/members/{characterId}", requireAuth(sessionsv1.LeaveGroupHandler(groupSvc)),
-		),
-	)
+	authenticated := transport.NewRouter(transport.WithMiddleware(requireAuth))
+	sessionsv1.NewGroupHandler(groupSvc).Register(authenticated)
+	router := transport.NewRouter(transport.WithSubRoute("", authenticated))
 
 	return groupTestEnv{
 		router:      router,

@@ -33,11 +33,29 @@ type importVaultResponse struct {
 	Results []importVaultFileResponse `json:"results"`
 }
 
-// ImportVaultHandler imports a batch of Obsidian vault files as documents.
-// Files are reported one by one: collisions come back as status "collision"
-// so the client can offer rename-or-continue per file. Must be wrapped in
+// ImportObsidianPath imports a batch of Obsidian vault files as documents.
+const ImportObsidianPath = "/api/import/obsidian"
+
+// ImportHandler serves vault imports under /api/import.
+type ImportHandler struct {
+	vaultImport *application.VaultImportService
+}
+
+// NewImportHandler builds the vault-import handler.
+func NewImportHandler(vaultImport *application.VaultImportService) *ImportHandler {
+	return &ImportHandler{vaultImport: vaultImport}
+}
+
+// Register wires the import route onto r. The handler must be reached through
 // RequireAuth.
-func ImportVaultHandler(svc *application.VaultImportService) http.Handler {
+func (h *ImportHandler) Register(r *transport.Router) {
+	r.Handle("POST "+ImportObsidianPath, h.ImportVault())
+}
+
+// ImportVault imports a batch of Obsidian vault files as documents. Files are
+// reported one by one: collisions come back as status "collision" so the client
+// can offer rename-or-continue per file.
+func (h *ImportHandler) ImportVault() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req importVaultRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -51,7 +69,7 @@ func ImportVaultHandler(svc *application.VaultImportService) http.Handler {
 			files[i] = application.ImportFileInput{Path: f.Path, Markdown: f.Markdown, AllowCollision: f.AllowCollision}
 		}
 
-		results, err := svc.Import(r.Context(), transport.RequesterFrom(r), req.RepositoryID, files)
+		results, err := h.vaultImport.Import(r.Context(), transport.RequesterFrom(r), req.RepositoryID, files)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 

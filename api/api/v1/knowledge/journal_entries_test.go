@@ -72,25 +72,9 @@ func newJournalTestEnv(t *testing.T) journalTestEnv {
 	character := &models.Character{Name: "Aria", UserID: player.ID}
 	require.NoError(t, characters.Create(ctx, character), "Create character")
 
-	router := transport.NewRouter(
-		transport.WithHandle(
-			"GET /api/characters/{id}/journal", requireAuth(knowledgev1.ListJournalEntriesHandler(journalSvc)),
-		),
-		transport.WithHandle(
-			"POST /api/characters/{id}/journal", requireAuth(knowledgev1.CreateJournalEntryHandler(journalSvc)),
-		),
-		transport.WithHandle(
-			"GET /api/characters/{id}/journal/{entryId}", requireAuth(knowledgev1.GetJournalEntryHandler(journalSvc)),
-		),
-		transport.WithHandle(
-			"PATCH /api/characters/{id}/journal/{entryId}",
-			requireAuth(knowledgev1.UpdateJournalEntryHandler(journalSvc)),
-		),
-		transport.WithHandle(
-			"POST /api/characters/{id}/journal/{entryId}/convert",
-			requireAuth(knowledgev1.ConvertJournalEntryHandler(journalSvc)),
-		),
-	)
+	authenticated := transport.NewRouter(transport.WithMiddleware(requireAuth))
+	knowledgev1.NewCharacterJournalHandler(journalSvc).Register(authenticated)
+	router := transport.NewRouter(transport.WithSubRoute("", authenticated))
 
 	return journalTestEnv{
 		router:      router,

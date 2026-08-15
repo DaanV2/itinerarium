@@ -68,35 +68,13 @@ func newInventoryTestEnv(t *testing.T) inventoryTestEnv {
 	err = characters.Create(ctx, character)
 	require.NoError(t, err)
 
-	router := transport.NewRouter(
-		// TODO: move this to the component tests
-		transport.WithHandle("GET /api/currencies", requireAuth(currenciesv1.ListCurrenciesHandler(catalogSvc))),
-		transport.WithHandle("POST /api/currencies", requireAuth(currenciesv1.CreateCurrencyHandler(catalogSvc))),
-		transport.WithHandle("POST /api/currencies/convert", requireAuth(currenciesv1.ConvertCurrencyHandler(catalogSvc))),
-		transport.WithHandle("POST /api/currencies/simplify", requireAuth(currenciesv1.SimplifyCurrencyHandler(catalogSvc))),
-		transport.WithHandle("GET /api/items", requireAuth(inventoryv1.ListItemDefinitionsHandler(catalogSvc))),
-		transport.WithHandle("POST /api/items", requireAuth(inventoryv1.CreateItemDefinitionHandler(catalogSvc))),
-		transport.WithHandle(
-			"GET /api/characters/{id}/inventory",
-			requireAuth(inventoryv1.ListInventoryHandler(inventorySvc, inventoryv1.CharacterOwner)),
-		),
-		transport.WithHandle(
-			"POST /api/characters/{id}/inventory",
-			requireAuth(inventoryv1.AddInventoryItemHandler(inventorySvc, inventoryv1.CharacterOwner)),
-		),
-		transport.WithHandle(
-			"DELETE /api/characters/{id}/inventory/{itemId}",
-			requireAuth(inventoryv1.RemoveInventoryItemHandler(inventorySvc, inventoryv1.CharacterOwner)),
-		),
-		transport.WithHandle(
-			"GET /api/characters/{id}/money",
-			requireAuth(inventoryv1.ListMoneyHandler(inventorySvc, inventoryv1.CharacterOwner)),
-		),
-		transport.WithHandle(
-			"PUT /api/characters/{id}/money/{currencyId}",
-			requireAuth(inventoryv1.SetMoneyHandler(inventorySvc, inventoryv1.CharacterOwner)),
-		),
-	)
+	// TODO: move the catalog wiring to the component tests
+	authenticated := transport.NewRouter(transport.WithMiddleware(requireAuth))
+	currenciesv1.NewCurrencyHandler(catalogSvc).Register(authenticated)
+	inventoryv1.NewItemHandler(catalogSvc).Register(authenticated)
+	inventoryv1.NewCharacterInventoryHandler(inventorySvc).Register(authenticated)
+	inventoryv1.NewCharacterMoneyHandler(inventorySvc).Register(authenticated)
+	router := transport.NewRouter(transport.WithSubRoute("", authenticated))
 
 	return inventoryTestEnv{
 		router:      router,

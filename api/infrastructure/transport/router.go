@@ -47,9 +47,16 @@ func NewRouter(opts ...Option) *Router {
 // WithHandle registers a handler on a ServeMux pattern, e.g.
 // "GET /api/health" or "POST /api/characters/{id}/journal".
 func WithHandle(pattern string, handler http.Handler) Option {
-	return func(r *Router) {
-		r.routes = append(r.routes, route{pattern: pattern, handler: handler})
-	}
+	return func(r *Router) { r.Handle(pattern, handler) }
+}
+
+// Handle registers a handler on a ServeMux pattern after construction. It is
+// safe to call until the first request (or until this router is mounted into
+// another with WithSubRoute), because routes are held as data until the mux is
+// built. This is the seam handler groups use to register their own routes via a
+// Register(r *Router) method.
+func (r *Router) Handle(pattern string, handler http.Handler) {
+	r.routes = append(r.routes, route{pattern: pattern, handler: handler})
 }
 
 // WithMiddleware appends router-wide middleware; it runs in registration order

@@ -55,9 +55,40 @@ func toSessionResponse(s *models.Session) sessionResponse {
 	}
 }
 
-// CreateSessionHandler lets a GM create a session. Must be wrapped in
-// RequireAuth.
-func CreateSessionHandler(svc *application.SessionService) http.Handler {
+// Route paths for the session resource.
+const (
+	SessionsPath            = "/api/sessions"
+	SessionPath             = SessionsPath + "/{id}"
+	SessionParticipantsPath = SessionPath + "/participants"
+	SessionParticipantPath  = SessionParticipantsPath + "/{characterId}"
+	SessionGameDayPath      = SessionPath + "/game-day"
+)
+
+// SessionHandler serves sessions, participants, and game-day advances under
+// /api/sessions.
+type SessionHandler struct {
+	sessions *application.SessionService
+}
+
+// NewSessionHandler builds the session resource handler.
+func NewSessionHandler(sessions *application.SessionService) *SessionHandler {
+	return &SessionHandler{sessions: sessions}
+}
+
+// Register wires the session routes onto r. Each handler must be reached
+// through RequireAuth.
+func (h *SessionHandler) Register(r *transport.Router) {
+	r.Handle("GET "+SessionsPath, h.List())
+	r.Handle("POST "+SessionsPath, h.Create())
+	r.Handle("GET "+SessionPath, h.Get())
+	r.Handle("PATCH "+SessionPath, h.Update())
+	r.Handle("POST "+SessionParticipantsPath, h.AddParticipant())
+	r.Handle("DELETE "+SessionParticipantPath, h.RemoveParticipant())
+	r.Handle("POST "+SessionGameDayPath, h.AdvanceGameDay())
+}
+
+// Create lets a GM create a session.
+func (h *SessionHandler) Create() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createSessionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -66,7 +97,7 @@ func CreateSessionHandler(svc *application.SessionService) http.Handler {
 			return
 		}
 
-		session, err := svc.Create(r.Context(), transport.RequesterFrom(r), req.Name, req.Description)
+		session, err := h.sessions.Create(r.Context(), transport.RequesterFrom(r), req.Name, req.Description)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -77,11 +108,10 @@ func CreateSessionHandler(svc *application.SessionService) http.Handler {
 	})
 }
 
-// ListSessionsHandler returns every session with its participants. Must be
-// wrapped in RequireAuth.
-func ListSessionsHandler(svc *application.SessionService) http.Handler {
+// List returns every session with its participants.
+func (h *SessionHandler) List() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		sessions, err := svc.List(r.Context(), transport.RequesterFrom(r))
+		sessions, err := h.sessions.List(r.Context(), transport.RequesterFrom(r))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -97,11 +127,10 @@ func ListSessionsHandler(svc *application.SessionService) http.Handler {
 	})
 }
 
-// GetSessionHandler returns one session with its participants. Must be
-// wrapped in RequireAuth.
-func GetSessionHandler(svc *application.SessionService) http.Handler {
+// Get returns one session with its participants.
+func (h *SessionHandler) Get() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		session, err := svc.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		session, err := h.sessions.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -112,9 +141,8 @@ func GetSessionHandler(svc *application.SessionService) http.Handler {
 	})
 }
 
-// UpdateSessionHandler lets a GM edit a session's name or description. Must
-// be wrapped in RequireAuth.
-func UpdateSessionHandler(svc *application.SessionService) http.Handler {
+// Update lets a GM edit a session's name or description.
+func (h *SessionHandler) Update() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateSessionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -123,7 +151,9 @@ func UpdateSessionHandler(svc *application.SessionService) http.Handler {
 			return
 		}
 
-		session, err := svc.Update(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.Name, req.Description)
+		session, err := h.sessions.Update(
+			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.Name, req.Description,
+		)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -134,9 +164,8 @@ func UpdateSessionHandler(svc *application.SessionService) http.Handler {
 	})
 }
 
-// AddSessionParticipantHandler lets a GM add a character to a session. Must
-// be wrapped in RequireAuth.
-func AddSessionParticipantHandler(svc *application.SessionService) http.Handler {
+// AddParticipant lets a GM add a character to a session.
+func (h *SessionHandler) AddParticipant() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req addSessionParticipantRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -145,7 +174,7 @@ func AddSessionParticipantHandler(svc *application.SessionService) http.Handler 
 			return
 		}
 
-		err := svc.AddParticipant(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.CharacterID)
+		err := h.sessions.AddParticipant(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.CharacterID)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -156,11 +185,12 @@ func AddSessionParticipantHandler(svc *application.SessionService) http.Handler 
 	})
 }
 
-// RemoveSessionParticipantHandler lets a GM remove a character from a
-// session. Must be wrapped in RequireAuth.
-func RemoveSessionParticipantHandler(svc *application.SessionService) http.Handler {
+// RemoveParticipant lets a GM remove a character from a session.
+func (h *SessionHandler) RemoveParticipant() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		err := svc.RemoveParticipant(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), r.PathValue("characterId"))
+		err := h.sessions.RemoveParticipant(
+			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), r.PathValue("characterId"),
+		)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -171,10 +201,9 @@ func RemoveSessionParticipantHandler(svc *application.SessionService) http.Handl
 	})
 }
 
-// AdvanceSessionGameDayHandler lets a GM move game day forward or back for
-// every session participant, or for one participant catching up. Must be
-// wrapped in RequireAuth.
-func AdvanceSessionGameDayHandler(svc *application.SessionService) http.Handler {
+// AdvanceGameDay lets a GM move game day forward or back for every session
+// participant, or for one participant catching up.
+func (h *SessionHandler) AdvanceGameDay() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req advanceGameDayRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -183,7 +212,9 @@ func AdvanceSessionGameDayHandler(svc *application.SessionService) http.Handler 
 			return
 		}
 
-		session, err := svc.AdvanceGameDay(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.Delta, req.CharacterID)
+		session, err := h.sessions.AdvanceGameDay(
+			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.Delta, req.CharacterID,
+		)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 

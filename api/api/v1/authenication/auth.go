@@ -25,12 +25,33 @@ type loginResponse struct {
 	AccessToken string      `json:"access_token"`
 }
 
-// LoginHandler authenticates an email + password pair and returns a signed
-// access token. No auth required. The throttle (nil disables it) rate-limits
-// failed attempts per client IP and per account with exponential backoff, so an
-// internet-facing deployment without a reverse proxy still can't be brute-forced
-// (roadmap M10); trustProxy decides whether X-Forwarded-For names the client.
-func LoginHandler(svc *application.AuthService, throttle *transport.Throttle, trustProxy bool) http.Handler {
+// LoginPath authenticates an email + password pair (public — no auth).
+const LoginPath = "/api/login"
+
+// AuthHandler serves authentication under /api/login. The route is public. The
+// throttle (nil disables it) rate-limits failed attempts per client IP and per
+// account with exponential backoff, so an internet-facing deployment without a
+// reverse proxy still can't be brute-forced (roadmap M10); trustProxy decides
+// whether X-Forwarded-For names the client.
+type AuthHandler struct {
+	auth       *application.AuthService
+	throttle   *transport.Throttle
+	trustProxy bool
+}
+
+// NewAuthHandler builds the authentication handler.
+func NewAuthHandler(auth *application.AuthService, throttle *transport.Throttle, trustProxy bool) *AuthHandler {
+	return &AuthHandler{auth: auth, throttle: throttle, trustProxy: trustProxy}
+}
+
+// Register wires the login route onto r. The handler is public.
+func (h *AuthHandler) Register(r *transport.Router) {
+	r.Handle("POST "+LoginPath, h.Login())
+}
+
+// Login authenticates an email + password pair and returns a signed access
+// token.
+func (h *AuthHandler) Login() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -39,28 +60,28 @@ func LoginHandler(svc *application.AuthService, throttle *transport.Throttle, tr
 			return
 		}
 
-		ipKey := "login:ip:" + transport.ClientIP(r, trustProxy)
+		ipKey := "login:ip:" + transport.ClientIP(r, h.trustProxy)
 		acctKey := "login:acct:" + strings.ToLower(strings.TrimSpace(req.Email))
 
-		if ok, retry := throttle.Allowed(ipKey); !ok {
+		if ok, retry := h.throttle.Allowed(ipKey); !ok {
 			transport.WriteThrottled(w, retry)
 
 			return
 		}
 
-		if ok, retry := throttle.Allowed(acctKey); !ok {
+		if ok, retry := h.throttle.Allowed(acctKey); !ok {
 			transport.WriteThrottled(w, retry)
 
 			return
 		}
 
-		user, token, err := svc.Login(r.Context(), req.Email, req.Password)
+		user, token, err := h.auth.Login(r.Context(), req.Email, req.Password)
 		if err != nil {
 			// Count only genuine credential failures — a server error is not the
 			// caller's fault and must not push them toward a lockout.
 			if errors.Is(err, application.ErrInvalidCredentials) {
-				throttle.Penalize(ipKey)
-				throttle.Penalize(acctKey)
+				h.throttle.Penalize(ipKey)
+				h.throttle.Penalize(acctKey)
 			}
 
 			writeLoginError(w, err)
@@ -71,7 +92,7 @@ func LoginHandler(svc *application.AuthService, throttle *transport.Throttle, tr
 		// A success clears the account's own failures, but deliberately not the
 		// IP's: on a shared/NAT address a legitimate login must not wipe an
 		// attacker's accumulated penalty.
-		throttle.Reset(acctKey)
+		h.throttle.Reset(acctKey)
 
 		w.WriteJSON(http.StatusOK, loginResponse{
 			ID: user.ID, Email: user.Email, Role: user.Role, AccessToken: token,

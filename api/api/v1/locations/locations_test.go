@@ -60,21 +60,10 @@ func newLocationHTTPTestEnv(t *testing.T) locationHTTPTestEnv {
 	character := &models.Character{Name: "Aria", UserID: player.ID}
 	require.NoError(t, characters.Create(ctx, character), "Create character")
 
-	router := transport.NewRouter(
-		transport.WithHandle("GET /api/locations", requireAuth(locationsv1.ListLocationsHandler(locationSvc))),
-		transport.WithHandle("POST /api/locations", requireAuth(locationsv1.CreateLocationHandler(locationSvc))),
-		transport.WithHandle("GET /api/locations/{id}", requireAuth(locationsv1.GetLocationHandler(locationSvc))),
-		transport.WithHandle("PATCH /api/locations/{id}", requireAuth(locationsv1.UpdateLocationHandler(locationSvc))),
-		transport.WithHandle(
-			"POST /api/locations/{id}/access", requireAuth(locationsv1.GrantLocationAccessHandler(locationSvc)),
-		),
-		transport.WithHandle(
-			"GET /api/locations/{id}/access", requireAuth(locationsv1.ListLocationAccessHandler(locationSvc)),
-		),
-		transport.WithHandle(
-			"PUT /api/characters/{id}/location", requireAuth(locationsv1.SetCharacterLocationHandler(locationSvc)),
-		),
-	)
+	authenticated := transport.NewRouter(transport.WithMiddleware(requireAuth))
+	locationsv1.NewLocationHandler(locationSvc).Register(authenticated)
+	locationsv1.NewCharacterLocationHandler(locationSvc).Register(authenticated)
+	router := transport.NewRouter(transport.WithSubRoute("", authenticated))
 
 	return locationHTTPTestEnv{
 		router:           router,

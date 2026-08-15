@@ -99,6 +99,12 @@ linters:
       - path: "_test\\.go"
         linters:
           - goconst
+      # The per-owner inventory/money handlers are deliberately independent
+      # (owner baked in per route, no shared OwnerExtractor). Their near-identical
+      # bodies are the accepted cost of that separation, so dupl is expected here.
+      - path: "api/v1/inventory/(character|group|location)_(inventory|money)\\.go"
+        linters:
+          - dupl
   enable:
     - asciicheck
     - bidichk

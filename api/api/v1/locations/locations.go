@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	charactersv1 "github.com/DaanV2/itinerarium/api/api/v1/characters"
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
@@ -98,9 +99,41 @@ type setCharacterLocationRequest struct {
 	LocationID string `json:"location_id"`
 }
 
-// CreateLocationHandler lets a GM create a location. Must be wrapped in
-// RequireAuth.
-func CreateLocationHandler(svc *application.LocationService) http.Handler {
+// Route paths for the location resource. LocationsPath / LocationPath are the
+// shared bases that location subresource groups in other packages (inventory)
+// build their own paths from.
+const (
+	LocationsPath      = "/api/locations"
+	LocationPath       = LocationsPath + "/{id}"
+	LocationAccessPath = LocationPath + "/access"
+	LocationAccessID   = LocationAccessPath + "/{accessId}"
+)
+
+// LocationHandler serves locations and their access grants under
+// /api/locations.
+type LocationHandler struct {
+	locations *application.LocationService
+}
+
+// NewLocationHandler builds the location resource handler.
+func NewLocationHandler(locations *application.LocationService) *LocationHandler {
+	return &LocationHandler{locations: locations}
+}
+
+// Register wires the location routes onto r. Each handler must be reached
+// through RequireAuth.
+func (h *LocationHandler) Register(r *transport.Router) {
+	r.Handle("GET "+LocationsPath, h.List())
+	r.Handle("POST "+LocationsPath, h.Create())
+	r.Handle("GET "+LocationPath, h.Get())
+	r.Handle("PATCH "+LocationPath, h.Update())
+	r.Handle("GET "+LocationAccessPath, h.ListAccess())
+	r.Handle("POST "+LocationAccessPath, h.GrantAccess())
+	r.Handle("DELETE "+LocationAccessID, h.RevokeAccess())
+}
+
+// Create lets a GM create a location.
+func (h *LocationHandler) Create() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createLocationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -109,7 +142,7 @@ func CreateLocationHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		location, err := svc.Create(r.Context(), transport.RequesterFrom(r), req.Name, req.Plane)
+		location, err := h.locations.Create(r.Context(), transport.RequesterFrom(r), req.Name, req.Plane)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -120,11 +153,11 @@ func CreateLocationHandler(svc *application.LocationService) http.Handler {
 	})
 }
 
-// ListLocationsHandler returns every location a caller may see: all of them
-// for a GM, only accessible ones for a player. Must be wrapped in RequireAuth.
-func ListLocationsHandler(svc *application.LocationService) http.Handler {
+// List returns every location a caller may see: all of them for a GM, only
+// accessible ones for a player.
+func (h *LocationHandler) List() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		locations, err := svc.List(r.Context(), transport.RequesterFrom(r))
+		locations, err := h.locations.List(r.Context(), transport.RequesterFrom(r))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -140,11 +173,11 @@ func ListLocationsHandler(svc *application.LocationService) http.Handler {
 	})
 }
 
-// GetLocationHandler returns one location, or 404 when the caller may not see
-// it (existence hidden). Must be wrapped in RequireAuth.
-func GetLocationHandler(svc *application.LocationService) http.Handler {
+// Get returns one location, or 404 when the caller may not see it (existence
+// hidden).
+func (h *LocationHandler) Get() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		location, err := svc.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		location, err := h.locations.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -155,9 +188,8 @@ func GetLocationHandler(svc *application.LocationService) http.Handler {
 	})
 }
 
-// UpdateLocationHandler edits a location — anyone who can see it can edit it.
-// Must be wrapped in RequireAuth.
-func UpdateLocationHandler(svc *application.LocationService) http.Handler {
+// Update edits a location — anyone who can see it can edit it.
+func (h *LocationHandler) Update() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateLocationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -176,7 +208,7 @@ func UpdateLocationHandler(svc *application.LocationService) http.Handler {
 			}
 		}
 
-		location, err := svc.Update(
+		location, err := h.locations.Update(
 			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.Name, req.Plane, req.SharedOnGameDay, sections,
 		)
 		if err != nil {
@@ -189,9 +221,8 @@ func UpdateLocationHandler(svc *application.LocationService) http.Handler {
 	})
 }
 
-// GrantLocationAccessHandler lets a GM grant a character or group access to a
-// location. Must be wrapped in RequireAuth.
-func GrantLocationAccessHandler(svc *application.LocationService) http.Handler {
+// GrantAccess lets a GM grant a character or group access to a location.
+func (h *LocationHandler) GrantAccess() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req grantLocationAccessRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -200,7 +231,7 @@ func GrantLocationAccessHandler(svc *application.LocationService) http.Handler {
 			return
 		}
 
-		grant, err := svc.GrantAccess(
+		grant, err := h.locations.GrantAccess(
 			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.CharacterID, req.GroupID,
 		)
 		if err != nil {
@@ -213,11 +244,10 @@ func GrantLocationAccessHandler(svc *application.LocationService) http.Handler {
 	})
 }
 
-// ListLocationAccessHandler lets a GM list the grants on a location. Must be
-// wrapped in RequireAuth.
-func ListLocationAccessHandler(svc *application.LocationService) http.Handler {
+// ListAccess lets a GM list the grants on a location.
+func (h *LocationHandler) ListAccess() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		grants, err := svc.ListAccess(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		grants, err := h.locations.ListAccess(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -233,11 +263,10 @@ func ListLocationAccessHandler(svc *application.LocationService) http.Handler {
 	})
 }
 
-// RevokeLocationAccessHandler lets a GM remove one grant from a location.
-// Must be wrapped in RequireAuth.
-func RevokeLocationAccessHandler(svc *application.LocationService) http.Handler {
+// RevokeAccess lets a GM remove one grant from a location.
+func (h *LocationHandler) RevokeAccess() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		err := svc.RevokeAccess(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), r.PathValue("accessId"))
+		err := h.locations.RevokeAccess(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), r.PathValue("accessId"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -248,9 +277,30 @@ func RevokeLocationAccessHandler(svc *application.LocationService) http.Handler 
 	})
 }
 
-// SetCharacterLocationHandler associates a character with a location. Must be
-// wrapped in RequireAuth.
-func SetCharacterLocationHandler(svc *application.LocationService) http.Handler {
+// CharacterLocationPath is a character's location association, addressed by the
+// character {id}.
+const CharacterLocationPath = charactersv1.CharacterPath + "/location"
+
+// CharacterLocationHandler serves a character's location association under
+// /api/characters/{id}/location. It reuses the location service.
+type CharacterLocationHandler struct {
+	locations *application.LocationService
+}
+
+// NewCharacterLocationHandler builds the character-location handler.
+func NewCharacterLocationHandler(locations *application.LocationService) *CharacterLocationHandler {
+	return &CharacterLocationHandler{locations: locations}
+}
+
+// Register wires the character-location routes onto r. Each handler must be
+// reached through RequireAuth.
+func (h *CharacterLocationHandler) Register(r *transport.Router) {
+	r.Handle("PUT "+CharacterLocationPath, h.Set())
+	r.Handle("DELETE "+CharacterLocationPath, h.Clear())
+}
+
+// Set associates a character with a location.
+func (h *CharacterLocationHandler) Set() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req setCharacterLocationRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.LocationID == "" {
@@ -259,7 +309,9 @@ func SetCharacterLocationHandler(svc *application.LocationService) http.Handler 
 			return
 		}
 
-		character, err := svc.AssignCharacter(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), &req.LocationID)
+		character, err := h.locations.AssignCharacter(
+			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), &req.LocationID,
+		)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -270,11 +322,10 @@ func SetCharacterLocationHandler(svc *application.LocationService) http.Handler 
 	})
 }
 
-// ClearCharacterLocationHandler removes a character's location association.
-// Must be wrapped in RequireAuth.
-func ClearCharacterLocationHandler(svc *application.LocationService) http.Handler {
+// Clear removes a character's location association.
+func (h *CharacterLocationHandler) Clear() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		character, err := svc.AssignCharacter(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), nil)
+		character, err := h.locations.AssignCharacter(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), nil)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
