@@ -118,27 +118,43 @@ func (s *CharacterService) Get(ctx context.Context, requester Requester, id stri
 }
 ```
 
-### 5. Route — handler in `api/v1/{domain}/`, wired in `components/router.go`
+### 5. Route — self-registering handler group in `api/v1/{domain}/`, wired in `components/router.go`
 
-Handlers decode the request, call one service method, encode the response. They pull the caller from the context seam `transport.RequesterFrom` and map errors with `transport.WriteServiceError`:
+Each resource (or subresource) is a **handler group**: a struct holding the service(s), route-path constants (the full `/api/...` URL, built from other constants where natural), a `Register(r *transport.Router)` method that wires those paths to handler methods, and one method per route. Handler methods decode the request, call one service method, encode the response — pulling the caller from `transport.RequesterFrom` and mapping errors with `transport.WriteServiceError`:
 
 ```go
 // api/v1/characters/characters.go
-func GetCharacterHandler(svc *application.CharacterService) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, err := svc.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
-		// ... transport.WriteServiceError on err, else write JSON
+const (
+	CharactersPath = "/api/characters"
+	CharacterPath  = CharactersPath + "/{id}" // subresources in other packages build on these
+)
+
+type CharacterHandler struct{ characters *application.CharacterService }
+
+func NewCharacterHandler(characters *application.CharacterService) *CharacterHandler {
+	return &CharacterHandler{characters: characters}
+}
+
+func (h *CharacterHandler) Register(r *transport.Router) {
+	r.Handle("GET "+CharacterPath, h.Get())
+	// ...one Handle per route
+}
+
+func (h *CharacterHandler) Get() http.Handler {
+	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
+		c, err := h.characters.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		// ... transport.WriteServiceError on err, else w.WriteJSON
 	})
 }
 ```
 
-Wire it into `CreateRouter` in `components/router.go` with the existing options pattern — `transport.*` provides the mechanism, `charactersv1.*` (or the relevant domain package) the endpoint (services come off the `*Services` bundle):
+Wire the group into `CreateRouter` (`components/router.go`) by registering it. Authenticated groups register onto the `authenticated` subrouter (RequireAuth applied once, mounted at the empty prefix so full paths pass through); public groups register onto the root router:
 
 ```go
-transport.WithHandle("GET /api/characters/{id}", requireAuth(charactersv1.GetCharacterHandler(services.Characters))),
+charactersv1.NewCharacterHandler(services.Characters).Register(authenticated)
 ```
 
-If the handler needs a new service or repository, add it to the `Services` / `Repositories` bundle in `components/services.go` / `components/repositories.go` — that is the composition root.
+A subresource that reuses another resource's base path imports that package for the constant (e.g. `knowledgev1.CharacterJournalHandler` builds `charactersv1.CharacterPath + "/journal"`). These references only go leaf→base, so no import cycle. If the handler needs a new service or repository, add it to the `Services` / `Repositories` bundle in `components/services.go` / `components/repositories.go` — that is the composition root.
 
 Route patterns use Go 1.22+ `http.ServeMux` syntax: `"METHOD /path/{param}"`, read params with `r.PathValue("param")`.
 
@@ -161,7 +177,7 @@ Route patterns use Go 1.22+ `http.ServeMux` syntax: `"METHOD /path/{param}"`, re
 - **Errors**: wrap with `fmt.Errorf("doing thing: %w", err)`; sentinel errors (`ErrNotFound`) live in the service layer.
 - **Per-request gating cache** (M8): the game-day gate resolves the requester's characters and group memberships many times per request. `application/request_cache.go` memoizes those lookups for the lifetime of one request — `RequireAuth` installs a cache with `application.WithRequestCache(ctx)`, and the gating helpers (`requesterCharacters`, `cachedGroupIDsForCharacters`, `cachedGroup`) read through it. When no cache is on the context (a direct service call, most tests) the helpers hit the database every time, so results are identical with or without it. Use these helpers for character/group-membership lookups inside gating rather than calling the repositories directly. The cache assumes its entries are stable within a request — only add a lookup to it that no request both caches and then mutates.
 - **Logging**: `github.com/charmbracelet/log` (`log.Default()`, `logger.Info("msg", "key", value)`). The linter rejects the stdlib `log` package (and `log/slog` — same import prefix). `infrastructure/logging` configures the global logger from the `log` config set (`--log.level`/`LOG_LEVEL`, `--log.format`/`LOG_FORMAT` — text/json/logfmt, `--log.report-caller`/`LOG_REPORT_CALLER`) and carries request-scoped loggers through `context.Context` via `logging.Context`/`logging.From` — request handlers get one via `logging.From(r.Context())` after `transport.Logging` middleware has run.
-- **HTTP hardening** (M10): router-wide middleware in `infrastructure/transport/security.go` sets security headers (`SecurityHeaders`) and caps request bodies (`MaxBytes`); `infrastructure/transport/throttle.go` adds an in-process login/reset rate limiter (`Throttle`) that `LoginHandler`/`ResetPasswordHandler` consult (per-IP + per-account for login, per-target for reset, exponential lockout → `429` + `Retry-After`). A nil `*Throttle` is a valid always-allow limiter, so `security.login-max-failures: 0` disables it. All are tuned by the `security.*` config set (`components/config.go`, registered in `cmd/serve.go`) and wired in `components/router.go`. They add no permission logic — they live in `infrastructure/transport`, not `application`.
+- **HTTP hardening** (M10): router-wide middleware in `infrastructure/transport/security.go` sets security headers (`SecurityHeaders`) and caps request bodies (`MaxBytes`); `infrastructure/transport/throttle.go` adds an in-process login/reset rate limiter (`Throttle`) that the login and reset handlers (`authenicationv1.AuthHandler`, `usersv1.AdminUsersHandler`) consult (per-IP + per-account for login, per-target for reset, exponential lockout → `429` + `Retry-After`). A nil `*Throttle` is a valid always-allow limiter, so `security.login-max-failures: 0` disables it. All are tuned by the `security.*` config set (`components/config.go`, registered in `cmd/serve.go`) and wired in `components/router.go`. They add no permission logic — they live in `infrastructure/transport`, not `application`.
 - **Schema migrations** (M11): `infrastructure/persistence/migrations.go` runs an ordered [gormigrate](https://github.com/go-gormigrate/gormigrate) list on start (`Database.Migrate()`). `0001` is `AutoMigrate(allModels())` (fresh-install baseline); every later change is a **new numbered migration** appended to `migrations()` — never edit `0001` to alter a deployed schema, and don't rely on `allModels()` alone to reach existing installs.
 
 ## Lint rules that trip people up (`.golangci.yml`, enforced in CI)

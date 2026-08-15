@@ -53,8 +53,39 @@ func toGroupResponse(g *models.Group) groupResponse {
 	}
 }
 
-// CreateGroupHandler lets a GM create a group. Must be wrapped in RequireAuth.
-func CreateGroupHandler(svc *application.GroupService) http.Handler {
+// Route paths for the group resource. GroupsPath / GroupPath are the shared
+// bases that group subresource groups in other packages (inventory, money)
+// build their own paths from.
+const (
+	GroupsPath       = "/api/groups"
+	GroupPath        = GroupsPath + "/{id}"
+	GroupMembersPath = GroupPath + "/members"
+	GroupMemberPath  = GroupMembersPath + "/{characterId}"
+)
+
+// GroupHandler serves groups and membership under /api/groups.
+type GroupHandler struct {
+	groups *application.GroupService
+}
+
+// NewGroupHandler builds the group resource handler.
+func NewGroupHandler(groups *application.GroupService) *GroupHandler {
+	return &GroupHandler{groups: groups}
+}
+
+// Register wires the group routes onto r. Each handler must be reached through
+// RequireAuth.
+func (h *GroupHandler) Register(r *transport.Router) {
+	r.Handle("GET "+GroupsPath, h.List())
+	r.Handle("POST "+GroupsPath, h.Create())
+	r.Handle("GET "+GroupPath, h.Get())
+	r.Handle("PATCH "+GroupPath, h.Update())
+	r.Handle("POST "+GroupMembersPath, h.Join())
+	r.Handle("DELETE "+GroupMemberPath, h.Leave())
+}
+
+// Create lets a GM create a group.
+func (h *GroupHandler) Create() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -63,7 +94,7 @@ func CreateGroupHandler(svc *application.GroupService) http.Handler {
 			return
 		}
 
-		group, err := svc.Create(r.Context(), transport.RequesterFrom(r), req.Name, req.Type, req.Description)
+		group, err := h.groups.Create(r.Context(), transport.RequesterFrom(r), req.Name, req.Type, req.Description)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -74,11 +105,10 @@ func CreateGroupHandler(svc *application.GroupService) http.Handler {
 	})
 }
 
-// ListGroupsHandler returns every group with its members. Must be wrapped in
-// RequireAuth.
-func ListGroupsHandler(svc *application.GroupService) http.Handler {
+// List returns every group with its members.
+func (h *GroupHandler) List() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		groups, err := svc.List(r.Context(), transport.RequesterFrom(r))
+		groups, err := h.groups.List(r.Context(), transport.RequesterFrom(r))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -94,11 +124,10 @@ func ListGroupsHandler(svc *application.GroupService) http.Handler {
 	})
 }
 
-// GetGroupHandler returns one group with its members. Must be wrapped in
-// RequireAuth.
-func GetGroupHandler(svc *application.GroupService) http.Handler {
+// Get returns one group with its members.
+func (h *GroupHandler) Get() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		group, err := svc.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		group, err := h.groups.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -109,9 +138,8 @@ func GetGroupHandler(svc *application.GroupService) http.Handler {
 	})
 }
 
-// UpdateGroupHandler lets a GM edit a group's name, type, or description.
-// Must be wrapped in RequireAuth.
-func UpdateGroupHandler(svc *application.GroupService) http.Handler {
+// Update lets a GM edit a group's name, type, or description.
+func (h *GroupHandler) Update() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -120,7 +148,9 @@ func UpdateGroupHandler(svc *application.GroupService) http.Handler {
 			return
 		}
 
-		group, err := svc.Update(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.Name, req.Type, req.Description)
+		group, err := h.groups.Update(
+			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.Name, req.Type, req.Description,
+		)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -131,9 +161,9 @@ func UpdateGroupHandler(svc *application.GroupService) http.Handler {
 	})
 }
 
-// JoinGroupHandler adds one of the caller's characters (or any character, for
-// a GM) to a group. Must be wrapped in RequireAuth.
-func JoinGroupHandler(svc *application.GroupService) http.Handler {
+// Join adds one of the caller's characters (or any character, for a GM) to a
+// group.
+func (h *GroupHandler) Join() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req joinGroupRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -142,7 +172,7 @@ func JoinGroupHandler(svc *application.GroupService) http.Handler {
 			return
 		}
 
-		if err := svc.Join(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.CharacterID); err != nil {
+		if err := h.groups.Join(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.CharacterID); err != nil {
 			transport.WriteServiceError(w, err)
 
 			return
@@ -152,11 +182,11 @@ func JoinGroupHandler(svc *application.GroupService) http.Handler {
 	})
 }
 
-// LeaveGroupHandler removes one of the caller's characters (or any character,
-// for a GM) from a group. Must be wrapped in RequireAuth.
-func LeaveGroupHandler(svc *application.GroupService) http.Handler {
+// Leave removes one of the caller's characters (or any character, for a GM)
+// from a group.
+func (h *GroupHandler) Leave() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		err := svc.Leave(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), r.PathValue("characterId"))
+		err := h.groups.Leave(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), r.PathValue("characterId"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 

@@ -107,26 +107,6 @@ func toSectionInputs(payloads []documentSectionPayload) []application.DocumentSe
 	return inputs
 }
 
-// ListDocumentsHandler returns the documents in the repository named by {id}
-// that the caller may see. Must be wrapped in RequireAuth.
-func ListDocumentsHandler(svc *application.DocumentService) http.Handler {
-	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		docs, err := svc.ListByRepository(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
-		if err != nil {
-			transport.WriteServiceError(w, err)
-
-			return
-		}
-
-		responses := make([]documentListItemResponse, len(docs))
-		for i := range docs {
-			responses[i] = toDocumentListItemResponse(&docs[i])
-		}
-
-		w.WriteJSON(http.StatusOK, responses)
-	})
-}
-
 // toFolderTreeResponse converts a folder tree node, recursively.
 func toFolderTreeResponse(node *application.FolderNode) folderTreeNodeResponse {
 	folders := make([]folderTreeNodeResponse, len(node.Folders))
@@ -142,58 +122,44 @@ func toFolderTreeResponse(node *application.FolderNode) folderTreeNodeResponse {
 	return folderTreeNodeResponse{Name: node.Name, Path: node.Path, Folders: folders, Documents: docs}
 }
 
-// GetDocumentFolderTreeHandler returns the repository named by {id} as a
-// folder tree of the documents the caller may see, sorted alphabetically at
-// every level. Folders with no accessible documents never appear. Must be
-// wrapped in RequireAuth.
-func GetDocumentFolderTreeHandler(svc *application.DocumentService) http.Handler {
-	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		tree, err := svc.FolderTree(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
-		if err != nil {
-			transport.WriteServiceError(w, err)
+// Route paths for single documents. Documents are created through their
+// repository (see RepositoryHandler); reads and edits address the document
+// directly.
+const (
+	DocumentsSharedPath   = "/api/documents/shared"
+	DocumentPath          = "/api/documents/{id}"
+	DocumentSharePath     = DocumentPath + "/share"
+	DocumentSharesPath    = DocumentPath + "/shares"
+	DocumentShareByIDPath = DocumentSharesPath + "/{shareId}"
+)
 
-			return
-		}
-
-		w.WriteJSON(http.StatusOK, toFolderTreeResponse(tree))
-	})
+// DocumentHandler serves single documents under /api/documents.
+type DocumentHandler struct {
+	documents *application.DocumentService
 }
 
-// CreateDocumentHandler adds a document to the repository named by {id}.
-// Must be wrapped in RequireAuth.
-func CreateDocumentHandler(svc *application.DocumentService) http.Handler {
-	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		var req createDocumentRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			w.WriteError(http.StatusBadRequest, fmt.Errorf("invalid request body: %w", err))
-
-			return
-		}
-
-		view, err := svc.Create(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), &application.CreateDocumentInput{
-			Path:            req.Path,
-			Title:           req.Title,
-			Tags:            req.Tags,
-			SharedOnGameDay: req.SharedOnGameDay,
-			Sections:        toSectionInputs(req.Sections),
-			Markdown:        req.Markdown,
-			AllowCollision:  req.AllowCollision,
-		})
-		if err != nil {
-			transport.WriteServiceError(w, err)
-
-			return
-		}
-
-		w.WriteJSON(http.StatusCreated, toDocumentResponse(view))
-	})
+// NewDocumentHandler builds the single-document handler.
+func NewDocumentHandler(documents *application.DocumentService) *DocumentHandler {
+	return &DocumentHandler{documents: documents}
 }
 
-// GetDocumentHandler returns one document with the sections the caller may
-// see. Must be wrapped in RequireAuth.
-func GetDocumentHandler(svc *application.DocumentService) http.Handler {
+// Register wires the document routes onto r. Each handler must be reached
+// through RequireAuth.
+func (h *DocumentHandler) Register(r *transport.Router) {
+	r.Handle("GET "+DocumentsSharedPath, h.ListShared())
+	r.Handle("GET "+DocumentPath, h.Get())
+	r.Handle("PATCH "+DocumentPath, h.Update())
+	r.Handle("DELETE "+DocumentPath, h.Delete())
+	r.Handle("POST "+DocumentSharePath, h.ShareToGroup())
+	r.Handle("GET "+DocumentSharesPath, h.ListShares())
+	r.Handle("POST "+DocumentSharesPath, h.ShareWithCharacter())
+	r.Handle("DELETE "+DocumentShareByIDPath, h.RevokeShare())
+}
+
+// Get returns one document with the sections the caller may see.
+func (h *DocumentHandler) Get() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		view, err := svc.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		view, err := h.documents.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -204,9 +170,8 @@ func GetDocumentHandler(svc *application.DocumentService) http.Handler {
 	})
 }
 
-// UpdateDocumentHandler replaces a document's metadata and the caller's
-// visible sections. Must be wrapped in RequireAuth.
-func UpdateDocumentHandler(svc *application.DocumentService) http.Handler {
+// Update replaces a document's metadata and the caller's visible sections.
+func (h *DocumentHandler) Update() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -215,16 +180,17 @@ func UpdateDocumentHandler(svc *application.DocumentService) http.Handler {
 			return
 		}
 
-		view, err := svc.Update(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), &application.UpdateDocumentInput{
-			Path:            req.Path,
-			Title:           req.Title,
-			Tags:            req.Tags,
-			SharedOnGameDay: req.SharedOnGameDay,
-			Sections:        toSectionInputs(req.Sections),
-			ExpectedVersion: req.ExpectedVersion,
-			Force:           req.Force,
-			AllowCollision:  req.AllowCollision,
-		})
+		view, err := h.documents.Update(
+			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), &application.UpdateDocumentInput{
+				Path:            req.Path,
+				Title:           req.Title,
+				Tags:            req.Tags,
+				SharedOnGameDay: req.SharedOnGameDay,
+				Sections:        toSectionInputs(req.Sections),
+				ExpectedVersion: req.ExpectedVersion,
+				Force:           req.Force,
+				AllowCollision:  req.AllowCollision,
+			})
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -235,10 +201,9 @@ func UpdateDocumentHandler(svc *application.DocumentService) http.Handler {
 	})
 }
 
-// ShareDocumentHandler moves the document named by {id} out of its character
-// repository into a target group repository at a chosen game day. Must be
-// wrapped in RequireAuth.
-func ShareDocumentHandler(svc *application.DocumentService) http.Handler {
+// ShareToGroup moves the document named by {id} out of its character
+// repository into a target group repository at a chosen game day.
+func (h *DocumentHandler) ShareToGroup() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req shareDocumentRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -247,11 +212,12 @@ func ShareDocumentHandler(svc *application.DocumentService) http.Handler {
 			return
 		}
 
-		view, err := svc.ShareToGroup(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), &application.ShareDocumentInput{
-			TargetRepositoryID: req.TargetRepositoryID,
-			SharedOnGameDay:    req.SharedOnGameDay,
-			AllowCollision:     req.AllowCollision,
-		})
+		view, err := h.documents.ShareToGroup(
+			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), &application.ShareDocumentInput{
+				TargetRepositoryID: req.TargetRepositoryID,
+				SharedOnGameDay:    req.SharedOnGameDay,
+				AllowCollision:     req.AllowCollision,
+			})
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -280,10 +246,9 @@ func toDocumentShareResponse(s *models.DocumentShare) documentShareResponse {
 	}
 }
 
-// ShareDocumentWithCharacterHandler lets a GM directly share the document
-// named by {id} with one character on a game day. Must be wrapped in
-// RequireAuth.
-func ShareDocumentWithCharacterHandler(svc *application.DocumentService) http.Handler {
+// ShareWithCharacter lets a GM directly share the document named by {id} with
+// one character on a game day.
+func (h *DocumentHandler) ShareWithCharacter() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req shareDocumentWithCharacterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -298,7 +263,7 @@ func ShareDocumentWithCharacterHandler(svc *application.DocumentService) http.Ha
 			return
 		}
 
-		share, err := svc.ShareWithCharacter(
+		share, err := h.documents.ShareWithCharacter(
 			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.CharacterID, req.SharedOnGameDay,
 		)
 		if err != nil {
@@ -311,11 +276,10 @@ func ShareDocumentWithCharacterHandler(svc *application.DocumentService) http.Ha
 	})
 }
 
-// ListDocumentSharesHandler lets a GM list the direct shares on a document.
-// Must be wrapped in RequireAuth.
-func ListDocumentSharesHandler(svc *application.DocumentService) http.Handler {
+// ListShares lets a GM list the direct shares on a document.
+func (h *DocumentHandler) ListShares() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		shares, err := svc.ListShares(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		shares, err := h.documents.ListShares(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -331,11 +295,10 @@ func ListDocumentSharesHandler(svc *application.DocumentService) http.Handler {
 	})
 }
 
-// RevokeDocumentShareHandler lets a GM remove one direct share from a
-// document. Must be wrapped in RequireAuth.
-func RevokeDocumentShareHandler(svc *application.DocumentService) http.Handler {
+// RevokeShare lets a GM remove one direct share from a document.
+func (h *DocumentHandler) RevokeShare() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		err := svc.RevokeShare(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), r.PathValue("shareId"))
+		err := h.documents.RevokeShare(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), r.PathValue("shareId"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -346,12 +309,11 @@ func RevokeDocumentShareHandler(svc *application.DocumentService) http.Handler {
 	})
 }
 
-// ListSharedDocumentsHandler returns the documents directly shared with any
-// of the caller's characters whose game day has been reached. Must be
-// wrapped in RequireAuth.
-func ListSharedDocumentsHandler(svc *application.DocumentService) http.Handler {
+// ListShared returns the documents directly shared with any of the caller's
+// characters whose game day has been reached.
+func (h *DocumentHandler) ListShared() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		views, err := svc.ListSharedWithMe(r.Context(), transport.RequesterFrom(r))
+		views, err := h.documents.ListSharedWithMe(r.Context(), transport.RequesterFrom(r))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -367,11 +329,11 @@ func ListSharedDocumentsHandler(svc *application.DocumentService) http.Handler {
 	})
 }
 
-// DeleteDocumentHandler removes a document and its sections. GM only; the
-// removal is recorded in the activity log. Must be wrapped in RequireAuth.
-func DeleteDocumentHandler(svc *application.DocumentService) http.Handler {
+// Delete removes a document and its sections. GM only; the removal is recorded
+// in the activity log.
+func (h *DocumentHandler) Delete() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		if err := svc.Delete(r.Context(), transport.RequesterFrom(r), r.PathValue("id")); err != nil {
+		if err := h.documents.Delete(r.Context(), transport.RequesterFrom(r), r.PathValue("id")); err != nil {
 			transport.WriteServiceError(w, err)
 
 			return

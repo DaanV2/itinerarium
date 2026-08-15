@@ -71,17 +71,11 @@ func newMoveTestEnv(t *testing.T) moveTestEnv {
 	}
 	require.NoError(t, groups.AddMember(ctx, group, character, entry), "AddMember")
 
-	router := transport.NewRouter(
-		transport.WithHandle(
-			"POST /api/characters/{id}/inventory",
-			requireAuth(inventoryv1.AddInventoryItemHandler(inventorySvc, inventoryv1.CharacterOwner)),
-		),
-		transport.WithHandle(
-			"GET /api/groups/{id}/inventory",
-			requireAuth(inventoryv1.ListInventoryHandler(inventorySvc, inventoryv1.GroupOwner)),
-		),
-		transport.WithHandle("POST /api/inventory/move", requireAuth(inventoryv1.MoveInventoryItemHandler(inventorySvc))),
-	)
+	authenticated := transport.NewRouter(transport.WithMiddleware(requireAuth))
+	inventoryv1.NewCharacterInventoryHandler(inventorySvc).Register(authenticated)
+	inventoryv1.NewGroupInventoryHandler(inventorySvc).Register(authenticated)
+	inventoryv1.NewInventoryMoveHandler(inventorySvc).Register(authenticated)
+	router := transport.NewRouter(transport.WithSubRoute("", authenticated))
 
 	return moveTestEnv{
 		router:      router,

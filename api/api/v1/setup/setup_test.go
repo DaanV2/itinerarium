@@ -29,10 +29,10 @@ func newSetupRouter(t *testing.T) *transport.Router {
 	tokens := authentication.NewTokenService(keys, repositories.NewRevokedTokens(db))
 	svc := application.NewSetupService(repositories.NewUsers(db), tokens)
 
-	return transport.NewRouter(
-		transport.WithHandle("GET /api/setup", setupv1.SetupStatusHandler(svc)),
-		transport.WithHandle("POST /api/setup", setupv1.CreateInitialGMHandler(svc)),
-	)
+	router := transport.NewRouter()
+	setupv1.NewSetupHandler(svc).Register(router)
+
+	return router
 }
 
 func TestSetupStatus_NeedsSetupInitially(t *testing.T) {

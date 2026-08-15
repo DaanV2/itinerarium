@@ -66,14 +66,9 @@ func newCharactersTestEnv(t *testing.T) charactersTestEnv {
 	otherToken, err := tokens.Issue(other.ID)
 	require.NoError(t, err)
 
-	router := transport.NewRouter(
-		transport.WithHandle("GET /api/characters", requireAuth(charactersv1.ListCharactersHandler(characterSvc))),
-		transport.WithHandle("POST /api/characters", requireAuth(charactersv1.CreateCharacterHandler(characterSvc))),
-		transport.WithHandle("GET /api/characters/{id}", requireAuth(charactersv1.GetCharacterHandler(characterSvc))),
-		transport.WithHandle(
-			"PATCH /api/characters/{id}", requireAuth(charactersv1.UpdateCharacterHandler(characterSvc)),
-		),
-	)
+	authenticated := transport.NewRouter(transport.WithMiddleware(requireAuth))
+	charactersv1.NewCharacterHandler(characterSvc).Register(authenticated)
+	router := transport.NewRouter(transport.WithSubRoute("", authenticated))
 
 	return charactersTestEnv{router: router, gmToken: gmToken, playerToken: playerToken, otherToken: otherToken}
 }

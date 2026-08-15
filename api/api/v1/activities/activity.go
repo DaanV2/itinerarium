@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	charactersv1 "github.com/DaanV2/itinerarium/api/api/v1/characters"
 	"github.com/DaanV2/itinerarium/api/application"
 	"github.com/DaanV2/itinerarium/api/infrastructure/persistence/models"
 	"github.com/DaanV2/itinerarium/api/infrastructure/transport"
@@ -70,13 +71,33 @@ func toActivityEntryResponses(entries []models.ActivityEntry) []activityEntryRes
 	return responses
 }
 
-// GetCharacterActivityHandler returns one character's activity feed — the
-// events visible to that character up to its current game day. The service
-// enforces ownership (owner + GM) and strips the actor from announced entries
-// for non-GM callers. Must be wrapped in RequireAuth.
-func GetCharacterActivityHandler(svc *application.ActivityService) http.Handler {
+// CharacterActivityPath is one character's activity feed, addressed by the
+// character {id}.
+const CharacterActivityPath = charactersv1.CharacterPath + "/activity"
+
+// CharacterActivityHandler serves one character's activity feed under
+// /api/characters/{id}/activity.
+type CharacterActivityHandler struct {
+	activity *application.ActivityService
+}
+
+// NewCharacterActivityHandler builds the character-activity handler.
+func NewCharacterActivityHandler(activity *application.ActivityService) *CharacterActivityHandler {
+	return &CharacterActivityHandler{activity: activity}
+}
+
+// Register wires the character-activity route onto r. The handler must be
+// reached through RequireAuth.
+func (h *CharacterActivityHandler) Register(r *transport.Router) {
+	r.Handle("GET "+CharacterActivityPath, h.Feed())
+}
+
+// Feed returns one character's activity feed — the events visible to that
+// character up to its current game day. The service enforces ownership (owner +
+// GM) and strips the actor from announced entries for non-GM callers.
+func (h *CharacterActivityHandler) Feed() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		entries, err := svc.Feed(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		entries, err := h.activity.Feed(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -87,11 +108,35 @@ func GetCharacterActivityHandler(svc *application.ActivityService) http.Handler 
 	})
 }
 
-// ListActivityHandler returns the full campaign log, announcement targets
-// included. GM only. Must be wrapped in RequireAuth.
-func ListActivityHandler(svc *application.ActivityService) http.Handler {
+// Route paths for the campaign-wide activity log.
+const (
+	ActivityPath             = "/api/activity"
+	ActivityAnnouncementPath = ActivityPath + "/announcements"
+)
+
+// ActivityHandler serves the GM-wide campaign log and announcements under
+// /api/activity. The per-character feed lives under
+// /api/characters/{id}/activity.
+type ActivityHandler struct {
+	activity *application.ActivityService
+}
+
+// NewActivityHandler builds the campaign-log handler.
+func NewActivityHandler(activity *application.ActivityService) *ActivityHandler {
+	return &ActivityHandler{activity: activity}
+}
+
+// Register wires the campaign-log routes onto r. Each handler must be reached
+// through RequireAuth.
+func (h *ActivityHandler) Register(r *transport.Router) {
+	r.Handle("GET "+ActivityPath, h.List())
+	r.Handle("POST "+ActivityAnnouncementPath, h.Announce())
+}
+
+// List returns the full campaign log, announcement targets included. GM only.
+func (h *ActivityHandler) List() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		entries, err := svc.ListAll(r.Context(), transport.RequesterFrom(r))
+		entries, err := h.activity.ListAll(r.Context(), transport.RequesterFrom(r))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -113,9 +158,9 @@ type announceActivityRequest struct {
 	GroupIDs     []string              `json:"group_ids,omitempty"`
 }
 
-// AnnounceActivityHandler lets a GM broadcast an announced activity entry to
-// specific characters, groups, or everyone. Must be wrapped in RequireAuth.
-func AnnounceActivityHandler(svc *application.ActivityService) http.Handler {
+// Announce lets a GM broadcast an announced activity entry to specific
+// characters, groups, or everyone.
+func (h *ActivityHandler) Announce() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req announceActivityRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -124,7 +169,7 @@ func AnnounceActivityHandler(svc *application.ActivityService) http.Handler {
 			return
 		}
 
-		entry, err := svc.Announce(r.Context(), transport.RequesterFrom(r), &application.AnnounceInput{
+		entry, err := h.activity.Announce(r.Context(), transport.RequesterFrom(r), &application.AnnounceInput{
 			GameDay:      req.GameDay,
 			Action:       req.Action,
 			EntityType:   req.EntityType,

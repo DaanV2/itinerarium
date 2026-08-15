@@ -28,11 +28,30 @@ func toItemDefinitionResponse(d *models.ItemDefinition) itemDefinitionResponse {
 	return itemDefinitionResponse{ID: d.ID, Name: d.Name, Description: d.Description, Category: d.Category}
 }
 
-// ListItemDefinitionsHandler returns the item catalog. Must be wrapped in
-// RequireAuth.
-func ListItemDefinitionsHandler(svc *application.CatalogService) http.Handler {
+// ItemsPath is the item-definition catalog.
+const ItemsPath = "/api/items"
+
+// ItemHandler serves the item-definition catalog under /api/items.
+type ItemHandler struct {
+	catalog *application.CatalogService
+}
+
+// NewItemHandler builds the item-catalog handler.
+func NewItemHandler(catalog *application.CatalogService) *ItemHandler {
+	return &ItemHandler{catalog: catalog}
+}
+
+// Register wires the item-catalog routes onto r. Each handler must be reached
+// through RequireAuth.
+func (h *ItemHandler) Register(r *transport.Router) {
+	r.Handle("GET "+ItemsPath, h.List())
+	r.Handle("POST "+ItemsPath, h.Create())
+}
+
+// List returns the item catalog.
+func (h *ItemHandler) List() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		defs, err := svc.ListItemDefinitions(r.Context())
+		defs, err := h.catalog.ListItemDefinitions(r.Context())
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -48,9 +67,8 @@ func ListItemDefinitionsHandler(svc *application.CatalogService) http.Handler {
 	})
 }
 
-// CreateItemDefinitionHandler lets a GM add an item to the catalog. Must be
-// wrapped in RequireAuth.
-func CreateItemDefinitionHandler(svc *application.CatalogService) http.Handler {
+// Create lets a GM add an item to the catalog.
+func (h *ItemHandler) Create() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createItemDefinitionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -59,7 +77,9 @@ func CreateItemDefinitionHandler(svc *application.CatalogService) http.Handler {
 			return
 		}
 
-		d, err := svc.CreateItemDefinition(r.Context(), transport.RequesterFrom(r), req.Name, req.Description, req.Category)
+		d, err := h.catalog.CreateItemDefinition(
+			r.Context(), transport.RequesterFrom(r), req.Name, req.Description, req.Category,
+		)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 

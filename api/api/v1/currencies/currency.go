@@ -59,10 +59,35 @@ func toCurrencyAmounts(reqs []currencyAmountRequest) []application.CurrencyAmoun
 	return amounts
 }
 
-// SimplifyCurrencyHandler adds up one or more currency amounts and returns
-// the fewest-coins breakdown across the whole catalog. Must be wrapped in
-// RequireAuth.
-func SimplifyCurrencyHandler(svc *application.CatalogService) http.Handler {
+// Route paths for the currency catalog.
+const (
+	CurrenciesPath       = "/api/currencies"
+	CurrencyConvertPath  = CurrenciesPath + "/convert"
+	CurrencySimplifyPath = CurrenciesPath + "/simplify"
+)
+
+// CurrencyHandler serves the currency catalog under /api/currencies.
+type CurrencyHandler struct {
+	catalog *application.CatalogService
+}
+
+// NewCurrencyHandler builds the currency-catalog handler.
+func NewCurrencyHandler(catalog *application.CatalogService) *CurrencyHandler {
+	return &CurrencyHandler{catalog: catalog}
+}
+
+// Register wires the currency routes onto r. Each handler must be reached
+// through RequireAuth.
+func (h *CurrencyHandler) Register(r *transport.Router) {
+	r.Handle("GET "+CurrenciesPath, h.List())
+	r.Handle("POST "+CurrenciesPath, h.Create())
+	r.Handle("POST "+CurrencyConvertPath, h.Convert())
+	r.Handle("POST "+CurrencySimplifyPath, h.Simplify())
+}
+
+// Simplify adds up one or more currency amounts and returns the fewest-coins
+// breakdown across the whole catalog.
+func (h *CurrencyHandler) Simplify() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req simplifyCurrencyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -71,7 +96,7 @@ func SimplifyCurrencyHandler(svc *application.CatalogService) http.Handler {
 			return
 		}
 
-		breakdown, err := svc.Simplify(r.Context(), toCurrencyAmounts(req.Amounts))
+		breakdown, err := h.catalog.Simplify(r.Context(), toCurrencyAmounts(req.Amounts))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -80,16 +105,17 @@ func SimplifyCurrencyHandler(svc *application.CatalogService) http.Handler {
 
 		responses := make([]simplifiedAmountResponse, len(breakdown))
 		for i := range breakdown {
-			responses[i] = simplifiedAmountResponse{Currency: toCurrencyResponse(&breakdown[i].Currency), Amount: breakdown[i].Amount}
+			responses[i] = simplifiedAmountResponse{
+				Currency: toCurrencyResponse(&breakdown[i].Currency), Amount: breakdown[i].Amount,
+			}
 		}
 
 		w.WriteJSON(http.StatusOK, responses)
 	})
 }
 
-// CreateCurrencyHandler lets a GM add a currency to the catalog. Must be
-// wrapped in RequireAuth.
-func CreateCurrencyHandler(svc *application.CatalogService) http.Handler {
+// Create lets a GM add a currency to the catalog.
+func (h *CurrencyHandler) Create() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createCurrencyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -98,7 +124,7 @@ func CreateCurrencyHandler(svc *application.CatalogService) http.Handler {
 			return
 		}
 
-		c, err := svc.CreateCurrency(r.Context(), transport.RequesterFrom(r), req.Code, req.Name, req.Ratio)
+		c, err := h.catalog.CreateCurrency(r.Context(), transport.RequesterFrom(r), req.Code, req.Name, req.Ratio)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -109,12 +135,11 @@ func CreateCurrencyHandler(svc *application.CatalogService) http.Handler {
 	})
 }
 
-// ConvertCurrencyHandler adds up one or more currency amounts and expresses
-// the total in a target currency — covering both single-currency conversion
-// ("how much of X is Y") and adding amounts across currencies together. Must
-// be wrapped in RequireAuth; any authenticated user may call it, currencies
-// are not secret.
-func ConvertCurrencyHandler(svc *application.CatalogService) http.Handler {
+// Convert adds up one or more currency amounts and expresses the total in a
+// target currency — covering both single-currency conversion ("how much of X is
+// Y") and adding amounts across currencies together. Any authenticated user may
+// call it, currencies are not secret.
+func (h *CurrencyHandler) Convert() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req convertCurrencyRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -123,7 +148,7 @@ func ConvertCurrencyHandler(svc *application.CatalogService) http.Handler {
 			return
 		}
 
-		result, err := svc.Convert(r.Context(), toCurrencyAmounts(req.Amounts), req.To)
+		result, err := h.catalog.Convert(r.Context(), toCurrencyAmounts(req.Amounts), req.To)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -139,11 +164,10 @@ func ConvertCurrencyHandler(svc *application.CatalogService) http.Handler {
 	})
 }
 
-// ListCurrenciesHandler returns the currency catalog. Must be wrapped in
-// RequireAuth.
-func ListCurrenciesHandler(svc *application.CatalogService) http.Handler {
+// List returns the currency catalog.
+func (h *CurrencyHandler) List() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		currencies, err := svc.ListCurrencies(r.Context())
+		currencies, err := h.catalog.ListCurrencies(r.Context())
 		if err != nil {
 			transport.WriteServiceError(w, err)
 

@@ -71,15 +71,10 @@ func newActivityHTTPEnv(t *testing.T) activityHTTPEnv {
 	character := &models.Character{Name: "Aria", UserID: player.ID, CurrentGameDay: 10}
 	require.NoError(t, characterRepo.Create(ctx, character), "Create character")
 
-	router := transport.NewRouter(
-		transport.WithHandle(
-			"GET /api/characters/{id}/activity", requireAuth(activitiesv1.GetCharacterActivityHandler(activitySvc)),
-		),
-		transport.WithHandle("GET /api/activity", requireAuth(activitiesv1.ListActivityHandler(activitySvc))),
-		transport.WithHandle(
-			"POST /api/activity/announcements", requireAuth(activitiesv1.AnnounceActivityHandler(activitySvc)),
-		),
-	)
+	authenticated := transport.NewRouter(transport.WithMiddleware(requireAuth))
+	activitiesv1.NewCharacterActivityHandler(activitySvc).Register(authenticated)
+	activitiesv1.NewActivityHandler(activitySvc).Register(authenticated)
+	router := transport.NewRouter(transport.WithSubRoute("", authenticated))
 
 	return activityHTTPEnv{
 		router:      router,

@@ -27,10 +27,35 @@ type resetPasswordResponse struct {
 	TemporaryPassword string `json:"temporary_password"`
 }
 
-// CreateAccountHandler lets a GM create a new player or GM account, handing
-// back a random temporary password for the GM to relay out of band. Must be
-// wrapped in RequireAuth.
-func CreateAccountHandler(svc *application.UserService) http.Handler {
+// Route paths for account administration.
+const (
+	AdminUsersPath         = "/api/admin/users"
+	AdminUserResetPassword = AdminUsersPath + "/{id}/reset-password"
+)
+
+// AdminUsersHandler serves account administration under /api/admin/users. The
+// throttle (nil disables it) caps password-reset spam per target account.
+type AdminUsersHandler struct {
+	users    *application.UserService
+	throttle *transport.Throttle
+}
+
+// NewAdminUsersHandler builds the account-administration handler.
+func NewAdminUsersHandler(users *application.UserService, throttle *transport.Throttle) *AdminUsersHandler {
+	return &AdminUsersHandler{users: users, throttle: throttle}
+}
+
+// Register wires the account-administration routes onto r. Each handler must be
+// reached through RequireAuth.
+func (h *AdminUsersHandler) Register(r *transport.Router) {
+	r.Handle("GET "+AdminUsersPath, h.List())
+	r.Handle("POST "+AdminUsersPath, h.Create())
+	r.Handle("POST "+AdminUserResetPassword, h.ResetPassword())
+}
+
+// Create lets a GM create a new player or GM account, handing back a random
+// temporary password for the GM to relay out of band.
+func (h *AdminUsersHandler) Create() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createAccountRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -39,7 +64,7 @@ func CreateAccountHandler(svc *application.UserService) http.Handler {
 			return
 		}
 
-		user, password, err := svc.CreateAccount(r.Context(), transport.RequesterFrom(r), req.Email, req.Role)
+		user, password, err := h.users.CreateAccount(r.Context(), transport.RequesterFrom(r), req.Email, req.Role)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -52,11 +77,10 @@ func CreateAccountHandler(svc *application.UserService) http.Handler {
 	})
 }
 
-// ListAccountsHandler lets a GM list every account for the admin panel. Must
-// be wrapped in RequireAuth.
-func ListAccountsHandler(svc *application.UserService) http.Handler {
+// List lets a GM list every account for the admin panel.
+func (h *AdminUsersHandler) List() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		users, err := svc.ListAccounts(r.Context(), transport.RequesterFrom(r))
+		users, err := h.users.ListAccounts(r.Context(), transport.RequesterFrom(r))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -72,24 +96,24 @@ func ListAccountsHandler(svc *application.UserService) http.Handler {
 	})
 }
 
-// ResetPasswordHandler lets a GM reset another account's password to a fresh
-// random temporary password, handed back for the GM to relay out of band. No
-// SMTP dependency. Must be wrapped in RequireAuth. The throttle (nil disables
-// it) caps repeated resets against a single target account (roadmap M10) — this
-// path is authenticated and GM-only, so account spam, not credential guessing,
-// is the risk, hence keying by target rather than IP.
-func ResetPasswordHandler(svc *application.UserService, throttle *transport.Throttle) http.Handler {
+// ResetPassword lets a GM reset another account's password to a fresh random
+// temporary password, handed back for the GM to relay out of band. No SMTP
+// dependency. The throttle (nil disables it) caps repeated resets against a
+// single target account (roadmap M10) — this path is authenticated and GM-only,
+// so account spam, not credential guessing, is the risk, hence keying by target
+// rather than IP.
+func (h *AdminUsersHandler) ResetPassword() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		targetID := r.PathValue("id")
 		key := "reset:acct:" + targetID
 
-		if ok, retry := throttle.Allowed(key); !ok {
+		if ok, retry := h.throttle.Allowed(key); !ok {
 			transport.WriteThrottled(w, retry)
 
 			return
 		}
 
-		password, err := svc.ResetPassword(r.Context(), transport.RequesterFrom(r), targetID)
+		password, err := h.users.ResetPassword(r.Context(), transport.RequesterFrom(r), targetID)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -98,7 +122,7 @@ func ResetPasswordHandler(svc *application.UserService, throttle *transport.Thro
 
 		// Every successful reset is chargeable: there is no "good" outcome that
 		// should clear the counter, so the decay window caps resets per window.
-		throttle.Penalize(key)
+		h.throttle.Penalize(key)
 
 		w.WriteJSON(http.StatusOK, resetPasswordResponse{TemporaryPassword: password})
 	})

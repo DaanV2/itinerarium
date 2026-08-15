@@ -35,9 +35,36 @@ func toCharacterResponse(c *models.Character) characterResponse {
 	}
 }
 
-// CreateCharacterHandler lets a caller create a character for themselves, or
-// a GM create one for any existing user. Must be wrapped in RequireAuth.
-func CreateCharacterHandler(svc *application.CharacterService) http.Handler {
+// Route paths for the character resource. CharactersPath / CharacterPath are
+// the shared bases that character subresource groups in other packages
+// (journal, inventory, money, location, activity) build their own paths from.
+const (
+	CharactersPath = "/api/characters"
+	CharacterPath  = CharactersPath + "/{id}"
+)
+
+// CharacterHandler serves the character resource under /api/characters.
+type CharacterHandler struct {
+	characters *application.CharacterService
+}
+
+// NewCharacterHandler builds the character resource handler.
+func NewCharacterHandler(characters *application.CharacterService) *CharacterHandler {
+	return &CharacterHandler{characters: characters}
+}
+
+// Register wires the character routes onto r. Each handler must be reached
+// through RequireAuth.
+func (h *CharacterHandler) Register(r *transport.Router) {
+	r.Handle("GET "+CharactersPath, h.List())
+	r.Handle("POST "+CharactersPath, h.Create())
+	r.Handle("GET "+CharacterPath, h.Get())
+	r.Handle("PATCH "+CharacterPath, h.Update())
+}
+
+// Create lets a caller create a character for themselves, or a GM create one
+// for any existing user.
+func (h *CharacterHandler) Create() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req createCharacterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -46,7 +73,7 @@ func CreateCharacterHandler(svc *application.CharacterService) http.Handler {
 			return
 		}
 
-		c, err := svc.Create(r.Context(), transport.RequesterFrom(r), req.UserID, req.Name)
+		c, err := h.characters.Create(r.Context(), transport.RequesterFrom(r), req.UserID, req.Name)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -57,11 +84,10 @@ func CreateCharacterHandler(svc *application.CharacterService) http.Handler {
 	})
 }
 
-// ListCharactersHandler returns the caller's own characters, or every
-// character for a GM. Must be wrapped in RequireAuth.
-func ListCharactersHandler(svc *application.CharacterService) http.Handler {
+// List returns the caller's own characters, or every character for a GM.
+func (h *CharacterHandler) List() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		characters, err := svc.List(r.Context(), transport.RequesterFrom(r))
+		characters, err := h.characters.List(r.Context(), transport.RequesterFrom(r))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -77,11 +103,11 @@ func ListCharactersHandler(svc *application.CharacterService) http.Handler {
 	})
 }
 
-// GetCharacterHandler returns a single character owned by the caller, or any
-// character for a GM. Must be wrapped in RequireAuth.
-func GetCharacterHandler(svc *application.CharacterService) http.Handler {
+// Get returns a single character owned by the caller, or any character for a
+// GM.
+func (h *CharacterHandler) Get() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
-		c, err := svc.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
+		c, err := h.characters.Get(r.Context(), transport.RequesterFrom(r), r.PathValue("id"))
 		if err != nil {
 			transport.WriteServiceError(w, err)
 
@@ -92,9 +118,8 @@ func GetCharacterHandler(svc *application.CharacterService) http.Handler {
 	})
 }
 
-// UpdateCharacterHandler renames a character and/or (GM only) sets its
-// current_game_day. Must be wrapped in RequireAuth.
-func UpdateCharacterHandler(svc *application.CharacterService) http.Handler {
+// Update renames a character and/or (GM only) sets its current_game_day.
+func (h *CharacterHandler) Update() http.Handler {
 	return xhttp.JSONHandlerFunc(func(w xhttp.JSONResponseWriter, r *http.Request) {
 		var req updateCharacterRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -103,7 +128,9 @@ func UpdateCharacterHandler(svc *application.CharacterService) http.Handler {
 			return
 		}
 
-		c, err := svc.Update(r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.Name, req.CurrentGameDay)
+		c, err := h.characters.Update(
+			r.Context(), transport.RequesterFrom(r), r.PathValue("id"), req.Name, req.CurrentGameDay,
+		)
 		if err != nil {
 			transport.WriteServiceError(w, err)
 

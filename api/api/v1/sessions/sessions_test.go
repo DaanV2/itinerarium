@@ -52,22 +52,9 @@ func newSessionTestEnv(t *testing.T) sessionTestEnv {
 	character := &models.Character{Name: "Aria", UserID: player.ID}
 	require.NoError(t, characters.Create(ctx, character), "Create character")
 
-	router := transport.NewRouter(
-		transport.WithHandle("GET /api/sessions", requireAuth(sessionsv1.ListSessionsHandler(sessionSvc))),
-		transport.WithHandle("POST /api/sessions", requireAuth(sessionsv1.CreateSessionHandler(sessionSvc))),
-		transport.WithHandle("GET /api/sessions/{id}", requireAuth(sessionsv1.GetSessionHandler(sessionSvc))),
-		transport.WithHandle("PATCH /api/sessions/{id}", requireAuth(sessionsv1.UpdateSessionHandler(sessionSvc))),
-		transport.WithHandle(
-			"POST /api/sessions/{id}/participants", requireAuth(sessionsv1.AddSessionParticipantHandler(sessionSvc)),
-		),
-		transport.WithHandle(
-			"DELETE /api/sessions/{id}/participants/{characterId}",
-			requireAuth(sessionsv1.RemoveSessionParticipantHandler(sessionSvc)),
-		),
-		transport.WithHandle(
-			"POST /api/sessions/{id}/game-day", requireAuth(sessionsv1.AdvanceSessionGameDayHandler(sessionSvc)),
-		),
-	)
+	authenticated := transport.NewRouter(transport.WithMiddleware(requireAuth))
+	sessionsv1.NewSessionHandler(sessionSvc).Register(authenticated)
+	router := transport.NewRouter(transport.WithSubRoute("", authenticated))
 
 	return sessionTestEnv{
 		router:      router,

@@ -57,9 +57,13 @@ func newRepositoriesTestEnv(t *testing.T) repositoriesTestEnv {
 	character, err := characterSvc.Create(ctx, application.UserRequester{User: player}, "", "Aria")
 	require.NoError(t, err, "Create character")
 
+	// This suite exercises only the repository reads, so it wires just those two
+	// methods; the nested-document routes (which need a document service) are
+	// covered in documents_test.go.
+	repoHandler := knowledgev1.NewRepositoryHandler(repoSvc, nil)
 	router := transport.NewRouter(
-		transport.WithHandle("GET /api/repositories", requireAuth(knowledgev1.ListRepositoriesHandler(repoSvc))),
-		transport.WithHandle("GET /api/repositories/{id}", requireAuth(knowledgev1.GetRepositoryHandler(repoSvc))),
+		transport.WithHandle("GET "+knowledgev1.RepositoriesPath, requireAuth(repoHandler.List())),
+		transport.WithHandle("GET "+knowledgev1.RepositoryPath, requireAuth(repoHandler.Get())),
 	)
 
 	return repositoriesTestEnv{

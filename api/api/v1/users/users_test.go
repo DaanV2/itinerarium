@@ -60,14 +60,9 @@ func newUsersTestEnv(t *testing.T, throttle ...*transport.Throttle) usersTestEnv
 	playerToken, err := tokens.Issue(player.ID)
 	require.NoError(t, err, "Issue(player)")
 
-	router := transport.NewRouter(
-		transport.WithHandle("GET /api/admin/users", requireAuth(usersv1.ListAccountsHandler(userSvc))),
-		transport.WithHandle("POST /api/admin/users", requireAuth(usersv1.CreateAccountHandler(userSvc))),
-		transport.WithHandle(
-			"POST /api/admin/users/{id}/reset-password",
-			requireAuth(usersv1.ResetPasswordHandler(userSvc, resetThrottle)),
-		),
-	)
+	authenticated := transport.NewRouter(transport.WithMiddleware(requireAuth))
+	usersv1.NewAdminUsersHandler(userSvc, resetThrottle).Register(authenticated)
+	router := transport.NewRouter(transport.WithSubRoute("", authenticated))
 
 	return usersTestEnv{router: router, gmToken: gmToken, playerToken: playerToken}
 }

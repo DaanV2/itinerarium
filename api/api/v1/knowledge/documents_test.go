@@ -86,30 +86,12 @@ func newDocumentsTransportEnv(t *testing.T) documentsTransportEnv {
 	character, err := charSvc.Create(ctx, application.UserRequester{User: player}, "", "Aria")
 	require.NoError(t, err)
 
-	router := transport.NewRouter(
-		transport.WithHandle(
-			"GET /api/repositories/{id}/documents", requireAuth(knowledgev1.ListDocumentsHandler(docSvc)),
-		),
-		transport.WithHandle(
-			"POST /api/repositories/{id}/documents", requireAuth(knowledgev1.CreateDocumentHandler(docSvc)),
-		),
-		transport.WithHandle(
-			"GET /api/repositories/{id}/documents/tree", requireAuth(knowledgev1.GetDocumentFolderTreeHandler(docSvc)),
-		),
-		transport.WithHandle("GET /api/documents/shared", requireAuth(knowledgev1.ListSharedDocumentsHandler(docSvc))),
-		transport.WithHandle("GET /api/documents/{id}", requireAuth(knowledgev1.GetDocumentHandler(docSvc))),
-		transport.WithHandle("PATCH /api/documents/{id}", requireAuth(knowledgev1.UpdateDocumentHandler(docSvc))),
-		transport.WithHandle("POST /api/documents/{id}/share", requireAuth(knowledgev1.ShareDocumentHandler(docSvc))),
-		transport.WithHandle("GET /api/documents/{id}/shares", requireAuth(knowledgev1.ListDocumentSharesHandler(docSvc))),
-		transport.WithHandle(
-			"POST /api/documents/{id}/shares", requireAuth(knowledgev1.ShareDocumentWithCharacterHandler(docSvc)),
-		),
-		transport.WithHandle(
-			"DELETE /api/documents/{id}/shares/{shareId}", requireAuth(knowledgev1.RevokeDocumentShareHandler(docSvc)),
-		),
-		transport.WithHandle("GET /api/search", requireAuth(knowledgev1.SearchDocumentsHandler(docSvc))),
-		transport.WithHandle("POST /api/import/obsidian", requireAuth(knowledgev1.ImportVaultHandler(vaultSvc))),
-	)
+	authenticated := transport.NewRouter(transport.WithMiddleware(requireAuth))
+	knowledgev1.NewRepositoryHandler(repoSvc, docSvc).Register(authenticated)
+	knowledgev1.NewDocumentHandler(docSvc).Register(authenticated)
+	knowledgev1.NewSearchHandler(docSvc).Register(authenticated)
+	knowledgev1.NewImportHandler(vaultSvc).Register(authenticated)
+	router := transport.NewRouter(transport.WithSubRoute("", authenticated))
 
 	return documentsTransportEnv{
 		router:         router,

@@ -39,9 +39,10 @@ func newLoginTestRouter(t *testing.T, email, password string, throttle *transpor
 	user := &models.User{Email: email, PasswordHash: hash, Role: models.RolePlayer}
 	require.NoError(t, users.Create(t.Context(), user), "Create")
 
-	return transport.NewRouter(
-		transport.WithHandle("POST /api/login", authenicationv1.LoginHandler(authSvc, throttle, false)),
-	)
+	router := transport.NewRouter()
+	authenicationv1.NewAuthHandler(authSvc, throttle, false).Register(router)
+
+	return router
 }
 
 func doLogin(t *testing.T, router *transport.Router, email, password string) *httptest.ResponseRecorder {
